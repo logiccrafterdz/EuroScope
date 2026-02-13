@@ -1,5 +1,19 @@
-# Python
+# Environment
+.env
+.env.*
+
+# Data & Logs
+data/*.db
+data/*.json
+data/logs/
+*.log
+!data/.gitkeep
+
+# Python cache & tests
 __pycache__/
+.pytest_cache/
+.coverage
+htmlcov/
 *.py[cod]
 *.egg-info/
 dist/
@@ -7,14 +21,6 @@ build/
 *.egg
 .venv/
 venv/
-
-# Environment
-.env
-
-# Data
-data/*.db
-data/*.json
-!data/.gitkeep
 
 # Charts output
 charts/

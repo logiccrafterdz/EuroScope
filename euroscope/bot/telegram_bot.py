@@ -625,7 +625,10 @@ class EuroScopeBot:
 
     def build_app(self) -> Application:
         """Build and configure the Telegram bot application."""
-        app = Application.builder().token(self.config.telegram.token).build()
+        app = Application.builder() \
+            .token(self.config.telegram.token) \
+            .post_init(self.post_init) \
+            .build()
 
         # Register command handlers
         commands = {
@@ -649,6 +652,7 @@ class EuroScopeBot:
             "performance": self.cmd_performance,
             "settings": self.cmd_settings,
             "ask": self.cmd_ask,
+            "health": self.cmd_health,
         }
 
         for cmd, handler in commands.items():
@@ -662,6 +666,22 @@ class EuroScopeBot:
 
         return app
 
+    async def post_init(self, application: Application):
+        """Called after bot is initialized, before polling starts."""
+        # Start automation services
+        asyncio.create_task(self.heartbeat.start())
+        asyncio.create_task(self.cron.start())
+        logger.info("⚡ Background services (Heartbeat, Cron) started.")
+
+    async def cmd_health(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /health — system health and runtime stats."""
+        if not await self._check_auth(update):
+            return
+
+        result = self.orchestrator.run_skill("monitoring", "runtime_stats")
+        text = result.metadata.get("formatted", "⚠️ Could not fetch health stats.")
+        await update.message.reply_text(text, parse_mode="Markdown")
+
     def run(self):
         """Start the Telegram bot polling and automation services."""
         if not self.config.telegram.token:
@@ -669,6 +689,8 @@ class EuroScopeBot:
             return
 
         logger.info("🌐 EuroScope bot V3 starting...")
+        
+        # Build app (now includes post_init)
         app = self.build_app()
 
         # Set up notifications
@@ -677,10 +699,5 @@ class EuroScopeBot:
             self.notifications.schedule_daily_reports(
                 app.job_queue, self.config.telegram.allowed_users
             )
-
-        # Start automation services
-        loop = asyncio.get_event_loop()
-        loop.create_task(self.heartbeat.start())
-        loop.create_task(self.cron.start())
 
         app.run_polling(drop_pending_updates=True)
