@@ -45,7 +45,7 @@ class HealthMonitor:
     formatted health dashboards.
     """
 
-    def __init__(self, storage: Storage):
+    def __init__(self, storage: Storage = None):
         self.storage = storage
         self._start_time = time.time()
         self._errors: list[dict] = []
