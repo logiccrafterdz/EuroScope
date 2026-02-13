@@ -85,4 +85,42 @@ class Config:
             warnings.append("⚠️  EUROSCOPE_TELEGRAM_TOKEN not set — Telegram bot disabled")
         if not self.data.brave_api_key:
             warnings.append("⚠️  EUROSCOPE_BRAVE_API_KEY not set — news search disabled")
+        if not self.data.alphavantage_key:
+            warnings.append("⚠️  EUROSCOPE_ALPHAVANTAGE_KEY not set — AlphaVantage disabled")
+        if not self.data.fred_api_key:
+            warnings.append("⚠️  EUROSCOPE_FRED_API_KEY not set — FRED macro data disabled")
         return warnings
+
+    def validate_connections(self) -> dict[str, bool]:
+        """
+        Quick connectivity check for configured APIs.
+        Returns {service_name: is_reachable}.
+        """
+        import urllib.request
+        results = {}
+
+        checks = [
+            ("LLM API", self.llm.api_base),
+            ("Telegram", "https://api.telegram.org"),
+        ]
+
+        for name, url in checks:
+            try:
+                req = urllib.request.Request(url, method="HEAD")
+                urllib.request.urlopen(req, timeout=5)
+                results[name] = True
+            except Exception:
+                results[name] = False
+
+        return results
+
+    def print_startup_summary(self):
+        """Print a concise startup summary to the console."""
+        warnings = self.validate()
+        total = 5  # LLM, Telegram, Brave, AlphaVantage, FRED
+        configured = total - len(warnings)
+
+        print(f"  ✅ {configured}/{total} API keys configured")
+        for w in warnings:
+            print(f"  {w}")
+        print()

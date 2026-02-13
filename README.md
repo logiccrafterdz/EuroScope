@@ -2,29 +2,39 @@
 
 **AI-powered expert bot specialized exclusively in the EUR/USD forex pair.**
 
-EuroScope is an advanced multi-agent system that provides institutional-grade technical analysis, classical pattern detection, fundamental macro data, and AI-powered forecasting with vector memory — all focused 100% on EUR/USD.
+EuroScope is a skills-based multi-agent system that provides institutional-grade analysis, pattern detection, macro data, AI forecasting, adaptive learning, and interactive Telegram control — all focused 100% on EUR/USD.
 
 ## 🚀 Key Features
 
 | Category | Features |
 |:---|:---|
-| 🧠 **AI Brain** | **Multi-Agent Architecture** (Specialists for Tech, Fund, Sent, Risk), **Vector Memory** (ChromaDB) for long-term learning, LLM Router with fallback support. |
-| 🛡️ **Trading Brain** | **Risk Management** (Position sizing, ATR stop-loss, drawdown control), **Strategy Engine** (Trend Following, Mean Reversion, Breakouts). |
-| 📊 **Analytics** | **Performance Metrics** (Sharpe, Sortino, Equity Curve), **Backtesting Engine** (historical candle replay), **System Health** monitor. |
-| 🔍 **Market Analysis** | RSI, MACD, Patterns (H&S, Double Top), Fibonacci & Pivot levels, Brave Search News Sentiment. |
-| 📰 **Macro Data** | Real-time FRED & ECB data integration (Rate differentials, CPI, GDP). |
-| 🤖 **Telegram V2** | **Interactive UI** (Inline keyboards), **Notification Manager** (Scheduled reports + Real-time Alerts), **User Settings** portal. |
+| 🧠 **AI Brain** | Multi-Agent Specialists (Tech, Fund, Sentiment, Risk), Vector Memory (ChromaDB), LLM Router with fallback |
+| 🔧 **Skills Engine** | 9+ auto-discovered skills, Orchestrator, SkillsRegistry, dynamic prompt generation |
+| 🛡️ **Trading** | Risk Management, Strategy Engine (Trend/MR/Breakout), Signal Executor, Paper Trading |
+| 📊 **Analytics** | Performance Metrics (Sharpe/Sortino), Walk-Forward Backtesting, Equity Curves |
+| 🔍 **Analysis** | RSI, MACD, Patterns (H&S, Double Top), Fibonacci & Pivot levels, Sentiment |
+| 📰 **Macro** | FRED & ECB integration (Rate differentials, CPI, GDP), Economic Calendar |
+| 📓 **Learning** | Trade Journal, Prediction Tracker, Pattern Success Rates, Adaptive Parameter Tuner |
+| 🤖 **Telegram V3** | Inline keyboards, Smart Alerts, Cron Scheduler, Heartbeat Service |
 
-## 🤖 Bot Commands (V2)
+## 🤖 Bot Commands
 
-| Primary Commands | Secondary & Trading |
+| Command | Description |
 |:---|:---|
-| `/menu` — Main interactive dashboard | `/strategy` — Current strategy recommendation |
-| `/price` — Real-time quotes & stats | `/risk` — Risk assessment for next trade |
-| `/analysis` — Full TA report | `/trades` — Active & historical paper trades |
-| `/chart` — Dark-themed candlesticks | `/performance` — Detailed ROI & Sharpe stats |
-| `/forecast` — AI directional outlook | `/settings` — Your personal alert preferences |
-| `/news` — Live sentiment & headlines | `/health` — System status & API connectivity |
+| `/menu` | Main interactive dashboard |
+| `/price` | Real-time EUR/USD quotes |
+| `/analysis` | Full technical analysis report |
+| `/chart` | Dark-themed candlestick chart |
+| `/forecast` | AI directional outlook |
+| `/news` | Live sentiment & headlines |
+| `/signals` | Active trading signals |
+| `/strategy` | Current strategy recommendation |
+| `/risk` | Risk assessment for next trade |
+| `/trades` | Paper trade history |
+| `/performance` | ROI & Sharpe stats |
+| `/report` | Full skills-based analysis pipeline |
+| `/health` | System health & runtime stats |
+| `/settings` | Personal alert preferences |
 
 ## 🛠️ Quick Start
 
@@ -42,43 +52,67 @@ pip install -r requirements.txt
 copy .env.example .env
 ```
 Edit `.env` with your API keys:
-- `EUROSCOPE_LLM_API_KEY`: OpenRouter (primary LLM)
-- `EUROSCOPE_TELEGRAM_TOKEN`: From [@BotFather](https://t.me/BotFather)
-- `EUROSCOPE_BRAVE_API_KEY`: For news sentiment (optional)
+- `EUROSCOPE_LLM_API_KEY` — LLM provider (DeepSeek/OpenAI)
+- `EUROSCOPE_TELEGRAM_TOKEN` — From [@BotFather](https://t.me/BotFather)
+- `EUROSCOPE_BRAVE_API_KEY` — News sentiment (optional)
+- `EUROSCOPE_ALPHAVANTAGE_KEY` — AlphaVantage data (optional)
+- `EUROSCOPE_FRED_API_KEY` — FRED macro data (optional)
 
 ### 3. Run
 ```bash
 python -m euroscope.main
 ```
 
-## 🏗️ Architecture (Multi-Agent)
+## 🏗️ Architecture (Skills-Based V3)
 
 ```
 euroscope/
-├── analytics/         # Performance metrics, Backtesting & Health Monitor
-├── bot/               # Telegram V2 (Inline keyboards & Notifications)
-├── brain/             # Specialists (Technical, Fundamental, Sentiment, Risk)
-│   └── memory.py      # Vector Memory (ChromaDB)
-├── trading/           # Risk Management, Strategy Engine & Signal Execution
-├── data/              # Multi-source Providers & SQLite Storage
-├── analysis/          # Technical indicators & Pattern detection
-└── forecast/          # AI Forecasting & LLM Routing
+├── skills/              # 9+ auto-discovered skills
+│   ├── base.py          # BaseSkill, SkillResult, SkillContext
+│   ├── registry.py      # Auto-discovery & LLM prompt generation
+│   ├── market_data/     # Price & OHLCV data
+│   ├── technical_analysis/
+│   ├── pattern_detection/
+│   ├── fundamental/
+│   ├── signals/
+│   ├── backtesting/     # Walk-forward + slippage
+│   ├── monitoring/      # Health + runtime stats
+│   ├── trade_journal/   # Full-context trade logging
+│   └── prediction_tracker/
+├── brain/               # AI Agent, Memory (ChromaDB), Orchestrator
+├── learning/            # Pattern Tracker, Adaptive Tuner
+├── automation/          # HeartbeatService, CronScheduler, EventBus, SmartAlerts
+├── bot/                 # Telegram V3 (Skills-Based)
+├── trading/             # Risk, Strategy Engine, Signal Executor
+├── analytics/           # Performance, Backtesting, Health Monitor
+├── data/                # Providers, News, Calendar, Storage (SQLite)
+├── forecast/            # AI Forecasting
+├── workspace/           # IDENTITY.md, SOUL.md, TOOLS.md, MEMORY.md
+└── utils/               # Charts, Logging, Formatting, Resilience
 ```
 
+### How Skills Work
+Each skill lives in its own folder under `skills/` with:
+- `SKILL.md` — Description and capabilities
+- `skill.py` — Implementation extending `BaseSkill`
+- `__init__.py` — Exports
+
+The `SkillsRegistry` auto-discovers skills at startup. The `Orchestrator` routes requests and assembles multi-skill analysis pipelines.
+
 ## 🧪 Testing
-The project includes a robust test suite with **300+ passed tests** covering all core logic.
+**406+ tests** covering all modules:
 ```bash
 python -m pytest tests/
 ```
 
 ## 🧰 Tech Stack
 - **Python 3.12+**
-- **python-telegram-bot** (Async V2)
-- **OpenRouter & OpenAI** (Multi-LLM)
+- **python-telegram-bot** (Async)
+- **DeepSeek & OpenAI** (Multi-LLM)
 - **ChromaDB** (Vector Memory)
 - **yfinance** & **pandas**
 - **SQLite** (Persistence)
+- **psutil** (Runtime monitoring)
 
 ## ⚖️ License
 Private project.
-
