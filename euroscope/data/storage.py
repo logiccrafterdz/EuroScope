@@ -129,6 +129,40 @@ class Storage:
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL
                 );
+
+                CREATE TABLE IF NOT EXISTS trade_journal (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    timestamp TEXT NOT NULL,
+                    direction TEXT NOT NULL,
+                    entry_price REAL NOT NULL,
+                    exit_price REAL,
+                    stop_loss REAL,
+                    take_profit REAL,
+                    pnl_pips REAL DEFAULT 0.0,
+                    is_win INTEGER DEFAULT 0,
+                    strategy TEXT DEFAULT '',
+                    timeframe TEXT DEFAULT 'H1',
+                    regime TEXT DEFAULT '',
+                    confidence REAL DEFAULT 0.0,
+                    indicators_snapshot TEXT DEFAULT '{}',
+                    patterns_snapshot TEXT DEFAULT '[]',
+                    reasoning TEXT DEFAULT '',
+                    closed_at TEXT,
+                    status TEXT DEFAULT 'open'
+                );
+
+                CREATE TABLE IF NOT EXISTS pattern_stats (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    pattern_name TEXT NOT NULL,
+                    timeframe TEXT NOT NULL,
+                    detected_at TEXT NOT NULL,
+                    predicted_direction TEXT NOT NULL,
+                    actual_outcome TEXT,
+                    is_success INTEGER,
+                    price_at_detection REAL,
+                    price_at_resolution REAL,
+                    resolved_at TEXT
+                );
             """)
         logger.info(f"Database initialized at {self.db_path}")
 
@@ -419,3 +453,179 @@ class Storage:
                 "SELECT * FROM user_preferences WHERE chat_id=?", (chat_id,)
             ).fetchone()
             return dict(row) if row else None
+
+    # ── Trade Journal ─────────────────────────────────────────
+
+    def save_trade_journal(self, direction: str, entry_price: float,
+                           stop_loss: float = 0.0, take_profit: float = 0.0,
+                           strategy: str = "", timeframe: str = "H1",
+                           regime: str = "", confidence: float = 0.0,
+                           indicators: dict = None, patterns: list = None,
+                           reasoning: str = "") -> int:
+        """Save a new trade journal entry."""
+        now = datetime.utcnow().isoformat()
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.execute(
+                """INSERT INTO trade_journal
+                   (timestamp, direction, entry_price, stop_loss, take_profit,
+                    strategy, timeframe, regime, confidence,
+                    indicators_snapshot, patterns_snapshot, reasoning, status)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open')""",
+                (now, direction, entry_price, stop_loss, take_profit,
+                 strategy, timeframe, regime, confidence,
+                 json.dumps(indicators or {}),
+                 json.dumps(patterns or []),
+                 reasoning)
+            )
+            return cursor.lastrowid
+
+    def close_trade_journal(self, trade_id: int, exit_price: float,
+                            pnl_pips: float, is_win: bool):
+        """Close a trade journal entry with outcome."""
+        now = datetime.utcnow().isoformat()
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                """UPDATE trade_journal SET exit_price=?, pnl_pips=?,
+                   is_win=?, closed_at=?, status='closed'
+                   WHERE id=?""",
+                (exit_price, pnl_pips, 1 if is_win else 0, now, trade_id)
+            )
+
+    def get_trade_journal(self, strategy: str = None, status: str = None,
+                          limit: int = 50) -> list[dict]:
+        """Get trade journal entries, optionally filtered."""
+        query = "SELECT * FROM trade_journal WHERE 1=1"
+        params = []
+        if strategy:
+            query += " AND strategy=?"
+            params.append(strategy)
+        if status:
+            query += " AND status=?"
+            params.append(status)
+        query += " ORDER BY timestamp DESC LIMIT ?"
+        params.append(limit)
+
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(query, params).fetchall()
+            return [dict(r) for r in rows]
+
+    def get_trade_journal_stats(self, strategy: str = None) -> dict:
+        """Get aggregate stats from trade journal."""
+        query = "SELECT * FROM trade_journal WHERE status='closed'"
+        params = []
+        if strategy:
+            query += " AND strategy=?"
+            params.append(strategy)
+
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(query, params).fetchall()
+
+        if not rows:
+            return {"total": 0, "wins": 0, "losses": 0, "win_rate": 0.0,
+                    "total_pnl": 0.0, "avg_pnl": 0.0}
+
+        trades = [dict(r) for r in rows]
+        wins = [t for t in trades if t["is_win"]]
+        total_pnl = sum(t["pnl_pips"] for t in trades)
+
+        return {
+            "total": len(trades),
+            "wins": len(wins),
+            "losses": len(trades) - len(wins),
+            "win_rate": round(len(wins) / len(trades) * 100, 1),
+            "total_pnl": round(total_pnl, 1),
+            "avg_pnl": round(total_pnl / len(trades), 1),
+            "by_strategy": self._journal_by_strategy(trades),
+        }
+
+    @staticmethod
+    def _journal_by_strategy(trades: list[dict]) -> dict:
+        """Group trade journal stats by strategy."""
+        by_strat = {}
+        for t in trades:
+            s = t.get("strategy", "unknown")
+            if s not in by_strat:
+                by_strat[s] = {"total": 0, "wins": 0, "pnl": 0.0}
+            by_strat[s]["total"] += 1
+            if t["is_win"]:
+                by_strat[s]["wins"] += 1
+            by_strat[s]["pnl"] += t["pnl_pips"]
+
+        for s, data in by_strat.items():
+            data["win_rate"] = round(data["wins"] / data["total"] * 100, 1) if data["total"] else 0
+            data["pnl"] = round(data["pnl"], 1)
+
+        return by_strat
+
+    # ── Pattern Stats ─────────────────────────────────────────
+
+    def save_pattern_detection(self, pattern_name: str, timeframe: str,
+                                predicted_direction: str,
+                                price_at_detection: float) -> int:
+        """Record a new pattern detection."""
+        now = datetime.utcnow().isoformat()
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.execute(
+                """INSERT INTO pattern_stats
+                   (pattern_name, timeframe, detected_at, predicted_direction,
+                    price_at_detection)
+                   VALUES (?, ?, ?, ?, ?)""",
+                (pattern_name, timeframe, now, predicted_direction,
+                 price_at_detection)
+            )
+            return cursor.lastrowid
+
+    def resolve_pattern(self, pattern_id: int, actual_outcome: str,
+                        price_at_resolution: float, is_success: bool):
+        """Resolve a pattern detection with actual outcome."""
+        now = datetime.utcnow().isoformat()
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                """UPDATE pattern_stats SET actual_outcome=?,
+                   price_at_resolution=?, is_success=?, resolved_at=?
+                   WHERE id=?""",
+                (actual_outcome, price_at_resolution,
+                 1 if is_success else 0, now, pattern_id)
+            )
+
+    def get_pattern_success_rates(self) -> dict:
+        """Get success rates grouped by pattern_name + timeframe."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                """SELECT pattern_name, timeframe,
+                   COUNT(*) as total,
+                   SUM(CASE WHEN is_success=1 THEN 1 ELSE 0 END) as successes
+                   FROM pattern_stats
+                   WHERE is_success IS NOT NULL
+                   GROUP BY pattern_name, timeframe"""
+            ).fetchall()
+
+        result = {}
+        for r in rows:
+            key = f"{r['pattern_name']}_{r['timeframe']}"
+            total = r["total"]
+            successes = r["successes"]
+            result[key] = {
+                "pattern": r["pattern_name"],
+                "timeframe": r["timeframe"],
+                "total": total,
+                "successes": successes,
+                "success_rate": round(successes / total * 100, 1) if total else 0,
+            }
+        return result
+
+    def get_unresolved_patterns(self, limit: int = 50) -> list[dict]:
+        """Get pattern detections that haven't been resolved yet."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                """SELECT * FROM pattern_stats
+                   WHERE is_success IS NULL
+                   ORDER BY detected_at DESC LIMIT ?""",
+                (limit,)
+            ).fetchall()
+            return [dict(r) for r in rows]
+

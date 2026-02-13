@@ -46,7 +46,7 @@ from .notification_manager import NotificationManager
 from ..skills.registry import SkillsRegistry
 from ..skills.base import SkillContext
 from ..workspace import WorkspaceManager
-from ..automation import HeartbeatService, EventBus, SmartAlerts, setup_default_alerts, CronScheduler
+from ..automation import HeartbeatService, EventBus, SmartAlerts, AlertChannel, setup_default_alerts, CronScheduler
 
 logger = logging.getLogger("euroscope.bot")
 

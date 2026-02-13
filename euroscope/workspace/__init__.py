@@ -124,6 +124,64 @@ class WorkspaceManager:
             current += new_entry
         self._write("MEMORY.md", current)
 
+    def refresh_memory(self, storage=None):
+        """
+        Refresh MEMORY.md with latest learning insights.
+
+        Pulls from: prediction accuracy, pattern stats, tuning recommendations.
+        """
+        from ..learning.pattern_tracker import PatternTracker
+        from ..learning.adaptive_tuner import AdaptiveTuner
+        from ..brain.memory import Memory
+        from ..data.storage import Storage as _Storage
+
+        storage = storage or _Storage()
+        memory = Memory(storage)
+        tracker = PatternTracker(storage)
+        tuner = AdaptiveTuner(storage)
+
+        lines = [
+            "# Memory\n",
+            f"> Auto-refreshed: {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}\n",
+        ]
+
+        # 1. Prediction accuracy
+        learning = memory.get_learning_context()
+        if learning and "No sufficient" not in learning:
+            lines.append("## Prediction Accuracy\n")
+            lines.append(learning + "\n")
+
+        # 2. Pattern success rates
+        rates = tracker.get_success_rates()
+        if rates:
+            lines.append("## Pattern Performance\n")
+            for key, data in sorted(rates.items(),
+                                     key=lambda x: x[1]["success_rate"],
+                                     reverse=True):
+                icon = "🟢" if data["success_rate"] >= 60 else "🔴"
+                lines.append(
+                    f"- {icon} `{data['pattern']}` ({data['timeframe']}): "
+                    f"{data['success_rate']}% ({data['successes']}/{data['total']})"
+                )
+            lines.append("")
+
+        # 3. Tuning recommendations
+        result = tuner.analyze()
+        if result["ready"] and result["recommendations"]:
+            lines.append("## Tuning Suggestions\n")
+            for rec in result["recommendations"]:
+                lines.append(f"- `{rec['param']}` → {rec['action']}: {rec['reason']}")
+            lines.append("")
+
+        # 4. Preserved: recent analyses
+        current = self._read("MEMORY.md")
+        if "## Recent Analyses" in current:
+            idx = current.index("## Recent Analyses")
+            lines.append(current[idx:])
+
+        self._write("MEMORY.md", "\n".join(lines))
+        logger.info("MEMORY.md refreshed with learning insights")
+
     def build_system_prompt(self) -> str:
         """
         Build a complete system prompt from all workspace files.
@@ -133,6 +191,7 @@ class WorkspaceManager:
             self.identity,
             self.soul,
             self.tools,
+            self.memory,
             self.user,
         ]
         return "\n\n---\n\n".join(s for s in sections if s)
@@ -140,3 +199,4 @@ class WorkspaceManager:
     def clear_cache(self):
         """Clear in-memory cache to force re-reads."""
         self._cache.clear()
+
