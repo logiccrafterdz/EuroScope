@@ -56,17 +56,68 @@ class TechnicalAnalysisSkill(BaseSkill):
         if "error" in ta:
             return SkillResult(success=False, error=ta["error"])
         context.analysis["indicators"] = ta
-        return SkillResult(success=True, data=ta)
+        
+        formatted = self._format_analysis(ta)
+        return SkillResult(success=True, data=ta, metadata={"formatted": formatted})
+
+    def _format_analysis(self, data: dict) -> str:
+        lines = ["📊 *Technical Analysis*"]
+        bias = data.get("overall_bias", "N/A")
+        icon = {"Bullish": "🟢", "Bearish": "🔴"}.get(bias, "⚪")
+        lines.append(f"Bias: {icon} {bias}\n")
+
+        ind = data.get("indicators", {})
+        
+        # RSI
+        rsi = ind.get("RSI", {})
+        lines.append(f"*RSI*: `{rsi.get('value', 0):.1f}` ({rsi.get('signal', 'N/A')})")
+        
+        # MACD
+        macd = ind.get("MACD", {})
+        lines.append(f"*MACD*: `{macd.get('macd', 0):.5f}` ({macd.get('signaltext', 'N/A')})")
+        
+        # Bands
+        bb = ind.get("Bollinger", {})
+        lines.append(f"*BB*: {bb.get('position', 'N/A')}")
+        
+        # ATR
+        atr = ind.get("ATR", {})
+        lines.append(f"*ATR*: `{atr.get('pips', 0):.1f} pips`")
+
+        return "\n".join(lines)
 
     async def _detect_patterns(self, context: SkillContext, df) -> SkillResult:
         patterns = self.patterns.detect_all(df)
         context.analysis["patterns"] = patterns
-        return SkillResult(success=True, data=patterns)
+        formatted = self._format_patterns(patterns)
+        return SkillResult(success=True, data=patterns, metadata={"formatted": formatted})
+
+    def _format_patterns(self, patterns: list) -> str:
+        if not patterns:
+            return "📉 No patterns detected."
+        
+        lines = ["🧩 *Detected Patterns*"]
+        for p in patterns:
+            name = p.get("name", "Unknown")
+            bias = p.get("signal", "Neutral")
+            icon = "🟢" if bias == "Bullish" else "🔴" if bias == "Bearish" else "⚪"
+            lines.append(f"{icon} {name} ({bias})")
+        return "\n".join(lines)
 
     async def _find_levels(self, context: SkillContext, df) -> SkillResult:
         levels = self.levels.find_support_resistance(df)
         context.analysis["levels"] = levels
-        return SkillResult(success=True, data=levels)
+        formatted = self._format_levels(levels)
+        return SkillResult(success=True, data=levels, metadata={"formatted": formatted})
+
+    def _format_levels(self, levels: dict) -> str:
+        lines = ["📏 *Key Levels*"]
+        sup = levels.get("support", [])
+        res = levels.get("resistance", [])
+        
+        lines.append(f"Supports: " + ", ".join([f"`{p:.5f}`" for p in sup[:3]]))
+        lines.append(f"Resistances: " + ", ".join([f"`{p:.5f}`" for p in res[:3]]))
+        return "\n".join(lines)
 
     async def _full(self, context: SkillContext, df) -> SkillResult:
         ta = self.technical.analyze(df)

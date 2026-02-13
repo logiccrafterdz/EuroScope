@@ -41,7 +41,9 @@ class FundamentalAnalysisSkill(BaseSkill):
         try:
             articles = await self._news.get_eurusd_news()
             context.analysis["news"] = articles
-            return SkillResult(success=True, data=articles)
+            
+            formatted = self._news.format_news(articles) if hasattr(self._news, 'format_news') else str(articles)
+            return SkillResult(success=True, data=articles, metadata={"formatted": formatted})
         except Exception as e:
             return SkillResult(success=False, error=str(e))
 
@@ -52,7 +54,9 @@ class FundamentalAnalysisSkill(BaseSkill):
             events = self._calendar.get_upcoming_events()
             data = [e.__dict__ if hasattr(e, "__dict__") else e for e in events]
             context.analysis["calendar"] = data
-            return SkillResult(success=True, data=data)
+            
+            formatted = self._format_calendar(data)
+            return SkillResult(success=True, data=data, metadata={"formatted": formatted})
         except Exception as e:
             return SkillResult(success=False, error=str(e))
 
@@ -68,7 +72,9 @@ class FundamentalAnalysisSkill(BaseSkill):
             sentiment = "bullish" if avg > 0.15 else "bearish" if avg < -0.15 else "neutral"
             data = {"sentiment": sentiment, "score": round(avg, 3), "article_count": len(articles)}
             context.analysis["sentiment_summary"] = data
-            return SkillResult(success=True, data=data)
+            
+            formatted = f"📊 *Sentiment:* {sentiment.capitalize()} (Score: {avg:.2f})"
+            return SkillResult(success=True, data=data, metadata={"formatted": formatted})
         except Exception as e:
             return SkillResult(success=False, error=str(e))
 
@@ -82,3 +88,25 @@ class FundamentalAnalysisSkill(BaseSkill):
             "sentiment": sent.data if sent.success else {},
         }
         return SkillResult(success=True, data=data)
+
+    def _format_calendar(self, events: list) -> str:
+        # Check if events is None or empty
+        if not events:
+            return "📅 No major impacted events upcoming."
+        
+        lines = ["📅 *Economic Calendar*"]
+        # Limit to 5 events
+        for e in events[:5]:
+            # Handle both dict and object (though we converted to dict in _get_calendar)
+            time = e.get("time", "") if isinstance(e, dict) else getattr(e, "time", "")
+            currency = e.get("currency", "") if isinstance(e, dict) else getattr(e, "currency", "")
+            impact = e.get("impact", "Low") if isinstance(e, dict) else getattr(e, "impact", "Low")
+            event = e.get("event", "") if isinstance(e, dict) else getattr(e, "event", "")
+            actual = e.get("actual", "") if isinstance(e, dict) else getattr(e, "actual", "")
+            forecast = e.get("forecast", "") if isinstance(e, dict) else getattr(e, "forecast", "")
+            
+            icon = "🔴" if impact == "High" else "🟠" if impact == "Medium" else "⚪"
+            lines.append(f"{icon} `{time}` {currency}: {event}")
+            if actual or forecast:
+                lines.append(f"   Act: `{actual}` Fcst: `{forecast}`")
+        return "\n".join(lines)

@@ -6,6 +6,7 @@ Includes TextBlob-based sentiment analysis and DB persistence.
 No API key required.
 """
 
+import asyncio
 import logging
 from datetime import datetime
 from typing import Optional
@@ -96,8 +97,11 @@ class NewsEngine:
         try:
             from duckduckgo_search import DDGS
 
-            with DDGS() as ddgs:
-                raw_results = list(ddgs.news(query, max_results=count))
+            def _search():
+                with DDGS() as ddgs:
+                    return list(ddgs.news(query, max_results=count))
+
+            raw_results = await asyncio.to_thread(_search)
 
             articles = []
             for result in raw_results:
@@ -163,8 +167,10 @@ class NewsEngine:
             "eurozone economy GDP",
         ]
 
-        for q in queries:
-            articles = await self.fetch_news(q, count=5)
+        tasks = [self.fetch_news(q, count=5) for q in queries]
+        results = await asyncio.gather(*tasks)
+        
+        for articles in results:
             all_articles.extend(articles)
 
         # Deduplicate by title similarity

@@ -254,7 +254,7 @@ class EuroScopeBot:
 
         # Formatting is now part of what we get back or can be handled by skill
         formatted = result.metadata.get("formatted", str(result.data))
-        await update.message.reply_text(truncate(formatted), parse_mode="Markdown")
+        await update.message.reply_text(formatted, parse_mode="Markdown")
 
     async def cmd_chart(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /chart command."""
@@ -316,9 +316,19 @@ class EuroScopeBot:
         tf = context.args[0].upper() if context.args else "H1"
         await update.message.reply_text(f"⏳ Generating {tf} signals...")
 
-        result = await self.orchestrator.run_skill("trading_strategy", "detect_signal", timeframe=tf)
+        # Run analysis first to populate context
+        ctx = SkillContext()
+        
+        # 1. Technical Analysis (Full)
+        res_ta = await self.orchestrator.run_skill("technical_analysis", "full", context=ctx, timeframe=tf)
+        if not res_ta.success:
+            await update.message.reply_text(f"❌ Analysis failed: {res_ta.error}")
+            return
+
+        # 2. Trading Strategy
+        result = await self.orchestrator.run_skill("trading_strategy", "detect_signal", context=ctx)
         if not result.success:
-            await update.message.reply_text(f"❌ {result.error}")
+            await update.message.reply_text(f"❌ Result generation failed: {result.error}")
             return
 
         formatted = result.metadata.get("formatted", str(result.data))
@@ -429,7 +439,16 @@ class EuroScopeBot:
             return
 
         await update.message.reply_text("⏳ Analyzing market regime...")
-        result = await self.orchestrator.run_skill("trading_strategy", "detect_signal")
+        ctx = SkillContext()
+
+        # 1. Analysis
+        res_ta = await self.orchestrator.run_skill("technical_analysis", "full", context=ctx)
+        if not res_ta.success:
+            await update.message.reply_text(f"❌ Analysis failed: {res_ta.error}")
+            return
+
+        # 2. Strategy
+        result = await self.orchestrator.run_skill("trading_strategy", "detect_signal", context=ctx)
 
         if not result.success:
             await update.message.reply_text(f"❌ {result.error}")
@@ -453,14 +472,36 @@ class EuroScopeBot:
             return
 
         await update.message.reply_text("⏳ Assessing trade risk...")
-        result = await self.orchestrator.run_skill("risk_management", "assess_trade")
+        
+        ctx = SkillContext()
+        # 1. Analysis (for ATR and levels)
+        res_ta = await self.orchestrator.run_skill("technical_analysis", "full", context=ctx)
+        if not res_ta.success:
+            await update.message.reply_text(f"❌ Analysis failed: {res_ta.error}")
+            return
+
+        # 2. Risk Assessment
+        result = await self.orchestrator.run_skill("risk_management", "assess_trade", context=ctx)
         
         if not result.success:
             await update.message.reply_text(f"❌ {result.error}")
             return
 
-        formatted = result.metadata.get("formatted", str(result.data))
-        await update.message.reply_text(truncate(formatted), parse_mode="Markdown")
+        # RiskManagementSkill needs formatting too? 
+        # It currently returns data dict. Let's start by just dumping it or I should add formatting to Risk skill.
+        # For now, let's use the raw data if formatted missing, but ideally I add formatting to Risk skill.
+        formatted = result.metadata.get("formatted", self._format_risk(result.data))
+        await update.message.reply_text(formatted, parse_mode="Markdown")
+
+    def _format_risk(self, data: dict) -> str:
+        # Fallback formatter if skill doesn't provide one
+        lines = ["🛡️ *Risk Assessment*"]
+        lines.append(f"Approved: {'✅' if data.get('approved') else '❌'}")
+        lines.append(f"Size: `{data.get('position_size', 0):.2f}` lots")
+        lines.append(f"SL: `{data.get('stop_loss', 0):.5f}`")
+        lines.append(f"TP: `{data.get('take_profit', 0):.5f}`")
+        lines.append(f"Risk: `{data.get('risk_pips', 0):.1f}` pips")
+        return "\n".join(lines)
 
     async def cmd_trades(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /trades — show open paper trades."""

@@ -59,9 +59,32 @@ class TradingStrategySkill(BaseSkill):
                 "reasoning": signal.reasoning,
             }
             context.signals = data
+            
+            formatted = self._format_signal(data)
             return SkillResult(
                 success=True, data=data,
                 next_skill="risk_management" if signal.direction in ("BUY", "SELL") else None,
+                metadata={"formatted": formatted}
             )
         except Exception as e:
             return SkillResult(success=False, error=str(e))
+
+    def _format_signal(self, data: dict) -> str:
+        lines = ["🎯 *Trading Signal*"]
+        direction = data.get("direction", "NONE")
+        icon = {"BUY": "🟢", "SELL": "🔴"}.get(direction, "⚪")
+        
+        lines.append(f"{icon} *{direction}*")
+        lines.append(f"Strategy: `{data.get('strategy', 'N/A')}`")
+        lines.append(f"Confidence: `{data.get('confidence', 0)}%`")
+        
+        if direction in ("BUY", "SELL"):
+            lines.append(f"Entry: `{data.get('entry_price', 0):.5f}`")
+        
+        reasoning = data.get("reasoning", [])
+        if reasoning:
+            lines.append("\n📝 *Reasoning*:")
+            for r in reasoning:
+                lines.append(f"• {r}")
+                
+        return "\n".join(lines)
