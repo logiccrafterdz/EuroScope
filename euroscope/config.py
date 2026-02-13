@@ -18,6 +18,10 @@ class LLMConfig:
     model: str = "deepseek-chat"
     max_tokens: int = 4096
     temperature: float = 0.4
+    # Fallback provider
+    fallback_api_key: str = ""
+    fallback_api_base: str = "https://api.openai.com/v1"
+    fallback_model: str = "gpt-4o-mini"
 
 
 @dataclass
