@@ -2,45 +2,35 @@
 
 **AI-powered expert bot specialized exclusively in the EUR/USD forex pair.**
 
-EuroScope is a Telegram bot that provides real-time technical analysis, classical pattern detection, fundamental analysis, AI-powered forecasting with self-learning, and interactive Q&A — all focused 100% on EUR/USD.
+EuroScope is an advanced multi-agent system that provides institutional-grade technical analysis, classical pattern detection, fundamental macro data, and AI-powered forecasting with vector memory — all focused 100% on EUR/USD.
 
-## Features
+## 🚀 Key Features
 
-| Feature | Description |
-|---------|-------------|
-| 📊 **Technical Analysis** | RSI, MACD, EMA, Bollinger Bands, ATR, ADX, Stochastic |
-| 🔍 **Pattern Detection** | Head & Shoulders, Double Top/Bottom, Triangles, Channels |
-| 📐 **Key Levels** | Support/Resistance, Fibonacci Retracements, Pivot Points |
-| 🎯 **Trading Signals** | Multi-indicator confluence scoring |
-| 📰 **News Engine** | Real-time EUR/USD news via Brave Search |
-| 📅 **Economic Calendar** | 15+ events (NFP, ECB, Fed, CPI, GDP...) with impact ratings |
-| 🔮 **AI Forecasting** | LLM-powered directional forecasts with confidence scoring |
-| 🧠 **Self-Learning** | Tracks prediction accuracy, adjusts from past mistakes |
-| 📈 **Charts** | Dark-themed candlestick charts with EMA overlays |
-| 💬 **Free-Form Q&A** | Ask any question about EUR/USD |
+| Category | Features |
+|:---|:---|
+| 🧠 **AI Brain** | **Multi-Agent Architecture** (Specialists for Tech, Fund, Sent, Risk), **Vector Memory** (ChromaDB) for long-term learning, LLM Router with fallback support. |
+| 🛡️ **Trading Brain** | **Risk Management** (Position sizing, ATR stop-loss, drawdown control), **Strategy Engine** (Trend Following, Mean Reversion, Breakouts). |
+| 📊 **Analytics** | **Performance Metrics** (Sharpe, Sortino, Equity Curve), **Backtesting Engine** (historical candle replay), **System Health** monitor. |
+| 🔍 **Market Analysis** | RSI, MACD, Patterns (H&S, Double Top), Fibonacci & Pivot levels, Brave Search News Sentiment. |
+| 📰 **Macro Data** | Real-time FRED & ECB data integration (Rate differentials, CPI, GDP). |
+| 🤖 **Telegram V2** | **Interactive UI** (Inline keyboards), **Notification Manager** (Scheduled reports + Real-time Alerts), **User Settings** portal. |
 
-## Bot Commands
+## 🤖 Bot Commands (V2)
 
-```
-/price       — Current EUR/USD price & daily stats
-/analysis    — Full technical analysis (specify timeframe: /analysis H4)
-/chart       — Candlestick chart with indicators (/chart D1)
-/patterns    — Detected classical chart patterns
-/levels      — Support/resistance, Fibonacci & pivot points
-/signals     — Multi-indicator trading signals
-/news        — Latest EUR/USD news
-/calendar    — Economic events that impact EUR/USD
-/forecast    — AI directional forecast with confidence
-/report      — Comprehensive daily report
-/accuracy    — Prediction track record
-/ask         — Ask anything about EUR/USD
-```
+| Primary Commands | Secondary & Trading |
+|:---|:---|
+| `/menu` — Main interactive dashboard | `/strategy` — Current strategy recommendation |
+| `/price` — Real-time quotes & stats | `/risk` — Risk assessment for next trade |
+| `/analysis` — Full TA report | `/trades` — Active & historical paper trades |
+| `/chart` — Dark-themed candlesticks | `/performance` — Detailed ROI & Sharpe stats |
+| `/forecast` — AI directional outlook | `/settings` — Your personal alert preferences |
+| `/news` — Live sentiment & headlines | `/health` — System status & API connectivity |
 
-## Quick Start
+## 🛠️ Quick Start
 
 ### 1. Clone & Install
-
 ```bash
+git clone https://github.com/logiccrafterdz/EuroScope.git
 cd EuroScope
 python -m venv .venv
 .venv\Scripts\activate   # Windows
@@ -48,58 +38,47 @@ pip install -r requirements.txt
 ```
 
 ### 2. Configure
-
 ```bash
 copy .env.example .env
 ```
-
 Edit `.env` with your API keys:
-
-```env
-EUROSCOPE_LLM_API_KEY=your-openrouter-key
-EUROSCOPE_TELEGRAM_TOKEN=your-telegram-bot-token
-EUROSCOPE_TELEGRAM_ALLOWED_USERS=your-telegram-user-id
-EUROSCOPE_BRAVE_API_KEY=your-brave-api-key   # optional, for news
-```
+- `EUROSCOPE_LLM_API_KEY`: OpenRouter (primary LLM)
+- `EUROSCOPE_TELEGRAM_TOKEN`: From [@BotFather](https://t.me/BotFather)
+- `EUROSCOPE_BRAVE_API_KEY`: For news sentiment (optional)
 
 ### 3. Run
-
 ```bash
 python -m euroscope.main
 ```
 
-## Architecture
+## 🏗️ Architecture (Multi-Agent)
 
 ```
 euroscope/
-├── config.py          # Environment-based configuration
-├── main.py            # Entry point
-├── bot/               # Telegram interface (12 commands)
-├── brain/             # AI agent (LLM integration + self-learning memory)
-├── data/              # Price provider, news, calendar, SQLite storage
-├── analysis/          # Technical indicators, patterns, levels, signals
-├── forecast/          # AI forecasting engine
-└── utils/             # Charts, formatting
+├── analytics/         # Performance metrics, Backtesting & Health Monitor
+├── bot/               # Telegram V2 (Inline keyboards & Notifications)
+├── brain/             # Specialists (Technical, Fundamental, Sentiment, Risk)
+│   └── memory.py      # Vector Memory (ChromaDB)
+├── trading/           # Risk Management, Strategy Engine & Signal Execution
+├── data/              # Multi-source Providers & SQLite Storage
+├── analysis/          # Technical indicators & Pattern detection
+└── forecast/          # AI Forecasting & LLM Routing
 ```
 
-## Requirements
+## 🧪 Testing
+The project includes a robust test suite with **300+ passed tests** covering all core logic.
+```bash
+python -m pytest tests/
+```
 
-- Python 3.12+
-- Telegram Bot Token (from [@BotFather](https://t.me/BotFather))
-- OpenRouter API key (or OpenAI-compatible)
-- Brave Search API key (optional, for news)
+## 🧰 Tech Stack
+- **Python 3.12+**
+- **python-telegram-bot** (Async V2)
+- **OpenRouter & OpenAI** (Multi-LLM)
+- **ChromaDB** (Vector Memory)
+- **yfinance** & **pandas**
+- **SQLite** (Persistence)
 
-## Tech Stack
-
-- **Python** — AI/ML, data analysis, financial libraries
-- **python-telegram-bot** — Telegram interface
-- **OpenRouter/OpenAI** — LLM brain (Claude, GPT, etc.)
-- **yfinance** — Real-time & historical price data
-- **pandas + numpy** — Data processing & indicator calculations
-- **mplfinance** — Professional chart generation
-- **SQLite** — Prediction tracking & self-learning
-- **httpx** — Async HTTP (news, LLM API)
-
-## License
-
+## ⚖️ License
 Private project.
+
