@@ -14,8 +14,8 @@ load_dotenv()
 @dataclass
 class LLMConfig:
     api_key: str = ""
-    api_base: str = "https://openrouter.ai/api/v1"
-    model: str = "anthropic/claude-sonnet-4"
+    api_base: str = "https://api.deepseek.com"
+    model: str = "deepseek-chat"
     max_tokens: int = 4096
     temperature: float = 0.4
 
@@ -54,8 +54,8 @@ class Config:
         return cls(
             llm=LLMConfig(
                 api_key=os.getenv("EUROSCOPE_LLM_API_KEY", ""),
-                api_base=os.getenv("EUROSCOPE_LLM_API_BASE", "https://openrouter.ai/api/v1"),
-                model=os.getenv("EUROSCOPE_LLM_MODEL", "anthropic/claude-sonnet-4"),
+                api_base=os.getenv("EUROSCOPE_LLM_API_BASE", "https://api.deepseek.com"),
+                model=os.getenv("EUROSCOPE_LLM_MODEL", "deepseek-chat"),
                 max_tokens=int(os.getenv("EUROSCOPE_LLM_MAX_TOKENS", "4096")),
                 temperature=float(os.getenv("EUROSCOPE_LLM_TEMPERATURE", "0.4")),
             ),
