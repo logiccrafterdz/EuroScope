@@ -83,8 +83,6 @@ class Config:
             warnings.append("⚠️  EUROSCOPE_LLM_API_KEY not set — AI features disabled")
         if not self.telegram.token:
             warnings.append("⚠️  EUROSCOPE_TELEGRAM_TOKEN not set — Telegram bot disabled")
-        if not self.data.brave_api_key:
-            warnings.append("⚠️  EUROSCOPE_BRAVE_API_KEY not set — news search disabled")
         if not self.data.alphavantage_key:
             warnings.append("⚠️  EUROSCOPE_ALPHAVANTAGE_KEY not set — AlphaVantage disabled")
         if not self.data.fred_api_key:
@@ -117,7 +115,7 @@ class Config:
     def print_startup_summary(self):
         """Print a concise startup summary to the console."""
         warnings = self.validate()
-        total = 5  # LLM, Telegram, Brave, AlphaVantage, FRED
+        total = 4  # LLM, Telegram, AlphaVantage, FRED
         configured = total - len(warnings)
 
         print(f"  ✅ {configured}/{total} API keys configured")

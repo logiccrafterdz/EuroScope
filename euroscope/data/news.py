@@ -1,15 +1,14 @@
 """
 EUR/USD News Engine
 
-Fetches and filters news relevant to EUR/USD using Brave Search API.
+Fetches and filters news relevant to EUR/USD using DuckDuckGo Search.
 Includes TextBlob-based sentiment analysis and DB persistence.
+No API key required.
 """
 
 import logging
 from datetime import datetime
 from typing import Optional
-
-import httpx
 
 logger = logging.getLogger("euroscope.data.news")
 
@@ -80,40 +79,38 @@ def analyze_sentiment(text: str) -> dict:
 
 
 class NewsEngine:
-    """Fetches EUR/USD-relevant news via Brave Search API with sentiment analysis."""
+    """Fetches EUR/USD-relevant news via DuckDuckGo Search with sentiment analysis."""
 
-    def __init__(self, api_key: str, storage=None):
-        self.api_key = api_key
-        self.base_url = "https://api.search.brave.com/res/v1/news/search"
-        self.storage = storage  # Optional Storage instance for persistence
+    def __init__(self, api_key: str = None, storage=None):
+        """
+        Initialize the news engine.
+
+        Args:
+            api_key: Ignored (kept for backward compatibility). DuckDuckGo is free.
+            storage: Optional Storage instance for persistence.
+        """
+        self.storage = storage
 
     async def fetch_news(self, query: str = "EUR/USD forex", count: int = 10) -> list[dict]:
-        """Fetch news articles related to EUR/USD."""
-        if not self.api_key:
-            return [{"title": "⚠️ News unavailable", "description": "Brave API key not configured"}]
-
+        """Fetch news articles related to EUR/USD via DuckDuckGo."""
         try:
-            async with httpx.AsyncClient(timeout=15) as client:
-                resp = await client.get(
-                    self.base_url,
-                    headers={"X-Subscription-Token": self.api_key, "Accept": "application/json"},
-                    params={"q": query, "count": count, "freshness": "pd"},  # past day
-                )
-                resp.raise_for_status()
-                data = resp.json()
+            from duckduckgo_search import DDGS
+
+            with DDGS() as ddgs:
+                raw_results = list(ddgs.news(query, max_results=count))
 
             articles = []
-            for result in data.get("results", []):
-                full_text = result.get("title", "") + " " + result.get("description", "")
+            for result in raw_results:
+                full_text = result.get("title", "") + " " + result.get("body", "")
                 relevance = self._score_relevance(full_text)
                 sentiment_data = analyze_sentiment(full_text)
 
                 article = {
                     "title": result.get("title", ""),
-                    "description": result.get("description", ""),
+                    "description": result.get("body", ""),
                     "url": result.get("url", ""),
-                    "published": result.get("age", ""),
-                    "source": result.get("meta_url", {}).get("hostname", ""),
+                    "published": result.get("date", ""),
+                    "source": result.get("source", ""),
                     "relevance": relevance,
                     "sentiment": sentiment_data["sentiment"],
                     "sentiment_score": sentiment_data["score"],
@@ -140,6 +137,9 @@ class NewsEngine:
             articles.sort(key=lambda x: x["relevance"], reverse=True)
             return articles[:count]
 
+        except ImportError:
+            logger.error("duckduckgo-search not installed. Run: pip install duckduckgo-search")
+            return [{"title": "❌ News unavailable", "description": "duckduckgo-search not installed"}]
         except Exception as e:
             logger.error(f"News fetch error: {e}")
             return [{"title": "❌ Error fetching news", "description": str(e)}]

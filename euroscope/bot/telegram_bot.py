@@ -79,8 +79,14 @@ class EuroScopeBot:
         self.alerts.register_handler(AlertChannel.TELEGRAM, self._on_alert_triggered)
         
         # Legacy components (still used by some handlers until fully migrated to skills)
+        self.agent = Agent(config.llm)
         self.price_provider = PriceProvider()
-        self.forecaster = Forecaster(Agent(config.llm), Memory(self.storage), self.price_provider, NewsEngine(config.data.brave_api_key))
+        self.technical = TechnicalAnalyzer()
+        self.patterns = PatternDetector()
+        self.levels = LevelAnalyzer()
+        self.signals = SignalGenerator()
+        
+        self.forecaster = Forecaster(self.agent, Memory(self.storage), self.price_provider, NewsEngine(config.data.brave_api_key))
 
     def _on_alert_triggered(self, alert):
         """Callback for SmartAlerts — sends to allowed users."""
