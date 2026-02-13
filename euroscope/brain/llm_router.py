@@ -5,6 +5,7 @@ Tries multiple LLM providers in order with retry logic.
 Chain: DeepSeek → OpenAI → Groq (configurable)
 """
 
+import asyncio
 import logging
 import time
 from dataclasses import dataclass
@@ -123,14 +124,14 @@ class LLMRouter:
                     if status == 429:
                         wait = min(2 ** attempt * 2, 30)
                         logger.warning(f"{provider.name}: Rate limited, waiting {wait}s")
-                        time.sleep(wait)
+                        await asyncio.sleep(wait)
                         continue
 
                     # Server error — retry
                     if status >= 500:
                         wait = 2 ** attempt
                         logger.warning(f"{provider.name}: Server error ({status}), retry in {wait}s")
-                        time.sleep(wait)
+                        await asyncio.sleep(wait)
                         continue
 
                     # Other client errors — skip provider
@@ -142,7 +143,7 @@ class LLMRouter:
                     wait = 2 ** attempt
                     logger.warning(f"{provider.name}: Error ({e}), retry in {wait}s")
                     if attempt < self.max_retries:
-                        time.sleep(wait)
+                        await asyncio.sleep(wait)
 
         # All providers failed
         self._failure_count += 1

@@ -32,7 +32,8 @@ from euroscope.automation.cron import CronScheduler, TaskFrequency
 class TestSkillsCommunication:
     """Test that SkillResult flows correctly between skills."""
 
-    def test_context_flows_between_skills(self):
+    @pytest.mark.asyncio
+    async def test_context_flows_between_skills(self):
         """SkillContext data set by one skill is available to the next."""
         from euroscope.skills.signal_executor import SignalExecutorSkill
 
@@ -51,7 +52,7 @@ class TestSkillsCommunication:
         ctx.risk = {"stop_loss": 1.0820, "take_profit": 1.0910}
 
         executor = SignalExecutorSkill()
-        result = executor.safe_execute(ctx, "open_trade")
+        result = await executor.safe_execute(ctx, "open_trade")
         assert result.success
         assert result.data["direction"] == "BUY"
         assert len(ctx.open_positions) == 1
@@ -80,7 +81,8 @@ class TestSkillsCommunication:
 class TestDataFlowPipeline:
     """Test end-to-end skill chaining via SkillChain and Orchestrator."""
 
-    def test_chain_with_mock_skills(self):
+    @pytest.mark.asyncio
+    async def test_chain_with_mock_skills(self):
         """SkillChain correctly passes context through multiple skills."""
         reg = SkillsRegistry()
         reg._discovered = True
@@ -88,14 +90,14 @@ class TestDataFlowPipeline:
         # Create two mock skills that read/write context
         skill_a = MagicMock()
         skill_a.name = "a"
-        def a_execute(ctx, action, **p):
+        async def a_execute(ctx, action, **p):
             ctx.market_data["from_a"] = True
             return SkillResult(success=True, data={"a": 1})
         skill_a.safe_execute = a_execute
 
         skill_b = MagicMock()
         skill_b.name = "b"
-        def b_execute(ctx, action, **p):
+        async def b_execute(ctx, action, **p):
             assert ctx.market_data.get("from_a") is True  # Data flows!
             return SkillResult(success=True, data={"b": 2})
         skill_b.safe_execute = b_execute
@@ -103,19 +105,21 @@ class TestDataFlowPipeline:
         reg._skills = {"a": skill_a, "b": skill_b}
 
         chain = SkillChain(reg)
-        ctx = chain.run([("a", "go"), ("b", "go")])
+        ctx = await chain.run([("a", "go"), ("b", "go")])
         assert ctx.market_data["from_a"] is True
 
-    def test_orchestrator_pipeline(self):
+    @pytest.mark.asyncio
+    async def test_orchestrator_pipeline(self):
         """Orchestrator.run_pipeline chains skills correctly."""
         o = Orchestrator()
-        ctx = o.run_pipeline([
+        ctx = await o.run_pipeline([
             ("signal_executor", "list_trades"),
         ])
         assert isinstance(ctx, SkillContext)
         assert len(ctx.history) >= 1
 
-    def test_full_executor_flow(self):
+    @pytest.mark.asyncio
+    async def test_full_executor_flow(self):
         """Full signal → open → close → history flow."""
         from euroscope.skills.signal_executor import SignalExecutorSkill
 
@@ -125,18 +129,18 @@ class TestDataFlowPipeline:
         ctx.risk = {"stop_loss": 1.0930, "take_profit": 1.0840}
 
         # Open
-        r1 = executor.safe_execute(ctx, "open_trade")
+        r1 = await executor.safe_execute(ctx, "open_trade")
         assert r1.success
         trade_id = r1.data["trade_id"]
 
         # Close with profit
-        r2 = executor.safe_execute(ctx, "close_trade",
+        r2 = await executor.safe_execute(ctx, "close_trade",
                                    trade_id=trade_id, exit_price=1.0850)
         assert r2.success
         assert r2.data["pnl_pips"] == 50.0
 
         # History
-        r3 = executor.safe_execute(ctx, "trade_history")
+        r3 = await executor.safe_execute(ctx, "trade_history")
         assert len(r3.data) == 1
         assert r3.data[0]["pnl_pips"] == 50.0
 
@@ -146,7 +150,8 @@ class TestDataFlowPipeline:
 class TestErrorHandling:
     """Test graceful degradation when skills fail."""
 
-    def test_safe_execute_catches_all(self):
+    @pytest.mark.asyncio
+    async def test_safe_execute_catches_all(self):
         """safe_execute wraps exceptions into SkillResult errors."""
         class CrashSkill(BaseSkill):
             name = "crash"
@@ -155,55 +160,60 @@ class TestErrorHandling:
             category = SkillCategory.SYSTEM
             version = "0.1.0"
             capabilities = ["boom"]
-            def execute(self, ctx, action, **p):
+            async def execute(self, ctx, action, **p):
                 raise RuntimeError("kernel panic")
 
         s = CrashSkill()
         ctx = SkillContext()
-        r = s.safe_execute(ctx, "boom")
+        r = await s.safe_execute(ctx, "boom")
         assert not r.success
         assert "kernel panic" in r.error
 
-    def test_chain_continues_on_failure(self):
+    @pytest.mark.asyncio
+    async def test_chain_continues_on_failure(self):
         """SkillChain doesn't abort on failed skill."""
+        from unittest.mock import AsyncMock
         reg = SkillsRegistry()
         reg._discovered = True
 
         fail = MagicMock()
         fail.name = "fail"
-        fail.safe_execute.return_value = SkillResult(success=False, error="down")
+        fail.safe_execute = AsyncMock(return_value=SkillResult(success=False, error="down"))
 
         ok = MagicMock()
         ok.name = "ok"
-        ok.safe_execute.return_value = SkillResult(success=True, data="fine")
+        ok.safe_execute = AsyncMock(return_value=SkillResult(success=True, data="fine"))
 
         reg._skills = {"fail": fail, "ok": ok}
         chain = SkillChain(reg)
-        ctx = chain.run([("fail", "a"), ("ok", "b")])
+        ctx = await chain.run([("fail", "a"), ("ok", "b")])
         ok.safe_execute.assert_called_once()
 
-    def test_chain_skips_missing_skill(self):
+    @pytest.mark.asyncio
+    async def test_chain_skips_missing_skill(self):
         """SkillChain skips unavailable skills gracefully."""
         reg = SkillsRegistry()
         reg._discovered = True
         reg._skills = {}
         chain = SkillChain(reg)
-        ctx = chain.run([("nonexistent", "go")])
+        ctx = await chain.run([("nonexistent", "go")])
         assert isinstance(ctx, SkillContext)
 
-    def test_orchestrator_run_skill_not_found(self):
+    @pytest.mark.asyncio
+    async def test_orchestrator_run_skill_not_found(self):
         """Orchestrator returns error for unknown skill."""
         o = Orchestrator()
-        r = o.run_skill("fake_skill", "fake_action")
+        r = await o.run_skill("fake_skill", "fake_action")
         assert not r.success
         assert "not found" in r.error
 
-    def test_market_data_no_provider_graceful(self):
+    @pytest.mark.asyncio
+    async def test_market_data_no_provider_graceful(self):
         """MarketDataSkill fails gracefully without provider."""
         from euroscope.skills.market_data import MarketDataSkill
         s = MarketDataSkill()
         ctx = SkillContext()
-        r = s.safe_execute(ctx, "get_price")
+        r = await s.safe_execute(ctx, "get_price")
         assert not r.success
         assert "provider" in r.error.lower()
 
@@ -242,9 +252,9 @@ class TestCrossComponentIntegration:
         from euroscope.skills.signal_executor import SignalExecutorSkill
         executor = SignalExecutorSkill()
 
-        def skill_check():
+        async def skill_check():
             ctx = SkillContext()
-            r = executor.safe_execute(ctx, "list_trades")
+            r = await executor.safe_execute(ctx, "list_trades")
             return {"status": "healthy" if r.success else "error"}
 
         hb.register_check("signal_executor", skill_check)

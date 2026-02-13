@@ -20,9 +20,11 @@ from euroscope.skills.base import SkillCategory, SkillContext, SkillResult
 # ── SkillChain Tests ─────────────────────────────────────────
 
 class TestSkillChain:
-    def test_chain_basic(self):
+    @pytest.mark.asyncio
+    async def test_chain_basic(self):
         from euroscope.brain.orchestrator import SkillChain
         from euroscope.skills.registry import SkillsRegistry
+        from unittest.mock import AsyncMock
 
         reg = SkillsRegistry()
         reg._discovered = True  # skip auto-discover
@@ -30,17 +32,18 @@ class TestSkillChain:
         # Register a mock skill
         mock_skill = MagicMock()
         mock_skill.name = "test_skill"
-        mock_skill.safe_execute.return_value = SkillResult(success=True, data={"foo": 1})
+        mock_skill.safe_execute = AsyncMock(return_value=SkillResult(success=True, data={"foo": 1}))
 
         reg._skills["test_skill"] = mock_skill
 
         chain = SkillChain(reg)
-        ctx = chain.run([("test_skill", "do_thing")])
+        ctx = await chain.run([("test_skill", "do_thing")])
 
         assert isinstance(ctx, SkillContext)
         mock_skill.safe_execute.assert_called_once()
 
-    def test_chain_missing_skill(self):
+    @pytest.mark.asyncio
+    async def test_chain_missing_skill(self):
         from euroscope.brain.orchestrator import SkillChain
         from euroscope.skills.registry import SkillsRegistry
 
@@ -48,46 +51,50 @@ class TestSkillChain:
         reg._discovered = True
 
         chain = SkillChain(reg)
-        ctx = chain.run([("nonexistent", "do_thing")])
+        ctx = await chain.run([("nonexistent", "do_thing")])
         assert isinstance(ctx, SkillContext)  # Doesn't crash
 
-    def test_chain_failed_step_continues(self):
+    @pytest.mark.asyncio
+    async def test_chain_failed_step_continues(self):
         from euroscope.brain.orchestrator import SkillChain
         from euroscope.skills.registry import SkillsRegistry
+        from unittest.mock import AsyncMock
 
         reg = SkillsRegistry()
         reg._discovered = True
 
         fail_skill = MagicMock()
         fail_skill.name = "fail"
-        fail_skill.safe_execute.return_value = SkillResult(success=False, error="boom")
+        fail_skill.safe_execute = AsyncMock(return_value=SkillResult(success=False, error="boom"))
         ok_skill = MagicMock()
         ok_skill.name = "ok"
-        ok_skill.safe_execute.return_value = SkillResult(success=True, data="good")
+        ok_skill.safe_execute = AsyncMock(return_value=SkillResult(success=True, data="good"))
 
         reg._skills["fail"] = fail_skill
         reg._skills["ok"] = ok_skill
 
         chain = SkillChain(reg)
-        ctx = chain.run([("fail", "a"), ("ok", "b")])
+        ctx = await chain.run([("fail", "a"), ("ok", "b")])
         ok_skill.safe_execute.assert_called_once()
 
 
 # ── Orchestrator V2 Tests ────────────────────────────────────
 
 class TestOrchestratorV2:
-    def test_run_skill(self):
+    @pytest.mark.asyncio
+    async def test_run_skill(self):
         from euroscope.brain.orchestrator import Orchestrator
         o = Orchestrator()
         ctx = SkillContext()
         # signal_executor is simple and works without injection
-        r = o.run_skill("signal_executor", "list_trades", ctx)
+        r = await o.run_skill("signal_executor", "list_trades", ctx)
         assert r.success
 
-    def test_run_pipeline(self):
+    @pytest.mark.asyncio
+    async def test_run_pipeline(self):
         from euroscope.brain.orchestrator import Orchestrator
         o = Orchestrator()
-        ctx = o.run_pipeline([
+        ctx = await o.run_pipeline([
             ("signal_executor", "list_trades"),
         ])
         assert isinstance(ctx, SkillContext)
@@ -99,7 +106,8 @@ class TestOrchestratorV2:
         assert "market_data" in prompt
         assert "technical_analysis" in prompt
 
-    def test_legacy_run_analysis_still_works(self):
+    @pytest.mark.asyncio
+    async def test_legacy_run_analysis_still_works(self):
         from euroscope.brain.orchestrator import Orchestrator
         o = Orchestrator()
         context = {
@@ -115,7 +123,7 @@ class TestOrchestratorV2:
             "sentiment_summary": {"score": 0.2, "article_count": 5},
             "news_articles": [],
         }
-        result = o.run_analysis(context)
+        result = await o.run_analysis(context)
         assert "consensus" in result
         assert "specialists" in result
         assert "formatted" in result

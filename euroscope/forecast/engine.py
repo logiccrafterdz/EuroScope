@@ -11,12 +11,7 @@ from typing import Optional
 
 from ..brain.agent import Agent
 from ..brain.memory import Memory
-from ..analysis.technical import TechnicalAnalyzer
-from ..analysis.patterns import PatternDetector
-from ..analysis.levels import LevelAnalyzer
-from ..data.provider import PriceProvider
-from ..data.news import NewsEngine
-from ..data.calendar import EconomicCalendar
+from ..brain.orchestrator import Orchestrator, SkillContext
 
 logger = logging.getLogger("euroscope.forecast")
 
@@ -24,52 +19,37 @@ logger = logging.getLogger("euroscope.forecast")
 class Forecaster:
     """Generates AI-powered EUR/USD forecasts with self-learning."""
 
-    def __init__(self, agent: Agent, memory: Memory, price_provider: PriceProvider,
-                 news_engine: NewsEngine):
+    def __init__(self, agent: Agent, memory: Memory, orchestrator: Orchestrator):
         self.agent = agent
         self.memory = memory
-        self.price_provider = price_provider
-        self.news_engine = news_engine
-        self.technical = TechnicalAnalyzer()
-        self.patterns = PatternDetector()
-        self.levels = LevelAnalyzer()
-        self.calendar = EconomicCalendar()
+        self.orchestrator = orchestrator
 
     async def generate_forecast(self, timeframe: str = "24 hours") -> dict:
         """Generate a comprehensive AI forecast for EUR/USD."""
 
-        # Gather all data
-        price_info = self.price_provider.get_price()
-        candles_h1 = self.price_provider.get_candles("H1", 100)
-        candles_d1 = self.price_provider.get_candles("D1", 50)
+        # Use Orchestrator to gather all necessary data via Skills
+        ctx = await self.orchestrator.run_full_analysis_pipeline()
 
-        # Technical analysis
-        ta_h1 = self.technical.analyze(candles_h1) if candles_h1 is not None else {}
-        ta_d1 = self.technical.analyze(candles_d1) if candles_d1 is not None else {}
-
-        # Patterns
-        patterns_h1 = self.patterns.detect_all(candles_h1) if candles_h1 is not None else []
-        patterns_d1 = self.patterns.detect_all(candles_d1) if candles_d1 is not None else []
-
-        # Levels
-        sr_levels = self.levels.find_support_resistance(candles_d1) if candles_d1 is not None else {}
-        fib = self.levels.fibonacci_retracement(candles_d1) if candles_d1 is not None else {}
-
-        # News (handle async)
-        try:
-            news = await self.news_engine.get_eurusd_news()
-            news_text = self.news_engine.format_news(news)
-        except Exception:
-            news_text = "No news available"
+        # Extract data from context
+        price_info = ctx.get_result("market_data")["data"] if ctx.get_result("market_data") else {}
+        ta_results = ctx.get_result("technical_analysis")["data"] if ctx.get_result("technical_analysis") else {}
+        news_text = ctx.get_result("fundamental_analysis")["data"].get("formatted", "No news available") if ctx.get_result("fundamental_analysis") else "No news available"
 
         # Learning context
         learning = self.memory.get_learning_context()
 
         # Build data strings for the AI
         price_str = "\n".join(f"  {k}: {v}" for k, v in price_info.items()) if price_info else "N/A"
-        ta_str = self._format_ta_for_prompt(ta_h1, "H1") + "\n" + self._format_ta_for_prompt(ta_d1, "D1")
-        patterns_str = self._format_patterns_for_prompt(patterns_h1 + patterns_d1)
-        levels_str = self._format_levels_for_prompt(sr_levels, fib)
+        
+        # Use existing formatting helpers or results from skills
+        ta_str = self._format_ta_for_prompt(ta_results.get("h1_analysis", {}), "H1") + \
+                 "\n" + self._format_ta_for_prompt(ta_results.get("d1_analysis", {}), "D1")
+        
+        patterns_str = self._format_patterns_for_prompt(ta_results.get("patterns", []))
+        levels_str = self._format_levels_for_prompt(
+            ta_results.get("levels", {}), 
+            ta_results.get("fibonacci", {})
+        )
 
         # Generate AI forecast
         forecast_text = await self.agent.forecast(

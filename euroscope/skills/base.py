@@ -58,6 +58,7 @@ class SkillContext:
     risk: dict = field(default_factory=dict)
     user_prefs: dict = field(default_factory=dict)
     open_positions: list = field(default_factory=list)
+    metadata: dict = field(default_factory=dict)
     history: list = field(default_factory=list)  # Previous skill results
 
     def add_result(self, skill_name: str, result: SkillResult):

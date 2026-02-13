@@ -13,6 +13,7 @@ import httpx
 
 from ..config import LLMConfig
 from .prompts import SYSTEM_PROMPT, ANALYSIS_PROMPT, FORECAST_PROMPT, QUESTION_PROMPT
+from .llm_router import LLMRouter
 
 logger = logging.getLogger("euroscope.brain.agent")
 
@@ -20,13 +21,36 @@ logger = logging.getLogger("euroscope.brain.agent")
 class Agent:
     """LLM-powered EUR/USD expert agent."""
 
-    def __init__(self, config: LLMConfig):
+    def __init__(self, config: LLMConfig, router: Optional[LLMRouter] = None):
         self.config = config
+        self.router = router
         self.conversation_history: list[dict] = []
         self.max_history = 20
 
     async def chat(self, user_message: str, system_override: str = None) -> str:
         """Send a message to the LLM and get a response."""
+        system = system_override or SYSTEM_PROMPT
+
+        # Build messages
+        messages = [{"role": "system", "content": system}]
+
+        # Add recent conversation history for context
+        messages.extend(self.conversation_history[-self.max_history:])
+        messages.append({"role": "user", "content": user_message})
+
+        # Use router if available
+        if self.router:
+            reply = await self.router.chat(messages)
+            if not reply.startswith("❌"):
+                # Save to history
+                self.conversation_history.append({"role": "user", "content": user_message})
+                self.conversation_history.append({"role": "assistant", "content": reply})
+                # Trim history
+                if len(self.conversation_history) > self.max_history * 2:
+                    self.conversation_history = self.conversation_history[-self.max_history:]
+            return reply
+
+        # Fallback to direct call if no router
         if not self.config.api_key:
             return "⚠️ AI features disabled — no API key configured."
 

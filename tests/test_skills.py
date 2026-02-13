@@ -67,7 +67,7 @@ class TestBaseSkill:
         version = "0.1.0"
         capabilities = ["do_thing", "do_other", "fail"]
 
-        def execute(self, context, action, **params):
+        async def execute(self, context, action, **params):
             if action == "do_thing":
                 return SkillResult(success=True, data="done")
             elif action == "fail":
@@ -83,25 +83,28 @@ class TestBaseSkill:
         s = self.DummySkill()
         assert not s.validate("fly")
 
-    def test_safe_execute_success(self):
+    @pytest.mark.asyncio
+    async def test_safe_execute_success(self):
         s = self.DummySkill()
         ctx = SkillContext()
-        r = s.safe_execute(ctx, "do_thing")
+        r = await s.safe_execute(ctx, "do_thing")
         assert r.success
         assert r.data == "done"
         assert len(ctx.history) == 1
 
-    def test_safe_execute_unknown_action(self):
+    @pytest.mark.asyncio
+    async def test_safe_execute_unknown_action(self):
         s = self.DummySkill()
         ctx = SkillContext()
-        r = s.safe_execute(ctx, "fly")
+        r = await s.safe_execute(ctx, "fly")
         assert not r.success
         assert "Unknown action" in r.error
 
-    def test_safe_execute_catches_exception(self):
+    @pytest.mark.asyncio
+    async def test_safe_execute_catches_exception(self):
         s = self.DummySkill()
         ctx = SkillContext()
-        r = s.safe_execute(ctx, "fail")
+        r = await s.safe_execute(ctx, "fail")
         assert not r.success
         assert "Boom" in r.error
         assert len(ctx.history) == 1
@@ -221,15 +224,17 @@ class TestSkillImports:
 # ── Skill Execution Tests ───────────────────────────────────
 
 class TestSkillExecution:
-    def test_market_data_no_provider(self):
+    @pytest.mark.asyncio
+    async def test_market_data_no_provider(self):
         from euroscope.skills.market_data import MarketDataSkill
         s = MarketDataSkill()
         ctx = SkillContext()
-        r = s.safe_execute(ctx, "get_price")
+        r = await s.safe_execute(ctx, "get_price")
         assert not r.success
         assert "provider" in r.error.lower()
 
-    def test_signal_executor_open_close(self):
+    @pytest.mark.asyncio
+    async def test_signal_executor_open_close(self):
         from euroscope.skills.signal_executor import SignalExecutorSkill
         s = SignalExecutorSkill()
         ctx = SkillContext()
@@ -237,39 +242,41 @@ class TestSkillExecution:
         ctx.risk = {"stop_loss": 1.0820, "take_profit": 1.0910}
 
         # Open
-        r = s.safe_execute(ctx, "open_trade")
+        r = await s.safe_execute(ctx, "open_trade")
         assert r.success
         assert r.data["direction"] == "BUY"
         trade_id = r.data["trade_id"]
 
         # List
-        r2 = s.safe_execute(ctx, "list_trades")
+        r2 = await s.safe_execute(ctx, "list_trades")
         assert r2.success
         assert len(r2.data) == 1
 
         # Close
-        r3 = s.safe_execute(ctx, "close_trade", trade_id=trade_id, exit_price=1.0900)
+        r3 = await s.safe_execute(ctx, "close_trade", trade_id=trade_id, exit_price=1.0900)
         assert r3.success
         assert r3.data["pnl_pips"] == 50.0
 
         # History
-        r4 = s.safe_execute(ctx, "trade_history")
+        r4 = await s.safe_execute(ctx, "trade_history")
         assert r4.success
         assert len(r4.data) == 1
 
-    def test_trading_strategy_list(self):
+    @pytest.mark.asyncio
+    async def test_trading_strategy_list(self):
         from euroscope.skills.trading_strategy import TradingStrategySkill
         s = TradingStrategySkill()
         ctx = SkillContext()
-        r = s.safe_execute(ctx, "list_strategies")
+        r = await s.safe_execute(ctx, "list_strategies")
         assert r.success
         assert "trend_following" in r.data
 
-    def test_monitoring_track_error(self):
+    @pytest.mark.asyncio
+    async def test_monitoring_track_error(self):
         from euroscope.skills.monitoring import MonitoringSkill
         s = MonitoringSkill(storage=MagicMock())
         ctx = SkillContext()
-        r = s.safe_execute(ctx, "track_error", component="test", error="test error")
+        r = await s.safe_execute(ctx, "track_error", component="test", error="test error")
         assert r.success
 
     def test_registry_discover_all_nine(self):

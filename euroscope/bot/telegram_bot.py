@@ -27,20 +27,17 @@ from ..config import Config
 from ..brain.agent import Agent
 from ..brain.memory import Memory
 from ..brain.orchestrator import Orchestrator
+from ..brain.llm_router import LLMRouter, LLMProvider
 from ..data.provider import PriceProvider
 from ..data.news import NewsEngine
 from ..data.calendar import EconomicCalendar
 from ..data.storage import Storage
-from ..analysis.technical import TechnicalAnalyzer
-from ..analysis.patterns import PatternDetector
-from ..analysis.levels import LevelAnalyzer
-from ..analysis.signals import SignalGenerator
 from ..forecast.engine import Forecaster
 from ..trading.risk_manager import RiskManager
 from ..trading.strategy_engine import StrategyEngine
 from ..trading.signal_executor import SignalExecutor
 from ..utils.charts import generate_chart
-from ..utils.formatting import truncate
+from ..utils.formatting import truncate, safe_markdown
 from .user_settings import UserSettings
 from .notification_manager import NotificationManager
 
@@ -60,9 +57,8 @@ class EuroScopeBot:
         self.storage = Storage()
         
         # New Skills-Based Architecture
-        self.registry = SkillsRegistry()
-        self.registry.discover()
-        self.orchestrator = Orchestrator() # Already discover inside
+        self.orchestrator = Orchestrator()  # discovers skills internally
+        self.registry = self.orchestrator.registry  # share single registry
         self.workspace = WorkspaceManager()
         
         # Automation & Events
@@ -84,14 +80,17 @@ class EuroScopeBot:
         self.news_engine = NewsEngine(config.data.brave_api_key, self.storage) # Key ignored in DDG version
         self.calendar = EconomicCalendar()
         
-        # Legacy components (still used by some handlers until fully migrated to skills)
-        self.agent = Agent(config.llm)
-        self.technical = TechnicalAnalyzer()
-        self.patterns = PatternDetector()
-        self.levels = LevelAnalyzer()
-        self.signals = SignalGenerator()
+        # LLM & Memory
+        self.router = LLMRouter.from_config(
+            primary_key=config.llm.api_key,
+            primary_base=config.llm.api_base,
+            primary_model=config.llm.model,
+            fallback_key=config.llm.api_key, # Can add separate fallback keys here
+        )
+        self.agent = Agent(config.llm, router=self.router)
+        self.memory = Memory(self.storage)
         
-        self.forecaster = Forecaster(self.agent, Memory(self.storage), self.price_provider, self.news_engine)
+        self.forecaster = Forecaster(self.agent, self.memory, self.orchestrator)
         
         # Inject dependencies into the skills system
         self.orchestrator.inject_dependencies(
@@ -99,12 +98,17 @@ class EuroScopeBot:
             news_engine=self.news_engine,
             calendar=self.calendar,
             storage=self.storage,
-            agent=self.agent
+            agent=self.agent,
+            risk_manager=RiskManager()
         )
 
     def _on_alert_triggered(self, alert):
         """Callback for SmartAlerts — sends to allowed users."""
-        asyncio.create_task(self.notifications.broadcast_alert(alert))
+        try:
+            loop = asyncio.get_running_loop()
+            loop.create_task(self.notifications.broadcast_alert(alert))
+        except RuntimeError:
+            logger.warning("Alert triggered outside event loop — skipped.")
 
 
     def _is_authorized(self, user_id: int) -> bool:
@@ -254,7 +258,7 @@ class EuroScopeBot:
 
         # Formatting is now part of what we get back or can be handled by skill
         formatted = result.metadata.get("formatted", str(result.data))
-        await update.message.reply_text(formatted, parse_mode="Markdown")
+        await update.message.reply_text(safe_markdown(formatted), parse_mode="Markdown")
 
     async def cmd_chart(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /chart command."""
@@ -292,7 +296,7 @@ class EuroScopeBot:
             return
 
         formatted = result.metadata.get("formatted", str(result.data))
-        await update.message.reply_text(truncate(formatted), parse_mode="Markdown")
+        await update.message.reply_text(safe_markdown(truncate(formatted)), parse_mode="Markdown")
 
     async def cmd_levels(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /levels command."""
@@ -306,7 +310,7 @@ class EuroScopeBot:
             return
 
         formatted = result.metadata.get("formatted", str(result.data))
-        await update.message.reply_text(truncate(formatted), parse_mode="Markdown")
+        await update.message.reply_text(safe_markdown(truncate(formatted)), parse_mode="Markdown")
 
     async def cmd_signals(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /signals command."""
@@ -332,7 +336,7 @@ class EuroScopeBot:
             return
 
         formatted = result.metadata.get("formatted", str(result.data))
-        await update.message.reply_text(truncate(formatted), parse_mode="Markdown")
+        await update.message.reply_text(safe_markdown(truncate(formatted)), parse_mode="Markdown")
 
     async def cmd_news(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /news command."""
@@ -346,7 +350,7 @@ class EuroScopeBot:
             return
 
         formatted = result.metadata.get("formatted", str(result.data))
-        await update.message.reply_text(truncate(formatted), parse_mode="Markdown")
+        await update.message.reply_text(safe_markdown(truncate(formatted)), parse_mode="Markdown")
 
     async def cmd_calendar(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /calendar command."""
@@ -359,7 +363,7 @@ class EuroScopeBot:
             return
 
         formatted = result.metadata.get("formatted", str(result.data))
-        await update.message.reply_text(truncate(formatted), parse_mode="Markdown")
+        await update.message.reply_text(safe_markdown(truncate(formatted)), parse_mode="Markdown")
 
     async def cmd_forecast(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /forecast command."""
@@ -377,7 +381,7 @@ class EuroScopeBot:
             f"{'─' * 25}\n\n"
         )
         full_msg = header + result["text"]
-        await update.message.reply_text(truncate(full_msg), parse_mode="Markdown")
+        await update.message.reply_text(safe_markdown(truncate(full_msg)), parse_mode="Markdown")
 
     async def cmd_report(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /report — comprehensive analysis report using skills pipeline."""
@@ -421,7 +425,7 @@ class EuroScopeBot:
             lines.append(f"�️ *Risk*: {'Approved ✅' if risk.get('approved') else 'Rejected ❌'}")
             lines.append(f"   SL: `{risk.get('stop_loss')}` | TP: `{risk.get('take_profit')}`")
 
-        await update.message.reply_text(truncate("\n".join(lines)), parse_mode="Markdown")
+        await update.message.reply_text(safe_markdown(truncate("\n".join(lines))), parse_mode="Markdown")
 
     async def cmd_accuracy(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /accuracy command."""
@@ -429,7 +433,7 @@ class EuroScopeBot:
             return
 
         report = self.memory.get_accuracy_report()
-        await update.message.reply_text(report, parse_mode="Markdown")
+        await update.message.reply_text(safe_markdown(report), parse_mode="Markdown")
 
     # ─── New Phase 3-4 Commands ──────────────────────────────
 
@@ -463,7 +467,7 @@ class EuroScopeBot:
             [InlineKeyboardButton("🔙 Menu", callback_data="menu:main")],
         ])
         await update.message.reply_text(
-            truncate(formatted), reply_markup=keyboard, parse_mode="Markdown"
+            safe_markdown(truncate(formatted)), reply_markup=keyboard, parse_mode="Markdown"
         )
 
     async def cmd_risk(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -491,7 +495,7 @@ class EuroScopeBot:
         # It currently returns data dict. Let's start by just dumping it or I should add formatting to Risk skill.
         # For now, let's use the raw data if formatted missing, but ideally I add formatting to Risk skill.
         formatted = result.metadata.get("formatted", self._format_risk(result.data))
-        await update.message.reply_text(formatted, parse_mode="Markdown")
+        await update.message.reply_text(safe_markdown(formatted), parse_mode="Markdown")
 
     def _format_risk(self, data: dict) -> str:
         # Fallback formatter if skill doesn't provide one
@@ -514,7 +518,7 @@ class EuroScopeBot:
             return
 
         formatted = result.metadata.get("formatted", str(result.data))
-        await update.message.reply_text(formatted, parse_mode="Markdown")
+        await update.message.reply_text(safe_markdown(formatted), parse_mode="Markdown")
 
     async def cmd_performance(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /performance — show trading stats."""
@@ -527,7 +531,7 @@ class EuroScopeBot:
             return
 
         formatted = result.metadata.get("formatted", str(result.data))
-        await update.message.reply_text(formatted, parse_mode="Markdown")
+        await update.message.reply_text(safe_markdown(formatted), parse_mode="Markdown")
 
     async def cmd_settings(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /settings — show settings with inline keyboard."""
@@ -562,7 +566,7 @@ class EuroScopeBot:
             support=str(sr.get("support", ["N/A"])[:2]),
             resistance=str(sr.get("resistance", ["N/A"])[:2]),
         )
-        await update.message.reply_text(truncate(answer), parse_mode="Markdown")
+        await update.message.reply_text(safe_markdown(truncate(answer)), parse_mode="Markdown")
 
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle free-form text messages — treat as questions."""
@@ -580,7 +584,7 @@ class EuroScopeBot:
             question=text,
             current_price=str(price.get("price", "N/A")),
         )
-        await update.message.reply_text(truncate(answer), parse_mode="Markdown")
+        await update.message.reply_text(safe_markdown(truncate(answer)), parse_mode="Markdown")
 
     # ─── Callback Query Handler ──────────────────────────────
 
@@ -684,11 +688,23 @@ class EuroScopeBot:
 
     # ─── Bot Setup ───────────────────────────────────────────
 
+    async def _error_handler(self, update: object, context: ContextTypes.DEFAULT_TYPE):
+        """Global error handler — logs and notifies the user."""
+        logger.error(f"Unhandled exception: {context.error}", exc_info=context.error)
+        if isinstance(update, Update) and update.effective_message:
+            try:
+                await update.effective_message.reply_text(
+                    "⚠️ An internal error occurred. Please try again later."
+                )
+            except Exception:
+                pass  # if reply itself fails, nothing more to do
+
     def build_app(self) -> Application:
         """Build and configure the Telegram bot application."""
         app = Application.builder() \
             .token(self.config.telegram.token) \
             .post_init(self.post_init) \
+            .post_shutdown(self.post_shutdown) \
             .build()
 
         # Register command handlers
@@ -725,6 +741,9 @@ class EuroScopeBot:
         # Free-form message handler
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_message))
 
+        # Global error handler — catches all unhandled exceptions
+        app.add_error_handler(self._error_handler)
+
         return app
 
     async def post_init(self, application: Application):
@@ -749,6 +768,13 @@ class EuroScopeBot:
         asyncio.create_task(self.cron.start())
         logger.info("⚡ Background services & Commands registered.")
 
+    async def post_shutdown(self, application: Application):
+        """Gracefully stop background services on shutdown."""
+        logger.info("Shutting down background services...")
+        await self.heartbeat.stop()
+        await self.cron.stop()
+        logger.info("✅ Background services stopped.")
+
     async def cmd_health(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /health — system health and runtime stats."""
         if not await self._check_auth(update):
@@ -756,7 +782,7 @@ class EuroScopeBot:
 
         result = await self.orchestrator.run_skill("monitoring", "runtime_stats")
         text = result.metadata.get("formatted", "⚠️ Could not fetch health stats.")
-        await update.message.reply_text(text, parse_mode="Markdown")
+        await update.message.reply_text(safe_markdown(text), parse_mode="Markdown")
 
     def run(self):
         """Start the Telegram bot polling and automation services."""

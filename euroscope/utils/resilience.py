@@ -73,3 +73,50 @@ def safe_call(func: Callable, *args, default=None, **kwargs):
     except Exception as e:
         logger.warning(f"safe_call({func.__name__}) failed: {e}")
         return default
+
+
+def async_retry(max_attempts: int = 3, delay: float = 1.0,
+                backoff: float = 2.0,
+                exceptions: tuple[type[Exception], ...] = (Exception,)):
+    """
+    Async retry decorator with exponential backoff.
+
+    Same as retry() but uses asyncio.sleep() to avoid
+    blocking the event loop.
+
+    Usage:
+        @async_retry(max_attempts=3, exceptions=(ConnectionError,))
+        async def fetch_data():
+            ...
+    """
+    import asyncio
+
+    def decorator(func: Callable) -> Callable:
+        @functools.wraps(func)
+        async def wrapper(*args, **kwargs):
+            current_delay = delay
+            last_exception = None
+
+            for attempt in range(1, max_attempts + 1):
+                try:
+                    return await func(*args, **kwargs)
+                except exceptions as e:
+                    last_exception = e
+                    if attempt < max_attempts:
+                        logger.warning(
+                            f"[AsyncRetry {attempt}/{max_attempts}] "
+                            f"{func.__name__} failed: {e}. "
+                            f"Retrying in {current_delay:.1f}s..."
+                        )
+                        await asyncio.sleep(current_delay)
+                        current_delay *= backoff
+                    else:
+                        logger.error(
+                            f"[AsyncRetry {attempt}/{max_attempts}] "
+                            f"{func.__name__} failed permanently: {e}"
+                        )
+
+            raise last_exception
+
+        return wrapper
+    return decorator

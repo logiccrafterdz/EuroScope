@@ -4,6 +4,8 @@ Message Formatting Helpers
 Utilities for formatting Telegram messages.
 """
 
+import re
+
 
 def truncate(text: str, max_length: int = 4096) -> str:
     """Truncate text to fit Telegram's message limit."""
@@ -39,3 +41,33 @@ def header(text: str, emoji: str = "📊") -> str:
 def divider() -> str:
     """A simple divider."""
     return "─" * 25
+
+
+def safe_markdown(text: str) -> str:
+    """
+    Sanitize text for Telegram classic Markdown.
+
+    Strips unmatched *, _, and ` that would cause
+    'Can't parse entities' BadRequest errors.
+    """
+    if not text:
+        return text
+
+    # Fix unmatched bold markers (*)
+    # Count non-escaped * characters; if odd, remove the last one
+    asterisks = [m.start() for m in re.finditer(r'(?<!\\)\*', text)]
+    if len(asterisks) % 2 != 0:
+        # Remove the last unmatched asterisk
+        text = text[:asterisks[-1]] + text[asterisks[-1] + 1:]
+
+    # Fix unmatched italic markers (_)
+    underscores = [m.start() for m in re.finditer(r'(?<!\\)_', text)]
+    if len(underscores) % 2 != 0:
+        text = text[:underscores[-1]] + text[underscores[-1] + 1:]
+
+    # Fix unmatched code markers (`)
+    backticks = [m.start() for m in re.finditer(r'(?<!\\)`', text)]
+    if len(backticks) % 2 != 0:
+        text = text[:backticks[-1]] + text[backticks[-1] + 1:]
+
+    return text
