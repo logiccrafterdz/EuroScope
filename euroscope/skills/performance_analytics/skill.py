@@ -18,18 +18,18 @@ class PerformanceAnalyticsSkill(BaseSkill):
         super().__init__()
         self._analytics = PerformanceAnalytics(storage)
 
-    def execute(self, context: SkillContext, action: str, **params) -> SkillResult:
+    async def execute(self, context: SkillContext, action: str, **params) -> SkillResult:
         if action == "compute_metrics":
-            return self._compute(context, **params)
+            return await self._compute(context, **params)
         elif action == "get_snapshot":
-            return self._snapshot(**params)
+            return await self._snapshot(**params)
         elif action == "breakdown":
-            return self._breakdown(**params)
+            return await self._breakdown(**params)
         elif action == "format_report":
-            return self._format(**params)
+            return await self._format(**params)
         return SkillResult(success=False, error=f"Unknown action: {action}")
 
-    def _compute(self, context: SkillContext, **params) -> SkillResult:
+    async def _compute(self, context: SkillContext, **params) -> SkillResult:
         trades = params.get("trades", [])
         try:
             snap = self._analytics.compute_from_trades(trades)
@@ -47,7 +47,7 @@ class PerformanceAnalyticsSkill(BaseSkill):
         except Exception as e:
             return SkillResult(success=False, error=str(e))
 
-    def _snapshot(self, **params) -> SkillResult:
+    async def _snapshot(self, **params) -> SkillResult:
         trades = params.get("trades", [])
         try:
             snap = self._analytics.compute_from_trades(trades)
@@ -55,7 +55,7 @@ class PerformanceAnalyticsSkill(BaseSkill):
         except Exception as e:
             return SkillResult(success=False, error=str(e))
 
-    def _breakdown(self, **params) -> SkillResult:
+    async def _breakdown(self, **params) -> SkillResult:
         trades = params.get("trades", [])
         by = params.get("by", "strategy")
         try:
@@ -71,7 +71,7 @@ class PerformanceAnalyticsSkill(BaseSkill):
         except Exception as e:
             return SkillResult(success=False, error=str(e))
 
-    def _format(self, **params) -> SkillResult:
+    async def _format(self, **params) -> SkillResult:
         trades = params.get("trades", [])
         try:
             snap = self._analytics.compute_from_trades(trades)

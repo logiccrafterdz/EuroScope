@@ -31,7 +31,7 @@ class SkillChain:
     def __init__(self, registry: SkillsRegistry):
         self.registry = registry
 
-    def run(self, steps: list[tuple[str, str]], context: SkillContext = None,
+    async def run(self, steps: list[tuple[str, str]], context: SkillContext = None,
             params: dict = None) -> SkillContext:
         """
         Execute a chain of (skill_name, action) steps.
@@ -56,7 +56,7 @@ class SkillChain:
                 continue
 
             step_params = params.get(skill_name, {})
-            result = skill.safe_execute(context, action, **step_params)
+            result = await skill.safe_execute(context, action, **step_params)
 
             if not result.success:
                 logger.warning(
@@ -88,10 +88,45 @@ class Orchestrator:
         self.registry.discover()
         self.chain = SkillChain(self.registry)
 
+    def inject_dependencies(self, **deps):
+        """
+        Inject shared dependencies into all registered skills.
+        
+        Supported dependencies:
+            - price_provider
+            - news_engine
+            - calendar
+            - storage
+            - risk_manager
+            - agent
+        """
+        for skill in self.registry.list_all():
+            # Inject PriceProvider
+            if hasattr(skill, "set_provider") and "price_provider" in deps:
+                skill.set_provider(deps["price_provider"])
+            
+            # Inject News/Calendar
+            if hasattr(skill, "set_engines") and ("news_engine" in deps or "calendar" in deps):
+                skill.set_engines(deps.get("news_engine"), deps.get("calendar"))
+            
+            # Inject Storage
+            if hasattr(skill, "set_storage") and "storage" in deps:
+                skill.set_storage(deps["storage"])
+            
+            # Inject Risk Manager
+            if hasattr(skill, "set_risk_manager") and "risk_manager" in deps:
+                skill.set_risk_manager(deps["risk_manager"])
+
+            # Generic setter support
+            for key, val in deps.items():
+                setter = getattr(skill, f"set_{key}", None)
+                if setter:
+                    setter(val)
+
     # ── V2 Skills API ────────────────────────────────────────
 
-    def run_skill(self, skill_name: str, action: str,
-                  context: SkillContext = None, **params) -> SkillResult:
+    async def run_skill(self, skill_name: str, action: str,
+                   context: SkillContext = None, **params) -> SkillResult:
         """
         Execute a single skill action.
 
@@ -111,11 +146,11 @@ class Orchestrator:
         if not skill:
             return SkillResult(success=False, error=f"Skill '{skill_name}' not found")
 
-        return skill.safe_execute(context, action, **params)
+        return await skill.safe_execute(context, action, **params)
 
-    def run_pipeline(self, steps: list[tuple[str, str]],
-                     context: SkillContext = None,
-                     params: dict = None) -> SkillContext:
+    async def run_pipeline(self, steps: list[tuple[str, str]],
+                      context: SkillContext = None,
+                      params: dict = None) -> SkillContext:
         """
         Execute a skill chain pipeline.
 
@@ -127,9 +162,9 @@ class Orchestrator:
                 ("trading_strategy", "detect_signal"),
             ])
         """
-        return self.chain.run(steps, context, params)
+        return await self.chain.run(steps, context, params)
 
-    def run_full_analysis_pipeline(self, context: SkillContext = None,
+    async def run_full_analysis_pipeline(self, context: SkillContext = None,
                                    **market_params) -> SkillContext:
         """
         Complete analysis pipeline using skills.
@@ -143,7 +178,7 @@ class Orchestrator:
             ("trading_strategy", "detect_signal"),
         ]
         params = {"market_data": market_params} if market_params else {}
-        return self.run_pipeline(steps, context, params)
+        return await self.run_pipeline(steps, context, params)
 
     def get_available_skills(self) -> str:
         """Get LLM-ready description of all available skills."""

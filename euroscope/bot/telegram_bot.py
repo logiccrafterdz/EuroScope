@@ -21,6 +21,7 @@ from telegram.ext import (
     ContextTypes,
     filters,
 )
+from telegram import BotCommand
 
 from ..config import Config
 from ..brain.agent import Agent
@@ -78,15 +79,28 @@ class EuroScopeBot:
         # Setup alert handler to send to Telegram
         self.alerts.register_handler(AlertChannel.TELEGRAM, self._on_alert_triggered)
         
+        # Sub-systems
+        self.price_provider = PriceProvider()
+        self.news_engine = NewsEngine(config.data.brave_api_key, self.storage) # Key ignored in DDG version
+        self.calendar = EconomicCalendar()
+        
         # Legacy components (still used by some handlers until fully migrated to skills)
         self.agent = Agent(config.llm)
-        self.price_provider = PriceProvider()
         self.technical = TechnicalAnalyzer()
         self.patterns = PatternDetector()
         self.levels = LevelAnalyzer()
         self.signals = SignalGenerator()
         
-        self.forecaster = Forecaster(self.agent, Memory(self.storage), self.price_provider, NewsEngine(config.data.brave_api_key))
+        self.forecaster = Forecaster(self.agent, Memory(self.storage), self.price_provider, self.news_engine)
+        
+        # Inject dependencies into the skills system
+        self.orchestrator.inject_dependencies(
+            price_provider=self.price_provider,
+            news_engine=self.news_engine,
+            calendar=self.calendar,
+            storage=self.storage,
+            agent=self.agent
+        )
 
     def _on_alert_triggered(self, alert):
         """Callback for SmartAlerts — sends to allowed users."""
@@ -196,7 +210,7 @@ class EuroScopeBot:
             return
 
         await update.message.reply_text("⏳ Fetching EUR/USD price...")
-        result = self.orchestrator.run_skill("market_data", "get_price")
+        result = await self.orchestrator.run_skill("market_data", "get_price")
 
         if not result.success:
             await update.message.reply_text(f"❌ {result.error}")
@@ -233,7 +247,7 @@ class EuroScopeBot:
         tf = context.args[0].upper() if context.args else "H1"
         await update.message.reply_text(f"⏳ Running {tf} technical analysis...")
 
-        result = self.orchestrator.run_skill("technical_analysis", "analyze", timeframe=tf)
+        result = await self.orchestrator.run_skill("technical_analysis", "analyze", timeframe=tf)
         if not result.success:
             await update.message.reply_text(f"❌ {result.error}")
             return
@@ -272,7 +286,7 @@ class EuroScopeBot:
 
         await update.message.reply_text("⏳ Scanning for patterns...")
 
-        result = self.orchestrator.run_skill("technical_analysis", "detect_patterns")
+        result = await self.orchestrator.run_skill("technical_analysis", "detect_patterns")
         if not result.success:
             await update.message.reply_text(f"❌ {result.error}")
             return
@@ -286,7 +300,7 @@ class EuroScopeBot:
             return
 
         await update.message.reply_text("⏳ Calculating key levels...")
-        result = self.orchestrator.run_skill("technical_analysis", "find_levels")
+        result = await self.orchestrator.run_skill("technical_analysis", "find_levels")
         if not result.success:
             await update.message.reply_text(f"❌ {result.error}")
             return
@@ -302,7 +316,7 @@ class EuroScopeBot:
         tf = context.args[0].upper() if context.args else "H1"
         await update.message.reply_text(f"⏳ Generating {tf} signals...")
 
-        result = self.orchestrator.run_skill("trading_strategy", "detect_signal", timeframe=tf)
+        result = await self.orchestrator.run_skill("trading_strategy", "detect_signal", timeframe=tf)
         if not result.success:
             await update.message.reply_text(f"❌ {result.error}")
             return
@@ -316,7 +330,7 @@ class EuroScopeBot:
             return
 
         await update.message.reply_text("⏳ Fetching EUR/USD news...")
-        result = self.orchestrator.run_skill("fundamental_analysis", "get_news")
+        result = await self.orchestrator.run_skill("fundamental_analysis", "get_news")
         if not result.success:
             await update.message.reply_text(f"❌ {result.error}")
             return
@@ -329,7 +343,7 @@ class EuroScopeBot:
         if not await self._check_auth(update):
             return
 
-        result = self.orchestrator.run_skill("fundamental_analysis", "get_calendar")
+        result = await self.orchestrator.run_skill("fundamental_analysis", "get_calendar")
         if not result.success:
             await update.message.reply_text(f"❌ {result.error}")
             return
@@ -364,7 +378,7 @@ class EuroScopeBot:
 
         # Run the full analysis pipeline
         tf = context.args[0].upper() if context.args else "H1"
-        ctx = self.orchestrator.run_full_analysis_pipeline(timeframe=tf)
+        ctx = await self.orchestrator.run_full_analysis_pipeline(timeframe=tf)
 
         # Build report from context
         lines = [
@@ -415,7 +429,7 @@ class EuroScopeBot:
             return
 
         await update.message.reply_text("⏳ Analyzing market regime...")
-        result = self.orchestrator.run_skill("trading_strategy", "detect_signal")
+        result = await self.orchestrator.run_skill("trading_strategy", "detect_signal")
 
         if not result.success:
             await update.message.reply_text(f"❌ {result.error}")
@@ -439,7 +453,7 @@ class EuroScopeBot:
             return
 
         await update.message.reply_text("⏳ Assessing trade risk...")
-        result = self.orchestrator.run_skill("risk_management", "assess_trade")
+        result = await self.orchestrator.run_skill("risk_management", "assess_trade")
         
         if not result.success:
             await update.message.reply_text(f"❌ {result.error}")
@@ -453,7 +467,7 @@ class EuroScopeBot:
         if not await self._check_auth(update):
             return
 
-        result = self.orchestrator.run_skill("signal_executor", "list_trades")
+        result = await self.orchestrator.run_skill("signal_executor", "list_trades")
         if not result.success:
             await update.message.reply_text(f"❌ {result.error}")
             return
@@ -466,7 +480,7 @@ class EuroScopeBot:
         if not await self._check_auth(update):
             return
 
-        result = self.orchestrator.run_skill("performance_analytics", "get_snapshot")
+        result = await self.orchestrator.run_skill("performance_analytics", "get_snapshot")
         if not result.success:
             await update.message.reply_text(f"❌ {result.error}")
             return
@@ -588,25 +602,25 @@ class EuroScopeBot:
             return
 
         if cmd_name == "trades":
-            result = self.orchestrator.run_skill("signal_executor", "list_trades")
+            result = await self.orchestrator.run_skill("signal_executor", "list_trades")
             text = result.metadata.get("formatted", str(result.data))
             await bot.send_message(chat_id, text, parse_mode="Markdown")
             return
 
         if cmd_name == "performance":
-            result = self.orchestrator.run_skill("performance_analytics", "get_snapshot")
+            result = await self.orchestrator.run_skill("performance_analytics", "get_snapshot")
             text = result.metadata.get("formatted", str(result.data))
             await bot.send_message(chat_id, text, parse_mode="Markdown")
             return
 
         if cmd_name == "calendar":
-            result = self.orchestrator.run_skill("fundamental_analysis", "get_calendar")
+            result = await self.orchestrator.run_skill("fundamental_analysis", "get_calendar")
             text = result.metadata.get("formatted", str(result.data))
             await bot.send_message(chat_id, truncate(text), parse_mode="Markdown")
             return
 
         if cmd_name == "price":
-            result = self.orchestrator.run_skill("market_data", "get_price")
+            result = await self.orchestrator.run_skill("market_data", "get_price")
             if not result.success:
                 await bot.send_message(chat_id, f"❌ {result.error}")
                 return
@@ -674,17 +688,32 @@ class EuroScopeBot:
 
     async def post_init(self, application: Application):
         """Called after bot is initialized, before polling starts."""
-        # Start automation services
+        # 1. Register commands to appear in the Telegram menu button
+        cmds = [
+            BotCommand("start", "Start the bot"),
+            BotCommand("menu", "Show interactive menu"),
+            BotCommand("price", "EUR/USD real-time price"),
+            BotCommand("analysis", "Technical analysis (H1/H4)"),
+            BotCommand("chart", "Generate candle chart"),
+            BotCommand("signals", "Trading signals"),
+            BotCommand("forecast", "AI-powered forecast"),
+            BotCommand("news", "Latest news (DuckDuckGo)"),
+            BotCommand("health", "System status"),
+            BotCommand("help", "List all commands"),
+        ]
+        await application.bot.set_my_commands(cmds)
+
+        # 2. Start automation services
         asyncio.create_task(self.heartbeat.start())
         asyncio.create_task(self.cron.start())
-        logger.info("⚡ Background services (Heartbeat, Cron) started.")
+        logger.info("⚡ Background services & Commands registered.")
 
     async def cmd_health(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /health — system health and runtime stats."""
         if not await self._check_auth(update):
             return
 
-        result = self.orchestrator.run_skill("monitoring", "runtime_stats")
+        result = await self.orchestrator.run_skill("monitoring", "runtime_stats")
         text = result.metadata.get("formatted", "⚠️ Could not fetch health stats.")
         await update.message.reply_text(text, parse_mode="Markdown")
 

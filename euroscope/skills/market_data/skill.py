@@ -21,14 +21,14 @@ class MarketDataSkill(BaseSkill):
         """Inject the PriceProvider instance."""
         self._provider = provider
 
-    def execute(self, context: SkillContext, action: str, **params) -> SkillResult:
+    async def execute(self, context: SkillContext, action: str, **params) -> SkillResult:
         if action == "get_price":
-            return self._get_price(context)
+            return await self._get_price(context)
         elif action == "get_candles":
-            return self._get_candles(context, **params)
+            return await self._get_candles(context, **params)
         return SkillResult(success=False, error=f"Unknown action: {action}")
 
-    def _get_price(self, context: SkillContext) -> SkillResult:
+    async def _get_price(self, context: SkillContext) -> SkillResult:
         if not self._provider:
             return SkillResult(success=False, error="No price provider configured")
         try:
@@ -40,13 +40,13 @@ class MarketDataSkill(BaseSkill):
         except Exception as e:
             return SkillResult(success=False, error=str(e))
 
-    def _get_candles(self, context: SkillContext, **params) -> SkillResult:
+    async def _get_candles(self, context: SkillContext, **params) -> SkillResult:
         if not self._provider:
             return SkillResult(success=False, error="No price provider configured")
         try:
             timeframe = params.get("timeframe", "H1")
             count = params.get("count", 100)
-            df = self._provider.get_historical(timeframe=timeframe, count=count)
+            df = self._provider.get_candles(timeframe=timeframe, count=count)
             if df is None or (hasattr(df, 'empty') and df.empty):
                 return SkillResult(success=False, error="No candle data returned")
             context.market_data["candles"] = df

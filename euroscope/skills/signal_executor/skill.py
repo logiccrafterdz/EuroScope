@@ -36,18 +36,18 @@ class SignalExecutorSkill(BaseSkill):
         self._closed: list[PaperTrade] = []
         self._counter = 0
 
-    def execute(self, context: SkillContext, action: str, **params) -> SkillResult:
+    async def execute(self, context: SkillContext, action: str, **params) -> SkillResult:
         if action == "open_trade":
-            return self._open_trade(context, **params)
+            return await self._open_trade(context, **params)
         elif action == "close_trade":
-            return self._close_trade(context, **params)
+            return await self._close_trade(context, **params)
         elif action == "list_trades":
-            return self._list_trades()
+            return await self._list_trades()
         elif action == "trade_history":
-            return self._trade_history()
+            return await self._trade_history()
         return SkillResult(success=False, error=f"Unknown action: {action}")
 
-    def _open_trade(self, context: SkillContext, **params) -> SkillResult:
+    async def _open_trade(self, context: SkillContext, **params) -> SkillResult:
         self._counter += 1
         signal = context.signals or params
         risk = context.risk or {}
@@ -66,7 +66,7 @@ class SignalExecutorSkill(BaseSkill):
         return SkillResult(success=True, data=trade.__dict__,
                           metadata={"trade_id": trade.trade_id})
 
-    def _close_trade(self, context: SkillContext, **params) -> SkillResult:
+    async def _close_trade(self, context: SkillContext, **params) -> SkillResult:
         trade_id = params.get("trade_id", "")
         exit_price = params.get("exit_price", 0)
 
@@ -84,8 +84,8 @@ class SignalExecutorSkill(BaseSkill):
 
         return SkillResult(success=False, error=f"Trade {trade_id} not found")
 
-    def _list_trades(self) -> SkillResult:
+    async def _list_trades(self) -> SkillResult:
         return SkillResult(success=True, data=[t.__dict__ for t in self._open])
 
-    def _trade_history(self) -> SkillResult:
+    async def _trade_history(self) -> SkillResult:
         return SkillResult(success=True, data=[t.__dict__ for t in self._closed])

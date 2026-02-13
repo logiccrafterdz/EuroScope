@@ -24,43 +24,43 @@ class FundamentalAnalysisSkill(BaseSkill):
         if calendar:
             self._calendar = calendar
 
-    def execute(self, context: SkillContext, action: str, **params) -> SkillResult:
+    async def execute(self, context: SkillContext, action: str, **params) -> SkillResult:
         if action == "get_news":
-            return self._get_news(context)
+            return await self._get_news(context)
         elif action == "get_calendar":
-            return self._get_calendar(context)
+            return await self._get_calendar(context)
         elif action == "get_sentiment":
-            return self._get_sentiment(context)
+            return await self._get_sentiment(context)
         elif action == "full":
-            return self._full(context)
+            return await self._full(context)
         return SkillResult(success=False, error=f"Unknown action: {action}")
 
-    def _get_news(self, context: SkillContext) -> SkillResult:
+    async def _get_news(self, context: SkillContext) -> SkillResult:
         if not self._news:
             return SkillResult(success=False, error="No news engine configured")
         try:
-            articles = self._news.get_news()
+            articles = await self._news.get_eurusd_news()
             context.analysis["news"] = articles
             return SkillResult(success=True, data=articles)
         except Exception as e:
             return SkillResult(success=False, error=str(e))
 
-    def _get_calendar(self, context: SkillContext) -> SkillResult:
+    async def _get_calendar(self, context: SkillContext) -> SkillResult:
         if not self._calendar:
             return SkillResult(success=False, error="No calendar configured")
         try:
             events = self._calendar.get_upcoming_events()
-            data = [e.__dict__ if hasattr(e, '__dict__') else e for e in events]
+            data = [e.__dict__ if hasattr(e, "__dict__") else e for e in events]
             context.analysis["calendar"] = data
             return SkillResult(success=True, data=data)
         except Exception as e:
             return SkillResult(success=False, error=str(e))
 
-    def _get_sentiment(self, context: SkillContext) -> SkillResult:
+    async def _get_sentiment(self, context: SkillContext) -> SkillResult:
         if not self._news:
             return SkillResult(success=False, error="No news engine configured")
         try:
-            articles = self._news.get_news()
+            articles = await self._news.get_eurusd_news()
             if not articles:
                 return SkillResult(success=True, data={"sentiment": "neutral", "score": 0})
             scores = [a.get("sentiment_score", 0) for a in articles]
@@ -72,10 +72,10 @@ class FundamentalAnalysisSkill(BaseSkill):
         except Exception as e:
             return SkillResult(success=False, error=str(e))
 
-    def _full(self, context: SkillContext) -> SkillResult:
-        news = self._get_news(context)
-        cal = self._get_calendar(context)
-        sent = self._get_sentiment(context)
+    async def _full(self, context: SkillContext) -> SkillResult:
+        news = await self._get_news(context)
+        cal = await self._get_calendar(context)
+        sent = await self._get_sentiment(context)
         data = {
             "news": news.data if news.success else [],
             "calendar": cal.data if cal.success else [],

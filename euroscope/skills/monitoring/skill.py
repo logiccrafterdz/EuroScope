@@ -24,33 +24,37 @@ class MonitoringSkill(BaseSkill):
         super().__init__()
         self.monitor = HealthMonitor(storage=storage)
 
-    def execute(self, context: SkillContext, action: str, **params) -> SkillResult:
+    def set_storage(self, storage):
+        """Inject the Storage instance."""
+        self.monitor.storage = storage
+
+    async def execute(self, context: SkillContext, action: str, **params) -> SkillResult:
         if action == "check_health":
-            return self._check()
+            return await self._check()
         elif action == "track_error":
-            return self._track_error(**params)
+            return await self._track_error(**params)
         elif action == "get_status":
-            return self._status()
+            return await self._status()
         elif action == "format_dashboard":
-            return self._dashboard()
+            return await self._dashboard()
         elif action == "runtime_stats":
-            return self._runtime_stats()
+            return await self._runtime_stats()
         return SkillResult(success=False, error=f"Unknown action: {action}")
 
-    def _check(self) -> SkillResult:
+    async def _check(self) -> SkillResult:
         try:
             report = self.monitor.full_check()
             return SkillResult(success=True, data=report)
         except Exception as e:
             return SkillResult(success=False, error=str(e))
 
-    def _track_error(self, **params) -> SkillResult:
+    async def _track_error(self, **params) -> SkillResult:
         component = params.get("component", "unknown")
         error_msg = params.get("error", "Unknown error")
         self.monitor.record_error(component, error_msg)
         return SkillResult(success=True, data={"tracked": True})
 
-    def _status(self) -> SkillResult:
+    async def _status(self) -> SkillResult:
         try:
             report = self.monitor.full_check()
             return SkillResult(success=True, data={
@@ -59,7 +63,7 @@ class MonitoringSkill(BaseSkill):
         except Exception as e:
             return SkillResult(success=False, error=str(e))
 
-    def _dashboard(self) -> SkillResult:
+    async def _dashboard(self) -> SkillResult:
         try:
             report = self.monitor.full_check()
             text = self.monitor.format_health_report(report)
@@ -67,7 +71,7 @@ class MonitoringSkill(BaseSkill):
         except Exception as e:
             return SkillResult(success=False, error=str(e))
 
-    def _runtime_stats(self) -> SkillResult:
+    async def _runtime_stats(self) -> SkillResult:
         """Get process-level runtime stats: uptime, memory, CPU."""
         try:
             uptime_sec = time.time() - _START_TIME

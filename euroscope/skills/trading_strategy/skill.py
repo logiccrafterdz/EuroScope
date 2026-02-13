@@ -18,16 +18,16 @@ class TradingStrategySkill(BaseSkill):
         super().__init__()
         self.engine = StrategyEngine()
 
-    def execute(self, context: SkillContext, action: str, **params) -> SkillResult:
+    async def execute(self, context: SkillContext, action: str, **params) -> SkillResult:
         if action == "detect_signal":
-            return self._detect(context, **params)
+            return await self._detect(context, **params)
         elif action == "list_strategies":
             return SkillResult(success=True, data=[
                 "trend_following", "mean_reversion", "breakout",
             ])
         return SkillResult(success=False, error=f"Unknown action: {action}")
 
-    def _detect(self, context: SkillContext, **params) -> SkillResult:
+    async def _detect(self, context: SkillContext, **params) -> SkillResult:
         indicators = params.get("indicators") or context.analysis.get("indicators", {})
         levels_data = params.get("levels") or context.analysis.get("levels", {})
         patterns = params.get("patterns") or context.analysis.get("patterns", [])

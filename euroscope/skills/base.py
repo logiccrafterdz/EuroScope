@@ -101,7 +101,7 @@ class BaseSkill(ABC):
     # ── Core API ─────────────────────────────────────────────
 
     @abstractmethod
-    def execute(self, context: SkillContext, action: str, **params) -> SkillResult:
+    async def execute(self, context: SkillContext, action: str, **params) -> SkillResult:
         """
         Execute a skill action.
 
@@ -168,7 +168,7 @@ class BaseSkill(ABC):
 
     # ── Utilities ────────────────────────────────────────────
 
-    def safe_execute(self, context: SkillContext, action: str, **params) -> SkillResult:
+    async def safe_execute(self, context: SkillContext, action: str, **params) -> SkillResult:
         """Execute with error handling — never raises."""
         if not self.validate(action, **params):
             return SkillResult(
@@ -176,7 +176,7 @@ class BaseSkill(ABC):
                 error=f"Unknown action '{action}'. Available: {self.capabilities}",
             )
         try:
-            result = self.execute(context, action, **params)
+            result = await self.execute(context, action, **params)
             context.add_result(self.name, result)
             return result
         except Exception as e:

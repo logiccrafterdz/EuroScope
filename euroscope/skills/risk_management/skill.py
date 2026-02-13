@@ -18,18 +18,22 @@ class RiskManagementSkill(BaseSkill):
         super().__init__()
         self.manager = RiskManager(config or RiskConfig())
 
-    def execute(self, context: SkillContext, action: str, **params) -> SkillResult:
+    def set_risk_manager(self, manager):
+        """Inject the RiskManager instance."""
+        self.manager = manager
+
+    async def execute(self, context: SkillContext, action: str, **params) -> SkillResult:
         if action == "assess_trade":
-            return self._assess(context, **params)
+            return await self._assess(context, **params)
         elif action == "position_size":
-            return self._position_size(**params)
+            return await self._position_size(**params)
         elif action == "stop_loss":
-            return self._stop_loss(**params)
+            return await self._stop_loss(**params)
         elif action == "take_profit":
-            return self._take_profit(**params)
+            return await self._take_profit(**params)
         return SkillResult(success=False, error=f"Unknown action: {action}")
 
-    def _assess(self, context: SkillContext, **params) -> SkillResult:
+    async def _assess(self, context: SkillContext, **params) -> SkillResult:
         direction = params.get("direction", "BUY")
         entry = params.get("entry_price", 0)
         atr = params.get("atr")
@@ -66,7 +70,7 @@ class RiskManagementSkill(BaseSkill):
         except Exception as e:
             return SkillResult(success=False, error=str(e))
 
-    def _position_size(self, **params) -> SkillResult:
+    async def _position_size(self, **params) -> SkillResult:
         balance = params.get("balance", 10000)
         risk_pct = params.get("risk_pct", 0.01)
         stop_pips = params.get("stop_pips", 30)
@@ -76,7 +80,7 @@ class RiskManagementSkill(BaseSkill):
         except Exception as e:
             return SkillResult(success=False, error=str(e))
 
-    def _stop_loss(self, **params) -> SkillResult:
+    async def _stop_loss(self, **params) -> SkillResult:
         direction = params.get("direction", "BUY")
         entry = params.get("entry_price", 0)
         atr = params.get("atr", 0.001)
@@ -86,7 +90,7 @@ class RiskManagementSkill(BaseSkill):
         except Exception as e:
             return SkillResult(success=False, error=str(e))
 
-    def _take_profit(self, **params) -> SkillResult:
+    async def _take_profit(self, **params) -> SkillResult:
         direction = params.get("direction", "BUY")
         entry = params.get("entry_price", 0)
         sl = params.get("stop_loss", 0)
