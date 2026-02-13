@@ -9,9 +9,16 @@ description: Historical strategy replay and performance measurement
 Replays historical candle data through StrategyEngine + RiskManager to simulate trades and measure strategy performance.
 
 ## Actions
-- `run` — Run backtest on historical candles (optionally filtered by strategy)
-- `compare` — Compare multiple strategies on the same data set
+- `run` — Run backtest with realistic simulation (slippage, commission)
+- `compare` — Compare multiple strategies with realistic costs
+- `walk_forward` — Perform Walk-Forward analysis on sliding windows
 - `format_result` — Format backtest result for Telegram display
+
+## Parameters
+- `slippage` — Expected slippage in pips (default: 0.5)
+- `commission` — Expected commission in pips (default: 0.7)
+- `window_size` — Sliding window size for Walk-Forward (default: 500)
+- `step_size` — Step size for Walk-Forward (default: 100)
 
 ## Returns
 - total_trades, wins, losses, win_rate

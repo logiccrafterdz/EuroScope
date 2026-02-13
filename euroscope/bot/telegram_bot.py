@@ -43,35 +43,49 @@ from ..utils.formatting import truncate
 from .user_settings import UserSettings
 from .notification_manager import NotificationManager
 
+from ..skills.registry import SkillsRegistry
+from ..skills.base import SkillContext
+from ..workspace import WorkspaceManager
+from ..automation import HeartbeatService, EventBus, SmartAlerts, setup_default_alerts, CronScheduler
+
 logger = logging.getLogger("euroscope.bot")
 
 
 class EuroScopeBot:
-    """Telegram bot for EUR/USD analysis — V2 with inline keyboards."""
+    """Telegram bot for EUR/USD analysis — V3 Skills-Based."""
 
     def __init__(self, config: Config):
         self.config = config
         self.storage = Storage()
-        self.price_provider = PriceProvider()
-        self.news_engine = NewsEngine(config.data.brave_api_key)
-        self.calendar = EconomicCalendar()
-        self.agent = Agent(config.llm)
-        self.memory = Memory(self.storage)
-        self.technical = TechnicalAnalyzer()
-        self.patterns = PatternDetector()
-        self.levels = LevelAnalyzer()
-        self.signals = SignalGenerator()
-        self.forecaster = Forecaster(self.agent, self.memory, self.price_provider, self.news_engine)
+        
+        # New Skills-Based Architecture
+        self.registry = SkillsRegistry()
+        self.registry.discover()
+        self.orchestrator = Orchestrator() # Already discover inside
+        self.workspace = WorkspaceManager()
+        
+        # Automation & Events
+        self.bus = EventBus()
+        self.alerts = SmartAlerts()
+        setup_default_alerts(self.alerts)
+        self.heartbeat = HeartbeatService(interval=300) # 5 min health checks
+        self.cron = CronScheduler()
 
-        # Phase 3-4 integrations
-        self.orchestrator = Orchestrator()
-        self.risk_manager = RiskManager()
-        self.strategy_engine = StrategyEngine()
-        self.signal_executor = SignalExecutor(self.storage)
-
-        # Phase 5
+        # Phase 5 integrations
         self.user_settings = UserSettings(self.storage)
         self.notifications = NotificationManager(self.storage)
+        
+        # Setup alert handler to send to Telegram
+        self.alerts.register_handler(AlertChannel.TELEGRAM, self._on_alert_triggered)
+        
+        # Legacy components (still used by some handlers until fully migrated to skills)
+        self.price_provider = PriceProvider()
+        self.forecaster = Forecaster(Agent(config.llm), Memory(self.storage), self.price_provider, NewsEngine(config.data.brave_api_key))
+
+    def _on_alert_triggered(self, alert):
+        """Callback for SmartAlerts — sends to allowed users."""
+        asyncio.create_task(self.notifications.broadcast_alert(alert))
+
 
     def _is_authorized(self, user_id: int) -> bool:
         """Check if user is authorized."""
@@ -176,12 +190,13 @@ class EuroScopeBot:
             return
 
         await update.message.reply_text("⏳ Fetching EUR/USD price...")
-        data = self.price_provider.get_price()
+        result = self.orchestrator.run_skill("market_data", "get_price")
 
-        if "error" in data:
-            await update.message.reply_text(f"❌ {data['error']}")
+        if not result.success:
+            await update.message.reply_text(f"❌ {result.error}")
             return
 
+        data = result.data
         msg = (
             f"💱 *EUR/USD Price*\n\n"
             f"{data['direction']} Price: `{data['price']}`\n"
@@ -212,13 +227,13 @@ class EuroScopeBot:
         tf = context.args[0].upper() if context.args else "H1"
         await update.message.reply_text(f"⏳ Running {tf} technical analysis...")
 
-        candles = self.price_provider.get_candles(tf)
-        if candles is None:
-            await update.message.reply_text("❌ Could not fetch candle data.")
+        result = self.orchestrator.run_skill("technical_analysis", "analyze", timeframe=tf)
+        if not result.success:
+            await update.message.reply_text(f"❌ {result.error}")
             return
 
-        result = self.technical.analyze(candles)
-        formatted = self.technical.format_analysis(result, tf)
+        # Formatting is now part of what we get back or can be handled by skill
+        formatted = result.metadata.get("formatted", str(result.data))
         await update.message.reply_text(truncate(formatted), parse_mode="Markdown")
 
     async def cmd_chart(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -251,16 +266,12 @@ class EuroScopeBot:
 
         await update.message.reply_text("⏳ Scanning for patterns...")
 
-        results = []
-        for tf in ["H1", "H4", "D1"]:
-            candles = self.price_provider.get_candles(tf)
-            if candles is not None:
-                found = self.patterns.detect_all(candles)
-                for p in found:
-                    p["timeframe"] = tf
-                results.extend(found)
+        result = self.orchestrator.run_skill("technical_analysis", "detect_patterns")
+        if not result.success:
+            await update.message.reply_text(f"❌ {result.error}")
+            return
 
-        formatted = self.patterns.format_patterns(results)
+        formatted = result.metadata.get("formatted", str(result.data))
         await update.message.reply_text(truncate(formatted), parse_mode="Markdown")
 
     async def cmd_levels(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -269,17 +280,12 @@ class EuroScopeBot:
             return
 
         await update.message.reply_text("⏳ Calculating key levels...")
-
-        candles = self.price_provider.get_candles("D1", 100)
-        if candles is None:
-            await update.message.reply_text("❌ Could not fetch data.")
+        result = self.orchestrator.run_skill("technical_analysis", "find_levels")
+        if not result.success:
+            await update.message.reply_text(f"❌ {result.error}")
             return
 
-        sr = self.levels.find_support_resistance(candles)
-        fib = self.levels.fibonacci_retracement(candles)
-        pivots = self.levels.pivot_points(candles)
-
-        formatted = self.levels.format_levels(sr, fib, pivots)
+        formatted = result.metadata.get("formatted", str(result.data))
         await update.message.reply_text(truncate(formatted), parse_mode="Markdown")
 
     async def cmd_signals(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -290,13 +296,12 @@ class EuroScopeBot:
         tf = context.args[0].upper() if context.args else "H1"
         await update.message.reply_text(f"⏳ Generating {tf} signals...")
 
-        candles = self.price_provider.get_candles(tf)
-        if candles is None:
-            await update.message.reply_text("❌ Could not fetch data.")
+        result = self.orchestrator.run_skill("trading_strategy", "detect_signal", timeframe=tf)
+        if not result.success:
+            await update.message.reply_text(f"❌ {result.error}")
             return
 
-        result = self.signals.generate_signals(candles, tf)
-        formatted = self.signals.format_signal(result)
+        formatted = result.metadata.get("formatted", str(result.data))
         await update.message.reply_text(truncate(formatted), parse_mode="Markdown")
 
     async def cmd_news(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -305,8 +310,12 @@ class EuroScopeBot:
             return
 
         await update.message.reply_text("⏳ Fetching EUR/USD news...")
-        articles = await self.news_engine.get_eurusd_news()
-        formatted = self.news_engine.format_news(articles)
+        result = self.orchestrator.run_skill("fundamental_analysis", "get_news")
+        if not result.success:
+            await update.message.reply_text(f"❌ {result.error}")
+            return
+
+        formatted = result.metadata.get("formatted", str(result.data))
         await update.message.reply_text(truncate(formatted), parse_mode="Markdown")
 
     async def cmd_calendar(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -314,7 +323,12 @@ class EuroScopeBot:
         if not await self._check_auth(update):
             return
 
-        formatted = self.calendar.format_calendar()
+        result = self.orchestrator.run_skill("fundamental_analysis", "get_calendar")
+        if not result.success:
+            await update.message.reply_text(f"❌ {result.error}")
+            return
+
+        formatted = result.metadata.get("formatted", str(result.data))
         await update.message.reply_text(truncate(formatted), parse_mode="Markdown")
 
     async def cmd_forecast(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -336,51 +350,46 @@ class EuroScopeBot:
         await update.message.reply_text(truncate(full_msg), parse_mode="Markdown")
 
     async def cmd_report(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle /report — comprehensive daily report."""
+        """Handle /report — comprehensive analysis report using skills pipeline."""
         if not await self._check_auth(update):
             return
 
-        await update.message.reply_text("⏳ Generating comprehensive report... (this may take a moment)")
+        await update.message.reply_text("⏳ Generating comprehensive report using skills pipeline...")
 
-        price = self.price_provider.get_price()
+        # Run the full analysis pipeline
+        tf = context.args[0].upper() if context.args else "H1"
+        ctx = self.orchestrator.run_full_analysis_pipeline(timeframe=tf)
 
-        analyses = {}
-        for tf in ["H1", "H4", "D1"]:
-            candles = self.price_provider.get_candles(tf)
-            if candles is not None:
-                analyses[tf] = self.technical.analyze(candles)
-
-        h1_candles = self.price_provider.get_candles("H1")
-        sig = self.signals.generate_signals(h1_candles, "H1") if h1_candles is not None else None
-
-        d1_candles = self.price_provider.get_candles("D1", 100)
-        sr = self.levels.find_support_resistance(d1_candles) if d1_candles is not None else {}
-
+        # Build report from context
         lines = [
-            "📋 *EUR/USD Daily Report*",
-            f"🕐 Generated at {price.get('timestamp', 'N/A')}\n",
+            "📋 *EuroScope Skills Report*",
+            f"🕐 Generated at {ctx.market_data.get('price', {}).get('timestamp', 'N/A')}\n",
         ]
 
-        if "error" not in price:
+        # Price section
+        price = ctx.market_data.get("price", {})
+        if price:
             lines.append(f"💱 *Price*: `{price['price']}` ({price['direction']} {price['change_pct']:+.3f}%)")
             lines.append(f"   Range: `{price['low']}` — `{price['high']}` ({price['spread_pips']} pips)\n")
 
-        lines.append("📊 *Multi-Timeframe Bias*")
-        for tf, ta in analyses.items():
+        # Analysis section
+        ta = ctx.analysis.get("indicators", {})
+        if ta:
             bias = ta.get("overall_bias", "N/A")
             icon = {"Bullish": "🟢", "Bearish": "🔴"}.get(bias, "⚪")
             rsi_val = ta.get("indicators", {}).get("RSI", {}).get("value", "?")
-            lines.append(f"   {tf}: {icon} {bias} (RSI: {rsi_val})")
-        lines.append("")
+            lines.append(f"📊 *Technical Bias*: {icon} {bias} (RSI: {rsi_val})")
 
-        if sig and sig.get("signal") != "NONE":
-            lines.append(f"🎯 *Signal*: {sig['emoji']} {sig['signal']} (score: {sig['score']:+d})")
-            lines.append("")
+        # Signal section
+        sig = ctx.signals
+        if sig and sig.get("direction") != "NONE":
+            lines.append(f"🎯 *Signal*: {sig.get('direction')} (Score: {sig.get('score', 0):+d})")
 
-        if sr.get("support"):
-            lines.append(f"🟢 *Support*: {', '.join(f'`{s}`' for s in sr['support'][:3])}")
-        if sr.get("resistance"):
-            lines.append(f"🔴 *Resistance*: {', '.join(f'`{r}`' for r in sr['resistance'][:3])}")
+        # Risk section
+        risk = ctx.risk
+        if risk:
+            lines.append(f"�️ *Risk*: {'Approved ✅' if risk.get('approved') else 'Rejected ❌'}")
+            lines.append(f"   SL: `{risk.get('stop_loss')}` | TP: `{risk.get('take_profit')}`")
 
         await update.message.reply_text(truncate("\n".join(lines)), parse_mode="Markdown")
 
@@ -400,32 +409,13 @@ class EuroScopeBot:
             return
 
         await update.message.reply_text("⏳ Analyzing market regime...")
+        result = self.orchestrator.run_skill("trading_strategy", "detect_signal")
 
-        candles = self.price_provider.get_candles("H1")
-        if candles is None:
-            await update.message.reply_text("❌ Could not fetch data.")
+        if not result.success:
+            await update.message.reply_text(f"❌ {result.error}")
             return
 
-        ta = self.technical.analyze(candles)
-        sr = self.levels.find_support_resistance(candles)
-        detected = self.patterns.detect_all(candles)
-
-        indicators = {
-            "adx": ta.get("indicators", {}).get("ADX", {}).get("value"),
-            "rsi": ta.get("indicators", {}).get("RSI", {}).get("value"),
-            "overall_bias": ta.get("overall_bias"),
-            "macd": ta.get("indicators", {}).get("MACD", {}),
-        }
-
-        levels = {
-            "current_price": ta.get("price"),
-            "support": sr.get("support", []),
-            "resistance": sr.get("resistance", []),
-        }
-
-        strategy_sig = self.strategy_engine.detect_strategy(indicators, levels, detected)
-        formatted = self.strategy_engine.format_strategy(strategy_sig)
-
+        formatted = result.metadata.get("formatted", str(result.data))
         keyboard = InlineKeyboardMarkup([
             [
                 InlineKeyboardButton("🛡️ Risk Check", callback_data="cmd:risk"),
@@ -443,42 +433,26 @@ class EuroScopeBot:
             return
 
         await update.message.reply_text("⏳ Assessing trade risk...")
-
-        candles = self.price_provider.get_candles("H1")
-        if candles is None:
-            await update.message.reply_text("❌ Could not fetch data.")
+        result = self.orchestrator.run_skill("risk_management", "assess_trade")
+        
+        if not result.success:
+            await update.message.reply_text(f"❌ {result.error}")
             return
 
-        ta = self.technical.analyze(candles)
-        sr = self.levels.find_support_resistance(candles)
-        price = ta.get("price", 0)
-        atr = ta.get("indicators", {}).get("ATR", {}).get("value")
-
-        # Assess both BUY and SELL
-        buy_risk = self.risk_manager.assess_trade(
-            "BUY", price, atr=atr,
-            support=sr.get("support", []),
-            resistance=sr.get("resistance", []),
-        )
-        sell_risk = self.risk_manager.assess_trade(
-            "SELL", price, atr=atr,
-            support=sr.get("support", []),
-            resistance=sr.get("resistance", []),
-        )
-
-        msg = (
-            f"{self.risk_manager.format_risk(buy_risk)}\n\n"
-            f"{'─' * 25}\n\n"
-            f"{self.risk_manager.format_risk(sell_risk)}"
-        )
-        await update.message.reply_text(truncate(msg), parse_mode="Markdown")
+        formatted = result.metadata.get("formatted", str(result.data))
+        await update.message.reply_text(truncate(formatted), parse_mode="Markdown")
 
     async def cmd_trades(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /trades — show open paper trades."""
         if not await self._check_auth(update):
             return
 
-        formatted = self.signal_executor.format_open_signals()
+        result = self.orchestrator.run_skill("signal_executor", "list_trades")
+        if not result.success:
+            await update.message.reply_text(f"❌ {result.error}")
+            return
+
+        formatted = result.metadata.get("formatted", str(result.data))
         await update.message.reply_text(formatted, parse_mode="Markdown")
 
     async def cmd_performance(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -486,7 +460,12 @@ class EuroScopeBot:
         if not await self._check_auth(update):
             return
 
-        formatted = self.signal_executor.format_performance()
+        result = self.orchestrator.run_skill("performance_analytics", "get_snapshot")
+        if not result.success:
+            await update.message.reply_text(f"❌ {result.error}")
+            return
+
+        formatted = result.metadata.get("formatted", str(result.data))
         await update.message.reply_text(formatted, parse_mode="Markdown")
 
     async def cmd_settings(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -603,25 +582,29 @@ class EuroScopeBot:
             return
 
         if cmd_name == "trades":
-            text = self.signal_executor.format_open_signals()
+            result = self.orchestrator.run_skill("signal_executor", "list_trades")
+            text = result.metadata.get("formatted", str(result.data))
             await bot.send_message(chat_id, text, parse_mode="Markdown")
             return
 
         if cmd_name == "performance":
-            text = self.signal_executor.format_performance()
+            result = self.orchestrator.run_skill("performance_analytics", "get_snapshot")
+            text = result.metadata.get("formatted", str(result.data))
             await bot.send_message(chat_id, text, parse_mode="Markdown")
             return
 
         if cmd_name == "calendar":
-            text = self.calendar.format_calendar()
+            result = self.orchestrator.run_skill("fundamental_analysis", "get_calendar")
+            text = result.metadata.get("formatted", str(result.data))
             await bot.send_message(chat_id, truncate(text), parse_mode="Markdown")
             return
 
         if cmd_name == "price":
-            data = self.price_provider.get_price()
-            if "error" in data:
-                await bot.send_message(chat_id, f"❌ {data['error']}")
+            result = self.orchestrator.run_skill("market_data", "get_price")
+            if not result.success:
+                await bot.send_message(chat_id, f"❌ {result.error}")
                 return
+            data = result.data
             msg = (
                 f"💱 *EUR/USD Price*\n\n"
                 f"{data['direction']} Price: `{data['price']}`\n"
@@ -680,12 +663,12 @@ class EuroScopeBot:
         return app
 
     def run(self):
-        """Start the Telegram bot polling."""
+        """Start the Telegram bot polling and automation services."""
         if not self.config.telegram.token:
             logger.error("Telegram token not configured!")
             return
 
-        logger.info("🌐 EuroScope bot V2 starting...")
+        logger.info("🌐 EuroScope bot V3 starting...")
         app = self.build_app()
 
         # Set up notifications
@@ -694,5 +677,10 @@ class EuroScopeBot:
             self.notifications.schedule_daily_reports(
                 app.job_queue, self.config.telegram.allowed_users
             )
+
+        # Start automation services
+        loop = asyncio.get_event_loop()
+        loop.create_task(self.heartbeat.start())
+        loop.create_task(self.cron.start())
 
         app.run_polling(drop_pending_updates=True)

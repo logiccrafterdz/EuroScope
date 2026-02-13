@@ -71,7 +71,8 @@ class BacktestEngine:
         self.risk_manager = RiskManager(risk_config or RiskConfig())
 
     def run(self, candles: list[dict], strategy_filter: Optional[str] = None,
-            lookback: int = 50) -> BacktestResult:
+            lookback: int = 50, slippage_pips: float = 0.5,
+            commission_pips: float = 0.7) -> BacktestResult:
         """
         Run a backtest on historical candles.
 
@@ -79,6 +80,8 @@ class BacktestEngine:
             candles: List of OHLCV dicts with 'open', 'high', 'low', 'close'
             strategy_filter: Only test this strategy (or all if None)
             lookback: Min bars for indicator warmup
+            slippage_pips: Pips to subtract from each trade's profit
+            commission_pips: Pips to subtract per round turn
 
         Returns:
             BacktestResult with complete metrics
@@ -102,7 +105,7 @@ class BacktestEngine:
 
             # If we have an open trade, check SL/TP
             if open_trade:
-                closed = self._check_exit(open_trade, high, low, i)
+                closed = self._check_exit(open_trade, high, low, i, slippage=slippage_pips, commission=commission_pips)
                 if closed:
                     result.trades.append(closed)
                     open_trade = None
@@ -187,13 +190,17 @@ class BacktestEngine:
         return result
 
     def compare_strategies(self, candles: list[dict],
-                           strategies: list[str] = None) -> dict[str, BacktestResult]:
+                            strategies: list[str] = None,
+                            slippage: float = 0.5,
+                            commission: float = 0.7) -> dict[str, BacktestResult]:
         """
         Run backtest for multiple strategies on the same data.
 
         Args:
             candles: Historical candle data
             strategies: List of strategy names to compare
+            slippage: Realistic slippage in pips
+            commission: Realistic commission in pips
 
         Returns:
             Dict mapping strategy name → BacktestResult
@@ -203,39 +210,65 @@ class BacktestEngine:
 
         results = {}
         for strat in strategies:
-            results[strat] = self.run(candles, strategy_filter=strat)
+            results[strat] = self.run(candles, strategy_filter=strat, 
+                                      slippage_pips=slippage, 
+                                      commission_pips=commission)
+        return results
+
+    def walk_forward_analysis(self, candles: list[dict], strategy: str,
+                               window_size: int = 500, step_size: int = 100,
+                               slippage: float = 0.5,
+                               commission: float = 0.7) -> list[BacktestResult]:
+        """
+        Perform Walk-Forward analysis by running backtests on sliding windows.
+
+        Args:
+            candles: Total historical data
+            strategy: Strategy to test
+            window_size: Size of the rolling window
+            step_size: How much to slide the window forward
+        """
+        results = []
+        for start in range(0, len(candles) - window_size + 1, step_size):
+            end = start + window_size
+            window_candles = candles[start:end]
+            res = self.run(window_candles, strategy_filter=strategy,
+                           slippage_pips=slippage, commission_pips=commission)
+            results.append(res)
         return results
 
     # ── Internal ─────────────────────────────────────────────
 
     @staticmethod
     def _check_exit(trade: BacktestTrade, high: float, low: float,
-                    bar_idx: int) -> Optional[BacktestTrade]:
+                    bar_idx: int, slippage: float = 0.0,
+                    commission: float = 0.0) -> Optional[BacktestTrade]:
         """Check if a bar's high/low hits SL or TP."""
+        total_cost = slippage + commission
         if trade.direction == "BUY":
             if low <= trade.stop_loss:
                 trade.exit_price = trade.stop_loss
-                trade.pnl_pips = round((trade.stop_loss - trade.entry_price) * 10000, 1)
-                trade.is_win = False
+                trade.pnl_pips = round((trade.stop_loss - trade.entry_price) * 10000 - total_cost, 1)
+                trade.is_win = trade.pnl_pips > 0
                 trade.exit_bar = bar_idx
                 return trade
             if high >= trade.take_profit:
                 trade.exit_price = trade.take_profit
-                trade.pnl_pips = round((trade.take_profit - trade.entry_price) * 10000, 1)
-                trade.is_win = True
+                trade.pnl_pips = round((trade.take_profit - trade.entry_price) * 10000 - total_cost, 1)
+                trade.is_win = trade.pnl_pips > 0
                 trade.exit_bar = bar_idx
                 return trade
         else:  # SELL
             if high >= trade.stop_loss:
                 trade.exit_price = trade.stop_loss
-                trade.pnl_pips = round((trade.entry_price - trade.stop_loss) * 10000, 1)
-                trade.is_win = False
+                trade.pnl_pips = round((trade.entry_price - trade.stop_loss) * 10000 - total_cost, 1)
+                trade.is_win = trade.pnl_pips > 0
                 trade.exit_bar = bar_idx
                 return trade
             if low <= trade.take_profit:
                 trade.exit_price = trade.take_profit
-                trade.pnl_pips = round((trade.entry_price - trade.take_profit) * 10000, 1)
-                trade.is_win = True
+                trade.pnl_pips = round((trade.entry_price - trade.take_profit) * 10000 - total_cost, 1)
+                trade.is_win = trade.pnl_pips > 0
                 trade.exit_bar = bar_idx
                 return trade
 
