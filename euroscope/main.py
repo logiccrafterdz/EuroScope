@@ -9,20 +9,12 @@ import sys
 
 from .config import Config
 from .bot.telegram_bot import EuroScopeBot
+from .utils.logger import setup_structured_logging
 
 
 def setup_logging(level: str = "INFO"):
-    """Configure logging for EuroScope."""
-    logging.basicConfig(
-        level=getattr(logging, level.upper(), logging.INFO),
-        format="%(asctime)s │ %(levelname)-7s │ %(name)-28s │ %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-    )
-    # Suppress noisy third-party loggers
-    logging.getLogger("httpx").setLevel(logging.WARNING)
-    logging.getLogger("httpcore").setLevel(logging.WARNING)
-    logging.getLogger("yfinance").setLevel(logging.WARNING)
-    logging.getLogger("telegram").setLevel(logging.WARNING)
+    """Configure structured logging for EuroScope."""
+    setup_structured_logging(level=level, log_dir="data/logs")
 
 
 def main():

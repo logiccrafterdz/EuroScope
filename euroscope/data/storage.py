@@ -1,7 +1,8 @@
 """
 SQLite Storage Layer
 
-Stores predictions, accuracy tracking, alerts, and cached data.
+Stores predictions, accuracy tracking, alerts, trading signals,
+news events, performance metrics, user preferences, and cached data.
 """
 
 import json
@@ -60,6 +61,72 @@ class Storage:
                 CREATE TABLE IF NOT EXISTS memory (
                     key TEXT PRIMARY KEY,
                     value TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS trading_signals (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    created_at TEXT NOT NULL,
+                    direction TEXT NOT NULL,
+                    entry_price REAL NOT NULL,
+                    stop_loss REAL NOT NULL,
+                    take_profit REAL NOT NULL,
+                    confidence REAL NOT NULL,
+                    timeframe TEXT NOT NULL,
+                    source TEXT DEFAULT 'system',
+                    status TEXT DEFAULT 'pending',
+                    reasoning TEXT,
+                    risk_reward_ratio REAL DEFAULT 0.0,
+                    pnl_pips REAL DEFAULT 0.0,
+                    closed_at TEXT
+                );
+
+                CREATE TABLE IF NOT EXISTS news_events (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    title TEXT NOT NULL,
+                    source TEXT NOT NULL,
+                    url TEXT,
+                    description TEXT,
+                    impact_score REAL DEFAULT 0.0,
+                    sentiment TEXT DEFAULT 'neutral',
+                    sentiment_score REAL DEFAULT 0.0,
+                    currency_impact TEXT,
+                    published_at TEXT,
+                    fetched_at TEXT NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS performance_metrics (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    period TEXT NOT NULL,
+                    total_signals INTEGER DEFAULT 0,
+                    winning_signals INTEGER DEFAULT 0,
+                    losing_signals INTEGER DEFAULT 0,
+                    win_rate REAL DEFAULT 0.0,
+                    total_pnl_pips REAL DEFAULT 0.0,
+                    avg_pnl_pips REAL DEFAULT 0.0,
+                    max_drawdown_pips REAL DEFAULT 0.0,
+                    profit_factor REAL DEFAULT 0.0,
+                    sharpe_ratio REAL DEFAULT 0.0,
+                    avg_risk_reward REAL DEFAULT 0.0,
+                    best_trade_pips REAL DEFAULT 0.0,
+                    worst_trade_pips REAL DEFAULT 0.0,
+                    avg_trade_duration_hours REAL DEFAULT 0.0,
+                    calculated_at TEXT NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS user_preferences (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    chat_id INTEGER UNIQUE NOT NULL,
+                    risk_tolerance TEXT DEFAULT 'medium',
+                    preferred_timeframe TEXT DEFAULT 'H1',
+                    alert_on_signals INTEGER DEFAULT 1,
+                    alert_on_news INTEGER DEFAULT 1,
+                    alert_min_confidence REAL DEFAULT 60.0,
+                    daily_report_enabled INTEGER DEFAULT 1,
+                    daily_report_hour INTEGER DEFAULT 8,
+                    language TEXT DEFAULT 'en',
+                    max_signals_per_day INTEGER DEFAULT 5,
+                    created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL
                 );
             """)
@@ -189,3 +256,166 @@ class Storage:
                     (limit,)
                 ).fetchall()
             return [dict(r) for r in rows]
+
+    # --- Trading Signals ---
+
+    def save_signal(self, direction: str, entry_price: float, stop_loss: float,
+                    take_profit: float, confidence: float, timeframe: str,
+                    source: str = "system", reasoning: str = "",
+                    risk_reward_ratio: float = 0.0) -> int:
+        """Save a new trading signal."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.execute(
+                """INSERT INTO trading_signals
+                   (created_at, direction, entry_price, stop_loss, take_profit,
+                    confidence, timeframe, source, reasoning, risk_reward_ratio)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (datetime.utcnow().isoformat(), direction, entry_price, stop_loss,
+                 take_profit, confidence, timeframe, source, reasoning, risk_reward_ratio)
+            )
+            return cursor.lastrowid
+
+    def update_signal_status(self, signal_id: int, status: str, pnl_pips: float = 0.0):
+        """Update a signal's status (active, closed, cancelled)."""
+        closed_at = datetime.utcnow().isoformat() if status in ("closed", "cancelled") else None
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                "UPDATE trading_signals SET status=?, pnl_pips=?, closed_at=? WHERE id=?",
+                (status, pnl_pips, closed_at, signal_id)
+            )
+
+    def get_signals(self, status: str = None, limit: int = 20) -> list[dict]:
+        """Get trading signals, optionally filtered by status."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            if status:
+                rows = conn.execute(
+                    "SELECT * FROM trading_signals WHERE status=? ORDER BY created_at DESC LIMIT ?",
+                    (status, limit)
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    "SELECT * FROM trading_signals ORDER BY created_at DESC LIMIT ?",
+                    (limit,)
+                ).fetchall()
+            return [dict(r) for r in rows]
+
+    # --- News Events ---
+
+    def save_news_event(self, title: str, source: str, url: str = "",
+                        description: str = "", impact_score: float = 0.0,
+                        sentiment: str = "neutral", sentiment_score: float = 0.0,
+                        currency_impact: str = "", published_at: str = "") -> int:
+        """Save a news event."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.execute(
+                """INSERT INTO news_events
+                   (title, source, url, description, impact_score, sentiment,
+                    sentiment_score, currency_impact, published_at, fetched_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (title, source, url, description, impact_score, sentiment,
+                 sentiment_score, currency_impact, published_at,
+                 datetime.utcnow().isoformat())
+            )
+            return cursor.lastrowid
+
+    def get_recent_news(self, limit: int = 20, min_impact: float = 0.0) -> list[dict]:
+        """Get recent news events, optionally filtered by minimum impact."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                """SELECT * FROM news_events
+                   WHERE impact_score >= ?
+                   ORDER BY fetched_at DESC LIMIT ?""",
+                (min_impact, limit)
+            ).fetchall()
+            return [dict(r) for r in rows]
+
+    # --- Performance Metrics ---
+
+    def save_performance_metric(self, period: str, total_signals: int = 0,
+                                winning_signals: int = 0, losing_signals: int = 0,
+                                win_rate: float = 0.0, total_pnl_pips: float = 0.0,
+                                avg_pnl_pips: float = 0.0, max_drawdown_pips: float = 0.0,
+                                profit_factor: float = 0.0, sharpe_ratio: float = 0.0,
+                                avg_risk_reward: float = 0.0, best_trade_pips: float = 0.0,
+                                worst_trade_pips: float = 0.0,
+                                avg_trade_duration_hours: float = 0.0) -> int:
+        """Save a performance metrics snapshot."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.execute(
+                """INSERT INTO performance_metrics
+                   (period, total_signals, winning_signals, losing_signals, win_rate,
+                    total_pnl_pips, avg_pnl_pips, max_drawdown_pips, profit_factor,
+                    sharpe_ratio, avg_risk_reward, best_trade_pips, worst_trade_pips,
+                    avg_trade_duration_hours, calculated_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (period, total_signals, winning_signals, losing_signals, win_rate,
+                 total_pnl_pips, avg_pnl_pips, max_drawdown_pips, profit_factor,
+                 sharpe_ratio, avg_risk_reward, best_trade_pips, worst_trade_pips,
+                 avg_trade_duration_hours, datetime.utcnow().isoformat())
+            )
+            return cursor.lastrowid
+
+    def get_latest_metrics(self, period: str = "daily") -> Optional[dict]:
+        """Get the most recent performance metrics for a period."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            row = conn.execute(
+                "SELECT * FROM performance_metrics WHERE period=? ORDER BY calculated_at DESC LIMIT 1",
+                (period,)
+            ).fetchone()
+            return dict(row) if row else None
+
+    # --- User Preferences ---
+
+    def save_user_preferences(self, chat_id: int, **kwargs) -> int:
+        """Save or update user preferences (upsert)."""
+        now = datetime.utcnow().isoformat()
+        defaults = {
+            "risk_tolerance": "medium",
+            "preferred_timeframe": "H1",
+            "alert_on_signals": 1,
+            "alert_on_news": 1,
+            "alert_min_confidence": 60.0,
+            "daily_report_enabled": 1,
+            "daily_report_hour": 8,
+            "language": "en",
+            "max_signals_per_day": 5,
+        }
+        defaults.update(kwargs)
+
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.execute(
+                """INSERT INTO user_preferences
+                   (chat_id, risk_tolerance, preferred_timeframe, alert_on_signals,
+                    alert_on_news, alert_min_confidence, daily_report_enabled,
+                    daily_report_hour, language, max_signals_per_day, created_at, updated_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                   ON CONFLICT(chat_id) DO UPDATE SET
+                    risk_tolerance=excluded.risk_tolerance,
+                    preferred_timeframe=excluded.preferred_timeframe,
+                    alert_on_signals=excluded.alert_on_signals,
+                    alert_on_news=excluded.alert_on_news,
+                    alert_min_confidence=excluded.alert_min_confidence,
+                    daily_report_enabled=excluded.daily_report_enabled,
+                    daily_report_hour=excluded.daily_report_hour,
+                    language=excluded.language,
+                    max_signals_per_day=excluded.max_signals_per_day,
+                    updated_at=excluded.updated_at""",
+                (chat_id, defaults["risk_tolerance"], defaults["preferred_timeframe"],
+                 defaults["alert_on_signals"], defaults["alert_on_news"],
+                 defaults["alert_min_confidence"], defaults["daily_report_enabled"],
+                 defaults["daily_report_hour"], defaults["language"],
+                 defaults["max_signals_per_day"], now, now)
+            )
+            return cursor.lastrowid
+
+    def get_user_preferences(self, chat_id: int) -> Optional[dict]:
+        """Get preferences for a specific user."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            row = conn.execute(
+                "SELECT * FROM user_preferences WHERE chat_id=?", (chat_id,)
+            ).fetchone()
+            return dict(row) if row else None
