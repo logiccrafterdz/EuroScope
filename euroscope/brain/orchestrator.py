@@ -1,7 +1,8 @@
 """
-Orchestrator — Multi-Agent Coordinator
+Orchestrator — Skills-Based Multi-Agent Coordinator (V2)
 
-Runs all specialist agents and produces a weighted consensus analysis.
+Replaces hard-coded specialists with SkillsRegistry-driven
+dynamic tool calling and skills chaining.
 """
 
 import logging
@@ -13,21 +14,146 @@ from .specialists import (
     SentimentSpecialist,
     RiskSpecialist,
 )
+from ..skills.base import SkillContext, SkillResult
+from ..skills.registry import SkillsRegistry
 
 logger = logging.getLogger("euroscope.brain.orchestrator")
 
 
+class SkillChain:
+    """
+    Pipeline that executes a sequence of skills, passing SkillContext through.
+
+    Each skill's output feeds into the next skill's context automatically.
+    Supports error fallback (skip failed skill, continue chain).
+    """
+
+    def __init__(self, registry: SkillsRegistry):
+        self.registry = registry
+
+    def run(self, steps: list[tuple[str, str]], context: SkillContext = None,
+            params: dict = None) -> SkillContext:
+        """
+        Execute a chain of (skill_name, action) steps.
+
+        Args:
+            steps: List of (skill_name, action) tuples
+            context: Shared context (created if None)
+            params: Optional dict of {skill_name: {action_params}}
+
+        Returns:
+            SkillContext with accumulated results from all steps
+        """
+        if context is None:
+            context = SkillContext()
+        if params is None:
+            params = {}
+
+        for skill_name, action in steps:
+            skill = self.registry.get(skill_name)
+            if not skill:
+                logger.warning(f"SkillChain: skill '{skill_name}' not found, skipping")
+                continue
+
+            step_params = params.get(skill_name, {})
+            result = skill.safe_execute(context, action, **step_params)
+
+            if not result.success:
+                logger.warning(
+                    f"SkillChain: {skill_name}.{action} failed: {result.error}"
+                )
+                # Continue chain — degraded but functional
+
+        return context
+
+
 class Orchestrator:
     """
-    Coordinates specialist agents and synthesizes their verdicts
-    into a final consensus recommendation.
+    Coordinates specialist agents and skills to produce analysis.
+
+    V2: Uses SkillsRegistry for dynamic skill discovery and SkillChain
+    for pipeline execution, while maintaining backward compatibility
+    with the specialist-based run_analysis() API.
     """
 
     def __init__(self):
+        # Legacy specialists (backward compat)
         self.technical = TechnicalSpecialist()
         self.fundamental = FundamentalSpecialist()
         self.sentiment = SentimentSpecialist()
         self.risk = RiskSpecialist()
+
+        # V2: Skills system
+        self.registry = SkillsRegistry()
+        self.registry.discover()
+        self.chain = SkillChain(self.registry)
+
+    # ── V2 Skills API ────────────────────────────────────────
+
+    def run_skill(self, skill_name: str, action: str,
+                  context: SkillContext = None, **params) -> SkillResult:
+        """
+        Execute a single skill action.
+
+        Args:
+            skill_name: Registered skill name
+            action: Skill capability to invoke
+            context: Shared context (created if None)
+            **params: Action-specific parameters
+
+        Returns:
+            SkillResult from the skill
+        """
+        if context is None:
+            context = SkillContext()
+
+        skill = self.registry.get(skill_name)
+        if not skill:
+            return SkillResult(success=False, error=f"Skill '{skill_name}' not found")
+
+        return skill.safe_execute(context, action, **params)
+
+    def run_pipeline(self, steps: list[tuple[str, str]],
+                     context: SkillContext = None,
+                     params: dict = None) -> SkillContext:
+        """
+        Execute a skill chain pipeline.
+
+        Example:
+            ctx = orchestrator.run_pipeline([
+                ("market_data", "get_candles"),
+                ("technical_analysis", "full"),
+                ("risk_management", "assess_trade"),
+                ("trading_strategy", "detect_signal"),
+            ])
+        """
+        return self.chain.run(steps, context, params)
+
+    def run_full_analysis_pipeline(self, context: SkillContext = None,
+                                   **market_params) -> SkillContext:
+        """
+        Complete analysis pipeline using skills.
+
+        Runs: market_data → technical_analysis → risk_management → trading_strategy
+        """
+        steps = [
+            ("market_data", "get_candles"),
+            ("technical_analysis", "full"),
+            ("risk_management", "assess_trade"),
+            ("trading_strategy", "detect_signal"),
+        ]
+        params = {"market_data": market_params} if market_params else {}
+        return self.run_pipeline(steps, context, params)
+
+    def get_available_skills(self) -> str:
+        """Get LLM-ready description of all available skills."""
+        return self.registry.get_tools_prompt()
+
+    def get_skill_cards(self) -> str:
+        """Get detailed skill cards for LLM deep context."""
+        return self.registry.get_skill_cards()
+
+    # ── Legacy API (backward compatible) ─────────────────────
 
     def run_analysis(self, market_context: dict) -> dict:
         """
