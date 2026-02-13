@@ -1,18 +1,23 @@
 """
-EuroScope Telegram Bot
+EuroScope Telegram Bot V2
 
-Handles all user interactions through Telegram commands.
+Interactive bot with inline keyboards, new commands for trading brain,
+and integrated notification system.
 """
 
 import asyncio
 import logging
 from typing import Optional
 
-from telegram import Update, InputFile
+from telegram import (
+    Update, InputFile,
+    InlineKeyboardButton, InlineKeyboardMarkup,
+)
 from telegram.ext import (
     Application,
     CommandHandler,
     MessageHandler,
+    CallbackQueryHandler,
     ContextTypes,
     filters,
 )
@@ -20,6 +25,7 @@ from telegram.ext import (
 from ..config import Config
 from ..brain.agent import Agent
 from ..brain.memory import Memory
+from ..brain.orchestrator import Orchestrator
 from ..data.provider import PriceProvider
 from ..data.news import NewsEngine
 from ..data.calendar import EconomicCalendar
@@ -29,14 +35,19 @@ from ..analysis.patterns import PatternDetector
 from ..analysis.levels import LevelAnalyzer
 from ..analysis.signals import SignalGenerator
 from ..forecast.engine import Forecaster
+from ..trading.risk_manager import RiskManager
+from ..trading.strategy_engine import StrategyEngine
+from ..trading.signal_executor import SignalExecutor
 from ..utils.charts import generate_chart
 from ..utils.formatting import truncate
+from .user_settings import UserSettings
+from .notification_manager import NotificationManager
 
 logger = logging.getLogger("euroscope.bot")
 
 
 class EuroScopeBot:
-    """Telegram bot for EUR/USD analysis."""
+    """Telegram bot for EUR/USD analysis — V2 with inline keyboards."""
 
     def __init__(self, config: Config):
         self.config = config
@@ -52,10 +63,20 @@ class EuroScopeBot:
         self.signals = SignalGenerator()
         self.forecaster = Forecaster(self.agent, self.memory, self.price_provider, self.news_engine)
 
+        # Phase 3-4 integrations
+        self.orchestrator = Orchestrator()
+        self.risk_manager = RiskManager()
+        self.strategy_engine = StrategyEngine()
+        self.signal_executor = SignalExecutor(self.storage)
+
+        # Phase 5
+        self.user_settings = UserSettings(self.storage)
+        self.notifications = NotificationManager(self.storage)
+
     def _is_authorized(self, user_id: int) -> bool:
         """Check if user is authorized."""
         if not self.config.telegram.allowed_users:
-            return True  # No restrictions if empty
+            return True
         return user_id in self.config.telegram.allowed_users
 
     async def _check_auth(self, update: Update) -> bool:
@@ -65,32 +86,89 @@ class EuroScopeBot:
             return False
         return True
 
-    # ─── Command Handlers ───────────────────────────────────────
+    # ─── Main Menu ───────────────────────────────────────────
+
+    def _main_menu_keyboard(self) -> InlineKeyboardMarkup:
+        """Build the main interactive menu."""
+        return InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton("💱 Price", callback_data="cmd:price"),
+                InlineKeyboardButton("📊 Analysis", callback_data="cmd:analysis"),
+                InlineKeyboardButton("📈 Chart", callback_data="cmd:chart"),
+            ],
+            [
+                InlineKeyboardButton("🎯 Signals", callback_data="cmd:signals"),
+                InlineKeyboardButton("🔮 Forecast", callback_data="cmd:forecast"),
+                InlineKeyboardButton("📰 News", callback_data="cmd:news"),
+            ],
+            [
+                InlineKeyboardButton("🧠 Strategy", callback_data="cmd:strategy"),
+                InlineKeyboardButton("🛡️ Risk", callback_data="cmd:risk"),
+                InlineKeyboardButton("📋 Trades", callback_data="cmd:trades"),
+            ],
+            [
+                InlineKeyboardButton("📊 Performance", callback_data="cmd:performance"),
+                InlineKeyboardButton("📅 Calendar", callback_data="cmd:calendar"),
+                InlineKeyboardButton("⚙️ Settings", callback_data="cmd:settings"),
+            ],
+        ])
+
+    # ─── Command Handlers ────────────────────────────────────
 
     async def cmd_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle /start command."""
+        """Handle /start — show interactive menu."""
         if not await self._check_auth(update):
             return
 
         welcome = (
             "🌐 *EuroScope — EUR/USD Expert Bot*\n\n"
             "I'm your personal AI assistant specialized exclusively in EUR/USD.\n\n"
-            "📋 *Available Commands:*\n"
+            "Tap a button below or use /help for commands 👇"
+        )
+        await update.message.reply_text(
+            welcome,
+            reply_markup=self._main_menu_keyboard(),
+            parse_mode="Markdown",
+        )
+
+    async def cmd_help(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /help — show all commands."""
+        if not await self._check_auth(update):
+            return
+
+        help_text = (
+            "📋 *Available Commands:*\n\n"
             "├ /price — Current price & daily stats\n"
-            "├ /analysis — Full technical analysis\n"
+            "├ /analysis [tf] — Technical analysis\n"
             "├ /chart [tf] — Candlestick chart\n"
-            "├ /patterns — Detected chart patterns\n"
+            "├ /patterns — Chart patterns\n"
             "├ /levels — Support/resistance & Fibonacci\n"
             "├ /signals — Trading signals\n"
             "├ /news — Latest EUR/USD news\n"
             "├ /calendar — Economic events\n"
             "├ /forecast — AI directional forecast\n"
-            "├ /report — Comprehensive daily report\n"
-            "├ /accuracy — My prediction track record\n"
-            "└ /ask [question] — Ask me anything about EUR/USD\n\n"
-            "💡 _Just type any message to chat with me about EUR/USD!_"
+            "├ /strategy — Strategy recommendation\n"
+            "├ /risk — Risk assessment\n"
+            "├ /trades — Open paper trades\n"
+            "├ /performance — Trading stats\n"
+            "├ /report — Full daily report\n"
+            "├ /accuracy — Prediction track record\n"
+            "├ /settings — Bot preferences\n"
+            "├ /menu — Interactive menu\n"
+            "└ /ask [question] — Ask about EUR/USD\n\n"
+            "💡 _Just type any message to chat!_"
         )
-        await update.message.reply_text(welcome, parse_mode="Markdown")
+        await update.message.reply_text(help_text, parse_mode="Markdown")
+
+    async def cmd_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /menu — show interactive menu."""
+        if not await self._check_auth(update):
+            return
+        await update.message.reply_text(
+            "📋 *EuroScope Menu*",
+            reply_markup=self._main_menu_keyboard(),
+            parse_mode="Markdown",
+        )
 
     async def cmd_price(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /price command."""
@@ -114,7 +192,17 @@ class EuroScopeBot:
             f"📏 Range: `{data['spread_pips']} pips`\n\n"
             f"🕐 {data['timestamp']}"
         )
-        await update.message.reply_text(msg, parse_mode="Markdown")
+
+        # Quick action buttons
+        keyboard = InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton("📊 Analysis", callback_data="cmd:analysis"),
+                InlineKeyboardButton("📈 Chart", callback_data="cmd:chart"),
+                InlineKeyboardButton("🎯 Signal", callback_data="cmd:signals"),
+            ],
+            [InlineKeyboardButton("🔙 Menu", callback_data="menu:main")],
+        ])
+        await update.message.reply_text(msg, reply_markup=keyboard, parse_mode="Markdown")
 
     async def cmd_analysis(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /analysis command."""
@@ -254,36 +342,29 @@ class EuroScopeBot:
 
         await update.message.reply_text("⏳ Generating comprehensive report... (this may take a moment)")
 
-        # Price
         price = self.price_provider.get_price()
 
-        # Multi-timeframe analysis
         analyses = {}
         for tf in ["H1", "H4", "D1"]:
             candles = self.price_provider.get_candles(tf)
             if candles is not None:
                 analyses[tf] = self.technical.analyze(candles)
 
-        # Signals
         h1_candles = self.price_provider.get_candles("H1")
         sig = self.signals.generate_signals(h1_candles, "H1") if h1_candles is not None else None
 
-        # Levels
         d1_candles = self.price_provider.get_candles("D1", 100)
         sr = self.levels.find_support_resistance(d1_candles) if d1_candles is not None else {}
 
-        # Build report
         lines = [
             "📋 *EUR/USD Daily Report*",
             f"🕐 Generated at {price.get('timestamp', 'N/A')}\n",
         ]
 
-        # Price section
         if "error" not in price:
             lines.append(f"💱 *Price*: `{price['price']}` ({price['direction']} {price['change_pct']:+.3f}%)")
             lines.append(f"   Range: `{price['low']}` — `{price['high']}` ({price['spread_pips']} pips)\n")
 
-        # Multi-TF bias
         lines.append("📊 *Multi-Timeframe Bias*")
         for tf, ta in analyses.items():
             bias = ta.get("overall_bias", "N/A")
@@ -292,12 +373,10 @@ class EuroScopeBot:
             lines.append(f"   {tf}: {icon} {bias} (RSI: {rsi_val})")
         lines.append("")
 
-        # Signal
         if sig and sig.get("signal") != "NONE":
             lines.append(f"🎯 *Signal*: {sig['emoji']} {sig['signal']} (score: {sig['score']:+d})")
             lines.append("")
 
-        # Levels
         if sr.get("support"):
             lines.append(f"🟢 *Support*: {', '.join(f'`{s}`' for s in sr['support'][:3])}")
         if sr.get("resistance"):
@@ -312,6 +391,112 @@ class EuroScopeBot:
 
         report = self.memory.get_accuracy_report()
         await update.message.reply_text(report, parse_mode="Markdown")
+
+    # ─── New Phase 3-4 Commands ──────────────────────────────
+
+    async def cmd_strategy(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /strategy — detect market regime and recommend strategy."""
+        if not await self._check_auth(update):
+            return
+
+        await update.message.reply_text("⏳ Analyzing market regime...")
+
+        candles = self.price_provider.get_candles("H1")
+        if candles is None:
+            await update.message.reply_text("❌ Could not fetch data.")
+            return
+
+        ta = self.technical.analyze(candles)
+        sr = self.levels.find_support_resistance(candles)
+        detected = self.patterns.detect_all(candles)
+
+        indicators = {
+            "adx": ta.get("indicators", {}).get("ADX", {}).get("value"),
+            "rsi": ta.get("indicators", {}).get("RSI", {}).get("value"),
+            "overall_bias": ta.get("overall_bias"),
+            "macd": ta.get("indicators", {}).get("MACD", {}),
+        }
+
+        levels = {
+            "current_price": ta.get("price"),
+            "support": sr.get("support", []),
+            "resistance": sr.get("resistance", []),
+        }
+
+        strategy_sig = self.strategy_engine.detect_strategy(indicators, levels, detected)
+        formatted = self.strategy_engine.format_strategy(strategy_sig)
+
+        keyboard = InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton("🛡️ Risk Check", callback_data="cmd:risk"),
+                InlineKeyboardButton("🎯 Signal", callback_data="cmd:signals"),
+            ],
+            [InlineKeyboardButton("🔙 Menu", callback_data="menu:main")],
+        ])
+        await update.message.reply_text(
+            truncate(formatted), reply_markup=keyboard, parse_mode="Markdown"
+        )
+
+    async def cmd_risk(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /risk — assess trade risk for current conditions."""
+        if not await self._check_auth(update):
+            return
+
+        await update.message.reply_text("⏳ Assessing trade risk...")
+
+        candles = self.price_provider.get_candles("H1")
+        if candles is None:
+            await update.message.reply_text("❌ Could not fetch data.")
+            return
+
+        ta = self.technical.analyze(candles)
+        sr = self.levels.find_support_resistance(candles)
+        price = ta.get("price", 0)
+        atr = ta.get("indicators", {}).get("ATR", {}).get("value")
+
+        # Assess both BUY and SELL
+        buy_risk = self.risk_manager.assess_trade(
+            "BUY", price, atr=atr,
+            support=sr.get("support", []),
+            resistance=sr.get("resistance", []),
+        )
+        sell_risk = self.risk_manager.assess_trade(
+            "SELL", price, atr=atr,
+            support=sr.get("support", []),
+            resistance=sr.get("resistance", []),
+        )
+
+        msg = (
+            f"{self.risk_manager.format_risk(buy_risk)}\n\n"
+            f"{'─' * 25}\n\n"
+            f"{self.risk_manager.format_risk(sell_risk)}"
+        )
+        await update.message.reply_text(truncate(msg), parse_mode="Markdown")
+
+    async def cmd_trades(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /trades — show open paper trades."""
+        if not await self._check_auth(update):
+            return
+
+        formatted = self.signal_executor.format_open_signals()
+        await update.message.reply_text(formatted, parse_mode="Markdown")
+
+    async def cmd_performance(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /performance — show trading stats."""
+        if not await self._check_auth(update):
+            return
+
+        formatted = self.signal_executor.format_performance()
+        await update.message.reply_text(formatted, parse_mode="Markdown")
+
+    async def cmd_settings(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /settings — show settings with inline keyboard."""
+        if not await self._check_auth(update):
+            return
+
+        chat_id = update.effective_chat.id
+        text, keyboard = self.user_settings.build_settings_keyboard(chat_id)
+        await update.message.reply_text(text, reply_markup=keyboard, parse_mode="Markdown")
 
     async def cmd_ask(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /ask [question] command."""
@@ -348,7 +533,6 @@ class EuroScopeBot:
         if not text:
             return
 
-        # Treat any text message as a question to the AI
         await update.message.reply_text("🤔 Thinking...")
 
         price = self.price_provider.get_price()
@@ -358,7 +542,103 @@ class EuroScopeBot:
         )
         await update.message.reply_text(truncate(answer), parse_mode="Markdown")
 
-    # ─── Bot Setup ──────────────────────────────────────────────
+    # ─── Callback Query Handler ──────────────────────────────
+
+    async def callback_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Route inline keyboard button presses."""
+        query = update.callback_query
+        await query.answer()
+
+        data = query.data
+
+        # Settings callbacks
+        if data.startswith("settings:"):
+            await self.user_settings.handle_callback(update, context)
+            return
+
+        # Menu callback
+        if data == "menu:main":
+            await query.edit_message_text(
+                "📋 *EuroScope Menu*",
+                reply_markup=self._main_menu_keyboard(),
+                parse_mode="Markdown",
+            )
+            return
+
+        # Command callbacks — send a new message with the result
+        cmd_map = {
+            "cmd:price": "Fetching price...",
+            "cmd:analysis": "Running analysis...",
+            "cmd:chart": "Generating chart...",
+            "cmd:signals": "Generating signals...",
+            "cmd:forecast": "Generating forecast...",
+            "cmd:news": "Fetching news...",
+            "cmd:calendar": "Loading calendar...",
+            "cmd:strategy": "Analyzing strategy...",
+            "cmd:risk": "Assessing risk...",
+            "cmd:trades": "Loading trades...",
+            "cmd:performance": "Loading performance...",
+            "cmd:settings": "Loading settings...",
+        }
+
+        if data in cmd_map:
+            # Map callback to the command method name
+            cmd_name = data.split(":")[1]
+            method = getattr(self, f"cmd_{cmd_name}", None)
+            if method:
+                # Create a pseudo-update that allows the handler to work
+                # We send a new message from the bot, not editing the button message
+                chat_id = query.message.chat_id
+                await self._bot_send_and_handle(
+                    context.bot, chat_id, cmd_name, method, context
+                )
+
+    async def _bot_send_and_handle(self, bot, chat_id: int, cmd_name: str,
+                                   handler, context: ContextTypes.DEFAULT_TYPE):
+        """Execute a command handler triggered by a callback button."""
+        # For settings, handle differently
+        if cmd_name == "settings":
+            text, keyboard = self.user_settings.build_settings_keyboard(chat_id)
+            await bot.send_message(chat_id, text, reply_markup=keyboard, parse_mode="Markdown")
+            return
+
+        if cmd_name == "trades":
+            text = self.signal_executor.format_open_signals()
+            await bot.send_message(chat_id, text, parse_mode="Markdown")
+            return
+
+        if cmd_name == "performance":
+            text = self.signal_executor.format_performance()
+            await bot.send_message(chat_id, text, parse_mode="Markdown")
+            return
+
+        if cmd_name == "calendar":
+            text = self.calendar.format_calendar()
+            await bot.send_message(chat_id, truncate(text), parse_mode="Markdown")
+            return
+
+        if cmd_name == "price":
+            data = self.price_provider.get_price()
+            if "error" in data:
+                await bot.send_message(chat_id, f"❌ {data['error']}")
+                return
+            msg = (
+                f"💱 *EUR/USD Price*\n\n"
+                f"{data['direction']} Price: `{data['price']}`\n"
+                f"📊 Change: `{data['change']:+.5f}` ({data['change_pct']:+.3f}%)\n"
+                f"📏 Range: `{data['spread_pips']} pips`"
+            )
+            await bot.send_message(chat_id, msg, parse_mode="Markdown")
+            return
+
+        # For data-heavy commands, just prompt the user
+        await bot.send_message(
+            chat_id,
+            f"💡 Use `/{cmd_name}` command directly for full results.",
+            parse_mode="Markdown",
+        )
+
+    # ─── Bot Setup ───────────────────────────────────────────
 
     def build_app(self) -> Application:
         """Build and configure the Telegram bot application."""
@@ -367,7 +647,8 @@ class EuroScopeBot:
         # Register command handlers
         commands = {
             "start": self.cmd_start,
-            "help": self.cmd_start,
+            "help": self.cmd_help,
+            "menu": self.cmd_menu,
             "price": self.cmd_price,
             "analysis": self.cmd_analysis,
             "chart": self.cmd_chart,
@@ -379,11 +660,19 @@ class EuroScopeBot:
             "forecast": self.cmd_forecast,
             "report": self.cmd_report,
             "accuracy": self.cmd_accuracy,
+            "strategy": self.cmd_strategy,
+            "risk": self.cmd_risk,
+            "trades": self.cmd_trades,
+            "performance": self.cmd_performance,
+            "settings": self.cmd_settings,
             "ask": self.cmd_ask,
         }
 
         for cmd, handler in commands.items():
             app.add_handler(CommandHandler(cmd, handler))
+
+        # Callback query handler for inline buttons
+        app.add_handler(CallbackQueryHandler(self.callback_handler))
 
         # Free-form message handler
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_message))
@@ -396,6 +685,14 @@ class EuroScopeBot:
             logger.error("Telegram token not configured!")
             return
 
-        logger.info("🌐 EuroScope bot starting...")
+        logger.info("🌐 EuroScope bot V2 starting...")
         app = self.build_app()
+
+        # Set up notifications
+        self.notifications.set_bot(app.bot)
+        if self.config.telegram.allowed_users:
+            self.notifications.schedule_daily_reports(
+                app.job_queue, self.config.telegram.allowed_users
+            )
+
         app.run_polling(drop_pending_updates=True)
