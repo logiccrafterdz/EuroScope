@@ -135,6 +135,35 @@ class HealthMonitor:
         status.last_check = datetime.utcnow().isoformat()
         return status
 
+    async def check_price_api_async(self, provider=None) -> ComponentStatus:
+        """Async check for price data API connectivity."""
+        status = ComponentStatus(name="Price API")
+        if provider is None:
+            status.healthy = True
+            status.response_time_ms = 0
+            status.last_check = datetime.utcnow().isoformat()
+            return status
+
+        start = time.time()
+        try:
+            data = await provider.get_price()
+            if isinstance(data, dict):
+                status.healthy = "error" not in data
+                if not status.healthy:
+                    status.error = data.get("error", "Unknown error")
+                    self.record_error("price_api", status.error)
+            else:
+                status.healthy = False
+                status.error = "Invalid price response"
+                self.record_error("price_api", status.error)
+            status.response_time_ms = round((time.time() - start) * 1000, 1)
+        except Exception as e:
+            status.healthy = False
+            status.error = str(e)
+            self.record_error("price_api", str(e))
+        status.last_check = datetime.utcnow().isoformat()
+        return status
+
     def check_llm(self, agent=None) -> ComponentStatus:
         """Check LLM API connectivity."""
         status = ComponentStatus(name="LLM API")
@@ -146,11 +175,12 @@ class HealthMonitor:
 
         start = time.time()
         try:
-            # Check if agent has a client configured
-            status.healthy = agent.client is not None
+            router = getattr(agent, "router", None)
+            api_key = getattr(getattr(agent, "config", None), "api_key", "")
+            status.healthy = bool(router or api_key)
             status.response_time_ms = round((time.time() - start) * 1000, 1)
             if not status.healthy:
-                status.error = "LLM client not configured"
+                status.error = "LLM not configured"
         except Exception as e:
             status.healthy = False
             status.error = str(e)
@@ -177,6 +207,36 @@ class HealthMonitor:
         error_rate = self.get_error_rate(1.0)
 
         # Determine overall status
+        unhealthy = [c for c in components if not c.healthy]
+        if len(unhealthy) >= 2:
+            overall = "critical"
+        elif len(unhealthy) == 1:
+            overall = "degraded"
+        else:
+            overall = "healthy"
+
+        return SystemHealth(
+            overall=overall,
+            components=components,
+            uptime_seconds=round(uptime, 0),
+            total_errors=len(self._errors),
+            error_rate_per_hour=error_rate,
+            recent_errors=self.get_recent_errors(5),
+        )
+
+    async def full_check_async(self, provider=None, agent=None) -> SystemHealth:
+        """
+        Run all component health checks asynchronously.
+        """
+        components = [
+            self.check_database(),
+            await self.check_price_api_async(provider),
+            self.check_llm(agent),
+        ]
+
+        uptime = time.time() - self._start_time
+        error_rate = self.get_error_rate(1.0)
+
         unhealthy = [c for c in components if not c.healthy]
         if len(unhealthy) >= 2:
             overall = "critical"

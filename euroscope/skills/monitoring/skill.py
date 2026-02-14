@@ -23,10 +23,20 @@ class MonitoringSkill(BaseSkill):
     def __init__(self, storage=None):
         super().__init__()
         self.monitor = HealthMonitor(storage=storage)
+        self._provider = None
+        self._agent = None
 
     def set_storage(self, storage):
         """Inject the Storage instance."""
         self.monitor.storage = storage
+
+    def set_price_provider(self, provider):
+        """Inject the PriceProvider instance."""
+        self._provider = provider
+
+    def set_agent(self, agent):
+        """Inject the Agent instance."""
+        self._agent = agent
 
     async def execute(self, context: SkillContext, action: str, **params) -> SkillResult:
         if action == "check_health":
@@ -43,7 +53,10 @@ class MonitoringSkill(BaseSkill):
 
     async def _check(self) -> SkillResult:
         try:
-            report = self.monitor.full_check()
+            report = await self.monitor.full_check_async(
+                provider=self._provider,
+                agent=self._agent,
+            )
             return SkillResult(success=True, data=report)
         except Exception as e:
             return SkillResult(success=False, error=str(e))
@@ -56,18 +69,24 @@ class MonitoringSkill(BaseSkill):
 
     async def _status(self) -> SkillResult:
         try:
-            report = self.monitor.full_check()
+            report = await self.monitor.full_check_async(
+                provider=self._provider,
+                agent=self._agent,
+            )
             return SkillResult(success=True, data={
-                "status": report.get("overall_status", "unknown"),
+                "status": report.overall,
             })
         except Exception as e:
             return SkillResult(success=False, error=str(e))
 
     async def _dashboard(self) -> SkillResult:
         try:
-            report = self.monitor.full_check()
-            text = self.monitor.format_health_report(report)
-            return SkillResult(success=True, data=text)
+            report = await self.monitor.full_check_async(
+                provider=self._provider,
+                agent=self._agent,
+            )
+            text = self.monitor.format_health(report)
+            return SkillResult(success=True, data=text, metadata={"formatted": text})
         except Exception as e:
             return SkillResult(success=False, error=str(e))
 
