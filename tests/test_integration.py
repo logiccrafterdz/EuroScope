@@ -18,6 +18,8 @@ for mod_name in ("yfinance", "mplfinance", "mplfinance.original_flavor",
 import pytest
 from unittest.mock import MagicMock, patch, AsyncMock
 
+import pandas as pd
+
 from euroscope.skills.base import BaseSkill, SkillCategory, SkillContext, SkillResult
 from euroscope.skills.registry import SkillsRegistry
 from euroscope.brain.orchestrator import Orchestrator, SkillChain
@@ -25,6 +27,7 @@ from euroscope.automation.events import EventBus, Event
 from euroscope.automation.alerts import SmartAlerts, setup_default_alerts
 from euroscope.automation.heartbeat import HeartbeatService
 from euroscope.automation.cron import CronScheduler, TaskFrequency
+from euroscope.data.storage import Storage
 
 
 # ── 6.1 Skills Communication Protocol ───────────────────────
@@ -143,6 +146,40 @@ class TestDataFlowPipeline:
         r3 = await executor.safe_execute(ctx, "trade_history")
         assert len(r3.data) == 1
         assert r3.data[0]["pnl_pips"] == 50.0
+
+    @pytest.mark.asyncio
+    async def test_emergency_mode_blocks_trade_execution(self):
+        from euroscope.skills.deviation_monitor import DeviationMonitorSkill
+        from euroscope.skills.signal_executor import SignalExecutorSkill
+
+        df = pd.DataFrame({
+            "High": [1.1] * 20,
+            "Low": [1.0] * 20,
+            "Close": [1.05] * 20,
+            "Volume": [100] * 19 + [1000],
+        })
+
+        class BufferSkill:
+            def get_buffer(self):
+                return {"candles": df, "timeframe": "M1"}
+
+        ctx = SkillContext()
+        bus = EventBus()
+        storage = Storage(":memory:")
+        monitor = DeviationMonitorSkill(event_bus=bus, market_data_skill=BufferSkill(), storage=storage, global_context=ctx)
+
+        await monitor._check_once()
+        assert ctx.metadata.get("emergency_mode") is True
+
+        executor = SignalExecutorSkill()
+        executor.set_event_bus(bus)
+        executor.set_storage(storage)
+        ctx.signals = {"direction": "BUY", "entry_price": 1.0850, "strategy": "trend"}
+        ctx.risk = {"stop_loss": 1.0820, "take_profit": 1.0910}
+        result = await executor.safe_execute(ctx, "open_trade")
+        assert not result.success
+        assert result.error == "EMERGENCY: market regime shift"
+        assert len(ctx.open_positions) == 0
 
 
 # ── 6.3 Error Handling ──────────────────────────────────────

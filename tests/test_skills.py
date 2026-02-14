@@ -263,6 +263,19 @@ class TestSkillExecution:
         assert len(r4.data) == 1
 
     @pytest.mark.asyncio
+    async def test_signal_executor_aborts_on_uncertainty(self):
+        from euroscope.skills.signal_executor import SignalExecutorSkill
+        s = SignalExecutorSkill()
+        ctx = SkillContext()
+        ctx.signals = {"direction": "BUY", "entry_price": 1.0850, "strategy": "trend_following"}
+        ctx.risk = {"stop_loss": 1.0820, "take_profit": 1.0910}
+        ctx.metadata["uncertainty_score"] = 0.7
+
+        r = await s.safe_execute(ctx, "open_trade")
+        assert not r.success
+        assert r.error == "UNCERTAINTY: confidence too low"
+
+    @pytest.mark.asyncio
     async def test_trading_strategy_list(self):
         from euroscope.skills.trading_strategy import TradingStrategySkill
         s = TradingStrategySkill()

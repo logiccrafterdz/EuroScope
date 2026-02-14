@@ -53,6 +53,18 @@ class RiskManagementSkill(BaseSkill):
             result = self.manager.assess_trade(
                 direction, entry, atr=atr, support=support, resistance=resistance,
             )
+            risk_pips = (result.entry_price - result.stop_loss) * 10000
+            reward_pips = (result.take_profit - result.entry_price) * 10000
+            risk_reward_ratio = reward_pips / risk_pips if risk_pips else 0
+            warnings = result.warnings or []
+            factors = []
+            if any("drawdown" in w.lower() for w in warnings):
+                factors.append("drawdown_risk")
+            if any("stop too wide" in w.lower() for w in warnings):
+                factors.append("max_risk_pct")
+            if result.stop_pips >= 60:
+                factors.append("volatility")
+            reason = ", ".join(factors) if factors else "normal"
             data = {
                 "approved": result.approved,
                 "direction": result.direction,
@@ -60,10 +72,10 @@ class RiskManagementSkill(BaseSkill):
                 "stop_loss": result.stop_loss,
                 "take_profit": result.take_profit,
                 "position_size": result.position_size,
-                "risk_pips": result.risk_pips,
-                "reward_pips": result.reward_pips,
-                "risk_reward_ratio": result.risk_reward_ratio,
-                "reason": result.reason,
+                "risk_pips": round(risk_pips, 1),
+                "reward_pips": round(reward_pips, 1),
+                "risk_reward_ratio": round(risk_reward_ratio, 2) if risk_reward_ratio else 0,
+                "reason": reason,
             }
             context.risk = data
             return SkillResult(success=True, data=data, next_skill="trading_strategy")

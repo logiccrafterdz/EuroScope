@@ -5,6 +5,9 @@ Tests for risk manager: position sizing, stop loss, drawdown control.
 import pytest
 
 from euroscope.trading.risk_manager import RiskManager, RiskConfig, TradeRisk
+from euroscope.skills.base import SkillContext
+from euroscope.skills.risk_management.skill import RiskManagementSkill
+from euroscope.bot.telegram_bot import EuroScopeBot
 
 
 # ── Position Sizing ──────────────────────────────────────
@@ -178,3 +181,33 @@ class TestTradeTracking:
         formatted = rm.format_risk(trade)
         assert "Risk Assessment" in formatted
         assert "BUY" in formatted
+
+
+@pytest.mark.asyncio
+async def test_risk_management_skill_maps_trade_risk_fields():
+    rm = RiskManager()
+    skill = RiskManagementSkill()
+    skill.set_risk_manager(rm)
+    ctx = SkillContext()
+    result = await skill.execute(
+        ctx, "assess_trade", direction="BUY", entry_price=1.0900, atr=0.0050
+    )
+    assert result.success
+    assert "risk_pips" in result.data
+    assert "reward_pips" in result.data
+    assert "risk_reward_ratio" in result.data
+    assert "reason" in result.data
+
+
+@pytest.mark.asyncio
+async def test_risk_command_formatting_no_crash():
+    rm = RiskManager()
+    skill = RiskManagementSkill()
+    skill.set_risk_manager(rm)
+    ctx = SkillContext()
+    result = await skill.execute(
+        ctx, "assess_trade", direction="BUY", entry_price=1.0900, atr=0.0050
+    )
+    bot = EuroScopeBot.__new__(EuroScopeBot)
+    formatted = EuroScopeBot._format_risk(bot, result.data)
+    assert "Risk Assessment" in formatted

@@ -5,6 +5,8 @@ Signal Executor Skill — Paper trading order management.
 import time
 from dataclasses import dataclass, field
 from ..base import BaseSkill, SkillCategory, SkillContext, SkillResult
+from ...automation.events import Event
+from ...data.storage import Storage
 
 
 @dataclass
@@ -35,6 +37,14 @@ class SignalExecutorSkill(BaseSkill):
         self._open: list[PaperTrade] = []
         self._closed: list[PaperTrade] = []
         self._counter = 0
+        self._storage: Storage | None = None
+        self._bus = None
+
+    def set_storage(self, storage):
+        self._storage = storage
+
+    def set_event_bus(self, event_bus):
+        self._bus = event_bus
 
     async def execute(self, context: SkillContext, action: str, **params) -> SkillResult:
         if action == "open_trade":
@@ -48,6 +58,13 @@ class SignalExecutorSkill(BaseSkill):
         return SkillResult(success=False, error=f"Unknown action: {action}")
 
     async def _open_trade(self, context: SkillContext, **params) -> SkillResult:
+        abort_reason = self._guard_trade(context)
+        if abort_reason:
+            await self._record_abort(context, params, abort_reason)
+            return SkillResult(success=False, error=abort_reason, data={
+                "aborted": True,
+                "reason": abort_reason,
+            })
         self._counter += 1
         signal = context.signals or params
         risk = context.risk or {}
@@ -65,6 +82,49 @@ class SignalExecutorSkill(BaseSkill):
         context.open_positions.append(trade.__dict__)
         return SkillResult(success=True, data=trade.__dict__,
                           metadata={"trade_id": trade.trade_id})
+
+    def _guard_trade(self, context: SkillContext) -> str | None:
+        if context.metadata.get("emergency_mode") is True:
+            return "EMERGENCY: market regime shift"
+        if context.metadata.get("uncertainty_score", 0) > 0.65:
+            return "UNCERTAINTY: confidence too low"
+        if context.metadata.get("confidence_adjustment", 1.0) < 0.5:
+            return "CONFIDENCE: signal degraded"
+        return None
+
+    async def _record_abort(self, context: SkillContext, params: dict, reason: str):
+        signal = context.signals or params
+        risk = context.risk or {}
+        entry_price = signal.get("entry_price", risk.get("entry_price", 0))
+        stop_loss = risk.get("stop_loss", 0)
+        take_profit = risk.get("take_profit", 0)
+        strategy = signal.get("strategy", "manual")
+        timeframe = context.market_data.get("timeframe", "H1")
+        regime = context.metadata.get("regime", "")
+        confidence = signal.get("confidence", 0.0)
+        indicators = context.analysis.get("indicators", {})
+        patterns = context.analysis.get("patterns", [])
+        if self._storage:
+            self._storage.save_trade_journal(
+                direction=signal.get("direction", "BUY"),
+                entry_price=entry_price,
+                stop_loss=stop_loss,
+                take_profit=take_profit,
+                strategy=strategy,
+                timeframe=timeframe,
+                regime=regime,
+                confidence=confidence,
+                indicators=indicators,
+                patterns=patterns if isinstance(patterns, list) else [],
+                reasoning=reason,
+            )
+        if self._bus:
+            await self._bus.emit(Event("trade.aborted", "signal_executor", {
+                "reason": reason,
+                "direction": signal.get("direction", "BUY"),
+                "strategy": strategy,
+                "timeframe": timeframe,
+            }))
 
     async def _close_trade(self, context: SkillContext, **params) -> SkillResult:
         trade_id = params.get("trade_id", "")
