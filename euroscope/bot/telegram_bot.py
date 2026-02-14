@@ -7,6 +7,7 @@ and integrated notification system.
 
 import asyncio
 import logging
+import re
 from typing import Optional
 
 from telegram import (
@@ -147,22 +148,32 @@ class EuroScopeBot:
             [
                 InlineKeyboardButton("💱 Price", callback_data="cmd:price"),
                 InlineKeyboardButton("📊 Analysis", callback_data="cmd:analysis"),
-                InlineKeyboardButton("📈 Chart", callback_data="cmd:chart"),
-            ],
-            [
                 InlineKeyboardButton("🎯 Signals", callback_data="cmd:signals"),
+            ],
+            [
                 InlineKeyboardButton("🔮 Forecast", callback_data="cmd:forecast"),
-                InlineKeyboardButton("📰 News", callback_data="cmd:news"),
-            ],
-            [
+                InlineKeyboardButton("📈 Chart", callback_data="cmd:chart"),
                 InlineKeyboardButton("🧠 Strategy", callback_data="cmd:strategy"),
-                InlineKeyboardButton("🛡️ Risk", callback_data="cmd:risk"),
-                InlineKeyboardButton("📋 Trades", callback_data="cmd:trades"),
             ],
             [
-                InlineKeyboardButton("📊 Performance", callback_data="cmd:performance"),
+                InlineKeyboardButton("📰 News", callback_data="cmd:news"),
                 InlineKeyboardButton("📅 Calendar", callback_data="cmd:calendar"),
+                InlineKeyboardButton("📋 Report", callback_data="cmd:report"),
+            ],
+            [
+                InlineKeyboardButton("📍 Levels", callback_data="cmd:levels"),
+                InlineKeyboardButton("🧩 Patterns", callback_data="cmd:patterns"),
+                InlineKeyboardButton("🛡️ Risk", callback_data="cmd:risk"),
+            ],
+            [
+                InlineKeyboardButton("📋 Trades", callback_data="cmd:trades"),
+                InlineKeyboardButton("📊 Performance", callback_data="cmd:performance"),
+                InlineKeyboardButton("🧠 Accuracy", callback_data="cmd:accuracy"),
+            ],
+            [
                 InlineKeyboardButton("⚙️ Settings", callback_data="cmd:settings"),
+                InlineKeyboardButton("🧪 Health", callback_data="cmd:health"),
+                InlineKeyboardButton("🔔 Alerts", callback_data="settings:manage_alerts"),
             ],
         ])
 
@@ -174,6 +185,75 @@ class EuroScopeBot:
         if self._is_compact_mode(chat_id):
             return truncate(text, max_length=1200)
         return truncate(text, max_length=max_length)
+
+    def _preferred_timeframe(self, chat_id: int) -> str:
+        prefs = self.user_settings.get_prefs(chat_id)
+        return (prefs.get("preferred_timeframe") or "H1").upper()
+
+    def _preferred_language(self, chat_id: int, text: str = "") -> str:
+        prefs = self.user_settings.get_prefs(chat_id)
+        lang = prefs.get("language")
+        if lang in ("ar", "en"):
+            return lang
+        return "ar" if self._looks_arabic(text) else "en"
+
+    def _looks_arabic(self, text: str) -> bool:
+        return bool(re.search(r"[\u0600-\u06FF]", text or ""))
+
+    def _is_market_status_question(self, text: str) -> bool:
+        t = (text or "").lower()
+        arabic = [
+            "السوق", "مغلق", "مفتوح", "جلسة", "جلسات", "تداول", "متى يفتح", "متى يغلق"
+        ]
+        english = [
+            "market", "open", "closed", "session", "trading hours", "weekend"
+        ]
+        if any(k in t for k in english):
+            return True
+        return any(k in (text or "") for k in arabic)
+
+    async def _get_market_status(self) -> dict:
+        result = await self.orchestrator.run_skill("market_data", "check_market_status")
+        return result.data if result.success else {}
+
+    def _translate_market_reason(self, reason: str) -> str:
+        if not reason:
+            return ""
+        if "Friday" in reason:
+            return "السوق مغلق لعطلة نهاية الأسبوع (الجمعة 5:00 مساءً بتوقيت نيويورك)."
+        if "Saturday" in reason:
+            return "السوق مغلق (السبت)."
+        if "Sunday" in reason:
+            return "السوق يفتح قريبًا (الأحد 5:00 مساءً بتوقيت نيويورك)."
+        if "Trading sessions are active" in reason:
+            return "السوق مفتوح وجلسات التداول نشطة."
+        return reason
+
+    def _format_market_status_reply(self, data: dict, lang: str) -> str:
+        is_open = data.get("is_open")
+        status = "مفتوح" if is_open else "مغلق"
+        time_et = data.get("current_time_et", "N/A")
+        reason = data.get("reason", "")
+        if lang == "ar":
+            reason = self._translate_market_reason(reason)
+            return (
+                "🕒 *حالة السوق الحالية لزوج EUR/USD:*\n\n"
+                f"السوق *{status}* حاليًا.\n\n"
+                f"⏱️ الوقت الحالي (ET): `{time_et}`\n"
+                f"📝 السبب: {reason}\n\n"
+                "🧭 جلسات التداول (GMT):\n"
+                "• لندن: 07:00 - 16:00\n"
+                "• نيويورك: 12:00 - 21:00\n"
+            )
+        return (
+            "🕒 *EUR/USD Market Status:*\n\n"
+            f"The market is *{'OPEN' if is_open else 'CLOSED'}* right now.\n\n"
+            f"⏱️ Current time (ET): `{time_et}`\n"
+            f"📝 Reason: {reason or 'N/A'}\n\n"
+            "🧭 Main sessions (GMT):\n"
+            "• London: 07:00 - 16:00\n"
+            "• New York: 12:00 - 21:00\n"
+        )
 
     # ─── Command Handlers ────────────────────────────────────
 
@@ -704,6 +784,14 @@ class EuroScopeBot:
         question = " ".join(context.args)
         await update.message.reply_text("🤔 Thinking...")
 
+        chat_id = update.effective_chat.id
+        lang = self._preferred_language(chat_id, question)
+        market_status = await self._get_market_status()
+        if self._is_market_status_question(question):
+            reply = self._format_market_status_reply(market_status, lang)
+            await update.message.reply_text(reply, parse_mode="Markdown")
+            return
+
         price = await self.price_provider.get_price()
         h1_candles = await self.price_provider.get_candles("H1")
         ta = self.technical.analyze(h1_candles) if h1_candles is not None else {}
@@ -715,6 +803,7 @@ class EuroScopeBot:
             current_bias=ta.get("overall_bias", "N/A"),
             support=str(sr.get("support", ["N/A"])[:2]),
             resistance=str(sr.get("resistance", ["N/A"])[:2]),
+            market_status=f"{market_status.get('status', 'N/A')} — {market_status.get('reason', 'N/A')} — {market_status.get('current_time_et', 'N/A')}",
         )
         await update.message.reply_text(safe_markdown(truncate(answer)), parse_mode="Markdown")
 
@@ -729,10 +818,19 @@ class EuroScopeBot:
 
         await update.message.reply_text("🤔 Thinking...")
 
+        chat_id = update.effective_chat.id
+        lang = self._preferred_language(chat_id, text)
+        market_status = await self._get_market_status()
+        if self._is_market_status_question(text):
+            reply = self._format_market_status_reply(market_status, lang)
+            await update.message.reply_text(reply, parse_mode="Markdown")
+            return
+
         price = await self.price_provider.get_price()
         answer = await self.agent.ask(
             question=text,
             current_price=str(price.get("price", "N/A")),
+            market_status=f"{market_status.get('status', 'N/A')} — {market_status.get('reason', 'N/A')} — {market_status.get('current_time_et', 'N/A')}",
         )
         await update.message.reply_text(safe_markdown(truncate(answer)), parse_mode="Markdown")
 
@@ -768,11 +866,16 @@ class EuroScopeBot:
             "cmd:forecast": "Generating forecast...",
             "cmd:news": "Fetching news...",
             "cmd:calendar": "Loading calendar...",
+            "cmd:report": "Generating report...",
+            "cmd:levels": "Loading levels...",
+            "cmd:patterns": "Scanning patterns...",
             "cmd:strategy": "Analyzing strategy...",
             "cmd:risk": "Assessing risk...",
             "cmd:trades": "Loading trades...",
             "cmd:performance": "Loading performance...",
+            "cmd:accuracy": "Loading accuracy...",
             "cmd:settings": "Loading settings...",
+            "cmd:health": "Loading health...",
         }
 
         if data in cmd_map:
@@ -829,7 +932,231 @@ class EuroScopeBot:
                 f"📊 Change: `{data['change']:+.5f}` ({data['change_pct']:+.3f}%)\n"
                 f"📏 Range: `{data['spread_pips']} pips`"
             )
-            await bot.send_message(chat_id, msg, parse_mode="Markdown")
+            keyboard = InlineKeyboardMarkup([
+                [
+                    InlineKeyboardButton("📊 Analysis", callback_data="cmd:analysis"),
+                    InlineKeyboardButton("📈 Chart", callback_data="cmd:chart"),
+                    InlineKeyboardButton("🎯 Signals", callback_data="cmd:signals"),
+                ],
+                [InlineKeyboardButton("🔙 Menu", callback_data="menu:main")],
+            ])
+            await bot.send_message(chat_id, msg, reply_markup=keyboard, parse_mode="Markdown")
+            return
+
+        if cmd_name == "analysis":
+            tf = self._preferred_timeframe(chat_id)
+            await bot.send_message(chat_id, f"⏳ Running {tf} technical analysis...")
+            result = await self.orchestrator.run_skill("technical_analysis", "analyze", timeframe=tf)
+            if not result.success:
+                await bot.send_message(chat_id, f"❌ {result.error}")
+                return
+            formatted = result.metadata.get("formatted", str(result.data))
+            formatted = self._format_for_user(chat_id, formatted)
+            keyboard = InlineKeyboardMarkup([
+                [
+                    InlineKeyboardButton("📈 Chart", callback_data="cmd:chart"),
+                    InlineKeyboardButton("🎯 Signals", callback_data="cmd:signals"),
+                    InlineKeyboardButton("🔮 Forecast", callback_data="cmd:forecast"),
+                ],
+                [InlineKeyboardButton("🔙 Menu", callback_data="menu:main")],
+            ])
+            await bot.send_message(
+                chat_id, safe_markdown(formatted), reply_markup=keyboard, parse_mode="Markdown"
+            )
+            return
+
+        if cmd_name == "chart":
+            tf = self._preferred_timeframe(chat_id)
+            await bot.send_message(chat_id, f"⏳ Generating {tf} chart...")
+            candles = await self.price_provider.get_candles(tf, count=80)
+            if candles is None:
+                await bot.send_message(chat_id, "❌ Could not fetch candle data.")
+                return
+            chart_path = generate_chart(candles, tf)
+            if chart_path:
+                with open(chart_path, "rb") as f:
+                    await bot.send_photo(
+                        chat_id, photo=InputFile(f), caption=f"📊 EUR/USD — {tf} Chart"
+                    )
+            else:
+                await bot.send_message(chat_id, "❌ Chart generation failed.")
+            return
+
+        if cmd_name == "signals":
+            tf = self._preferred_timeframe(chat_id)
+            await bot.send_message(chat_id, f"⏳ Generating {tf} signals...")
+            ctx = SkillContext()
+            res_ta = await self.orchestrator.run_skill(
+                "technical_analysis", "full", context=ctx, timeframe=tf
+            )
+            if not res_ta.success:
+                await bot.send_message(chat_id, f"❌ Analysis failed: {res_ta.error}")
+                return
+            result = await self.orchestrator.run_skill(
+                "trading_strategy", "detect_signal", context=ctx
+            )
+            if not result.success:
+                await bot.send_message(chat_id, f"❌ Result generation failed: {result.error}")
+                return
+            formatted = result.metadata.get("formatted", str(result.data))
+            formatted = self._format_for_user(chat_id, formatted)
+            keyboard = InlineKeyboardMarkup([
+                [
+                    InlineKeyboardButton("🛡️ Risk", callback_data="cmd:risk"),
+                    InlineKeyboardButton("📋 Trades", callback_data="cmd:trades"),
+                ],
+                [InlineKeyboardButton("🔙 Menu", callback_data="menu:main")],
+            ])
+            await bot.send_message(
+                chat_id, safe_markdown(formatted), reply_markup=keyboard, parse_mode="Markdown"
+            )
+            return
+
+        if cmd_name == "forecast":
+            await bot.send_message(chat_id, "⏳ Generating AI forecast for 24 hours...")
+            result = await self.forecaster.generate_forecast("24 hours")
+            header = (
+                "🔮 *EUR/USD Forecast (24 hours)*\n\n"
+                f"Direction: {'🟢 BULLISH' if result['direction'] == 'BULLISH' else '🔴 BEARISH' if result['direction'] == 'BEARISH' else '⚪ NEUTRAL'}\n"
+                f"Confidence: {result['confidence']:.0f}%\n"
+                f"{'─' * 25}\n\n"
+            )
+            full_msg = self._format_for_user(chat_id, header + result["text"])
+            keyboard = InlineKeyboardMarkup([
+                [
+                    InlineKeyboardButton("📊 Analysis", callback_data="cmd:analysis"),
+                    InlineKeyboardButton("🎯 Signals", callback_data="cmd:signals"),
+                ],
+                [InlineKeyboardButton("🔙 Menu", callback_data="menu:main")],
+            ])
+            await bot.send_message(
+                chat_id, safe_markdown(full_msg), reply_markup=keyboard, parse_mode="Markdown"
+            )
+            return
+
+        if cmd_name == "news":
+            await bot.send_message(chat_id, "⏳ Fetching EUR/USD news...")
+            result = await self.orchestrator.run_skill("fundamental_analysis", "get_news")
+            if not result.success:
+                await bot.send_message(chat_id, f"❌ {result.error}")
+                return
+            formatted = result.metadata.get("formatted", str(result.data))
+            formatted = self._format_for_user(chat_id, formatted)
+            keyboard = InlineKeyboardMarkup([
+                [
+                    InlineKeyboardButton("📅 Calendar", callback_data="cmd:calendar"),
+                    InlineKeyboardButton("🔮 Forecast", callback_data="cmd:forecast"),
+                ],
+                [InlineKeyboardButton("🔙 Menu", callback_data="menu:main")],
+            ])
+            await bot.send_message(
+                chat_id, safe_markdown(formatted), reply_markup=keyboard, parse_mode="Markdown"
+            )
+            return
+
+        if cmd_name == "report":
+            await bot.send_message(chat_id, "⏳ Generating comprehensive report using skills pipeline...")
+            tf = self._preferred_timeframe(chat_id)
+            ctx = await self.orchestrator.run_full_analysis_pipeline(timeframe=tf)
+            lines = [
+                "📋 *EuroScope Skills Report*",
+                f"🕐 Generated at {ctx.market_data.get('price', {}).get('timestamp', 'N/A')}\n",
+            ]
+            price = ctx.market_data.get("price", {})
+            if price:
+                lines.append(f"💱 *Price*: `{price['price']}` ({price['direction']} {price['change_pct']:+.3f}%)")
+                lines.append(f"   Range: `{price['low']}` — `{price['high']}` ({price['spread_pips']} pips)\n")
+            ta = ctx.analysis.get("indicators", {})
+            if ta:
+                bias = ta.get("overall_bias", "N/A")
+                icon = {"Bullish": "🟢", "Bearish": "🔴"}.get(bias, "⚪")
+                rsi_val = ta.get("indicators", {}).get("RSI", {}).get("value", "?")
+                lines.append(f"📊 *Technical Bias*: {icon} {bias} (RSI: {rsi_val})")
+            sig = ctx.signals
+            if sig and sig.get("direction") != "NONE":
+                lines.append(f"🎯 *Signal*: {sig.get('direction')} (Score: {sig.get('score', 0):+d})")
+            risk = ctx.risk
+            if risk:
+                lines.append(f"�️ *Risk*: {'Approved ✅' if risk.get('approved') else 'Rejected ❌'}")
+                lines.append(f"   SL: `{risk.get('stop_loss')}` | TP: `{risk.get('take_profit')}`")
+            report = self._format_for_user(chat_id, "\n".join(lines))
+            await bot.send_message(chat_id, safe_markdown(report), parse_mode="Markdown")
+            return
+
+        if cmd_name == "levels":
+            await bot.send_message(chat_id, "⏳ Calculating key levels...")
+            result = await self.orchestrator.run_skill("technical_analysis", "find_levels")
+            if not result.success:
+                await bot.send_message(chat_id, f"❌ {result.error}")
+                return
+            formatted = result.metadata.get("formatted", str(result.data))
+            formatted = self._format_for_user(chat_id, formatted)
+            await bot.send_message(chat_id, safe_markdown(formatted), parse_mode="Markdown")
+            return
+
+        if cmd_name == "patterns":
+            await bot.send_message(chat_id, "⏳ Scanning for patterns...")
+            result = await self.orchestrator.run_skill("technical_analysis", "detect_patterns")
+            if not result.success:
+                await bot.send_message(chat_id, f"❌ {result.error}")
+                return
+            formatted = result.metadata.get("formatted", str(result.data))
+            formatted = self._format_for_user(chat_id, formatted)
+            await bot.send_message(chat_id, safe_markdown(formatted), parse_mode="Markdown")
+            return
+
+        if cmd_name == "strategy":
+            await bot.send_message(chat_id, "⏳ Analyzing market regime...")
+            ctx = SkillContext()
+            res_ta = await self.orchestrator.run_skill("technical_analysis", "full", context=ctx)
+            if not res_ta.success:
+                await bot.send_message(chat_id, f"❌ Analysis failed: {res_ta.error}")
+                return
+            result = await self.orchestrator.run_skill("trading_strategy", "detect_signal", context=ctx)
+            if not result.success:
+                await bot.send_message(chat_id, f"❌ {result.error}")
+                return
+            formatted = result.metadata.get("formatted", str(result.data))
+            formatted = self._format_for_user(chat_id, formatted)
+            keyboard = InlineKeyboardMarkup([
+                [
+                    InlineKeyboardButton("🛡️ Risk Check", callback_data="cmd:risk"),
+                    InlineKeyboardButton("🎯 Signal", callback_data="cmd:signals"),
+                ],
+                [InlineKeyboardButton("🔙 Menu", callback_data="menu:main")],
+            ])
+            await bot.send_message(
+                chat_id, safe_markdown(formatted), reply_markup=keyboard, parse_mode="Markdown"
+            )
+            return
+
+        if cmd_name == "risk":
+            await bot.send_message(chat_id, "⏳ Assessing trade risk...")
+            ctx = SkillContext()
+            res_ta = await self.orchestrator.run_skill("technical_analysis", "full", context=ctx)
+            if not res_ta.success:
+                await bot.send_message(chat_id, f"❌ Analysis failed: {res_ta.error}")
+                return
+            result = await self.orchestrator.run_skill("risk_management", "assess_trade", context=ctx)
+            if not result.success:
+                await bot.send_message(chat_id, f"❌ {result.error}")
+                return
+            formatted = result.metadata.get("formatted", self._format_risk(result.data))
+            formatted = self._format_for_user(chat_id, formatted)
+            await bot.send_message(chat_id, safe_markdown(formatted), parse_mode="Markdown")
+            return
+
+        if cmd_name == "accuracy":
+            report = self.memory.get_accuracy_report()
+            report = self._format_for_user(chat_id, report)
+            await bot.send_message(chat_id, safe_markdown(report), parse_mode="Markdown")
+            return
+
+        if cmd_name == "health":
+            result = await self.orchestrator.run_skill("monitoring", "runtime_stats")
+            text = result.metadata.get("formatted", "⚠️ Could not fetch health stats.")
+            text = self._format_for_user(chat_id, text)
+            await bot.send_message(chat_id, safe_markdown(text), parse_mode="Markdown")
             return
 
         # For data-heavy commands, just prompt the user

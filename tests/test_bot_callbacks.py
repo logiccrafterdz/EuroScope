@@ -44,8 +44,8 @@ class TestMainMenu:
             kb = bot._main_menu_keyboard()
 
         assert isinstance(kb, InlineKeyboardMarkup)
-        # 4 rows of buttons
-        assert len(kb.inline_keyboard) == 4
+        # 6 rows of buttons
+        assert len(kb.inline_keyboard) == 6
         # First row has 3 buttons (Price, Analysis, Chart)
         assert len(kb.inline_keyboard[0]) == 3
 
@@ -75,7 +75,7 @@ class TestMainMenu:
 
         for row in kb.inline_keyboard:
             for button in row:
-                assert button.callback_data.startswith("cmd:")
+                assert button.callback_data.startswith(("cmd:", "settings:"))
 
     def test_build_app_registers_callback_handler(self):
         """Verify CallbackQueryHandler is registered."""

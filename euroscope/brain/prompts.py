@@ -103,6 +103,7 @@ QUESTION_PROMPT = """You are EuroScope, the EUR/USD expert. Answer the following
 Price: {current_price}
 Bias: {current_bias}
 Key Levels: Support {support} | Resistance {resistance}
+Market Status: {market_status}
 
 ## Question
 {question}

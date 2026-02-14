@@ -140,13 +140,14 @@ class Agent:
 
     async def ask(self, question: str, current_price: str = "N/A",
                   current_bias: str = "N/A", support: str = "N/A",
-                  resistance: str = "N/A") -> str:
+                  resistance: str = "N/A", market_status: str = "N/A") -> str:
         """Answer a free-form question about EUR/USD."""
         prompt = QUESTION_PROMPT.format(
             current_price=current_price,
             current_bias=current_bias,
             support=support,
             resistance=resistance,
+            market_status=market_status,
             question=question,
         )
         return await self.chat(prompt)

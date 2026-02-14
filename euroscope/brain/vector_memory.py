@@ -6,6 +6,7 @@ for semantic search and context retrieval.
 """
 
 import logging
+import sys
 from datetime import datetime
 from typing import Optional
 
@@ -29,6 +30,10 @@ class VectorMemory:
     def _init_db(self):
         """Initialize ChromaDB client and collections."""
         try:
+            if sys.version_info >= (3, 14):
+                logger.warning("VectorMemory disabled: ChromaDB is not compatible with Python 3.14+.")
+                self._available = False
+                return
             import chromadb
             from chromadb.config import Settings
 
