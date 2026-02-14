@@ -272,6 +272,28 @@ class TestSkillExecution:
         assert "trend_following" in r.data
 
     @pytest.mark.asyncio
+    async def test_trading_strategy_blocks_on_high_uncertainty(self):
+        from euroscope.skills.trading_strategy import TradingStrategySkill
+        s = TradingStrategySkill()
+        ctx = SkillContext()
+        ctx.analysis["indicators"] = {
+            "overall_bias": "bullish",
+            "indicators": {
+                "ADX": {"value": 30},
+                "RSI": {"value": 55},
+                "MACD": {"histogram": 0.0001},
+            },
+        }
+        ctx.analysis["levels"] = {"current_price": 1.0950, "support": [], "resistance": []}
+        ctx.metadata["confidence_adjustment"] = 0.8
+        ctx.metadata["high_uncertainty"] = True
+
+        r = await s.safe_execute(ctx, "detect_signal")
+        assert r.success
+        assert r.data["direction"] == "WAIT"
+        assert r.data["blocking_reason"] == "high_uncertainty_without_macro_confirmation"
+
+    @pytest.mark.asyncio
     async def test_monitoring_track_error(self):
         from euroscope.skills.monitoring import MonitoringSkill
         s = MonitoringSkill(storage=MagicMock())

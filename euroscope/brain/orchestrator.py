@@ -113,6 +113,7 @@ class Orchestrator:
             [
                 ("market_data", "get_candles"),
                 ("technical_analysis", "full"),
+                ("uncertainty_assessment", "assess"),
                 ("trading_strategy", "detect_signal"),
             ],
             context,

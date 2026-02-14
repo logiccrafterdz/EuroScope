@@ -50,7 +50,21 @@ class TradingStrategySkill(BaseSkill):
         }
 
         try:
-            signal = self.engine.detect_strategy(ind, levels, patterns)
+            uncertainty = {
+                "confidence_adjustment": context.metadata.get("confidence_adjustment", 1.0),
+                "high_uncertainty": context.metadata.get("high_uncertainty", False),
+            }
+            macro_data = context.analysis.get("macro_data", {})
+            signal = self.engine.detect_strategy(
+                ind, levels, patterns, uncertainty=uncertainty, macro_data=macro_data
+            )
+            blocking_reason = None
+            if signal.strategy == "uncertain":
+                blocking_reason = "high_uncertainty_without_macro_confirmation"
+                context.metadata["blocking_reason"] = blocking_reason
+                uncertainty_data = context.analysis.get("uncertainty")
+                if isinstance(uncertainty_data, dict):
+                    uncertainty_data["blocking_reason"] = blocking_reason
             adjusted_confidence, multiplier = self._apply_pattern_multipliers(
                 signal.confidence, signal.direction, patterns, context.metadata.get("pattern_multipliers", {})
             )
@@ -60,7 +74,8 @@ class TradingStrategySkill(BaseSkill):
                 "confidence": adjusted_confidence,
                 "raw_confidence": signal.confidence,
                 "confidence_multiplier": multiplier,
-                "entry_price": signal.entry_price,
+                "blocking_reason": blocking_reason,
+                "entry_price": getattr(signal, "entry_price", 0),
                 "reasoning": signal.reasoning,
                 "regime": signal.regime,
             }

@@ -153,3 +153,20 @@ class TestFormatting:
             {"name": "Hammer", "bias": "bullish"},
         ])
         assert 0 <= sig.confidence <= 95
+
+    def test_high_uncertainty_blocks_without_macro(self, engine):
+        indicators = {"adx": 35, "rsi": 55, "overall_bias": "bullish",
+                      "macd": {"histogram_latest": 0.01}}
+        levels = {"current_price": 1.0950}
+        uncertainty = {"high_uncertainty": True, "confidence_adjustment": 0.8}
+        sig = engine.detect_strategy(indicators, levels, uncertainty=uncertainty, macro_data={})
+        assert sig.direction == "WAIT"
+
+    def test_high_uncertainty_allows_with_macro(self, engine):
+        indicators = {"adx": 35, "rsi": 55, "overall_bias": "bullish",
+                      "macd": {"histogram_latest": 0.01}}
+        levels = {"current_price": 1.0950}
+        uncertainty = {"high_uncertainty": True, "confidence_adjustment": 0.8}
+        macro_data = {"differential": {"bias": "EUR stronger"}}
+        sig = engine.detect_strategy(indicators, levels, uncertainty=uncertainty, macro_data=macro_data)
+        assert sig.direction == "BUY"

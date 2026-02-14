@@ -35,7 +35,8 @@ class StrategyEngine:
     """
 
     def detect_strategy(self, indicators: dict, levels: dict,
-                        patterns: list = None) -> StrategySignal:
+                        patterns: list = None, uncertainty: Optional[dict] = None,
+                        macro_data: Optional[dict] = None) -> StrategySignal:
         """
         Analyze market conditions and recommend a strategy.
 
@@ -51,11 +52,54 @@ class StrategyEngine:
         patterns = patterns or []
 
         if regime == "trending":
-            return self._trend_following(indicators, levels, patterns)
+            sig = self._trend_following(indicators, levels, patterns)
         elif regime == "breakout":
-            return self._breakout_strategy(indicators, levels, patterns)
+            sig = self._breakout_strategy(indicators, levels, patterns)
         else:
-            return self._mean_reversion(indicators, levels, patterns)
+            sig = self._mean_reversion(indicators, levels, patterns)
+
+        if uncertainty:
+            sig = self._apply_uncertainty(sig, uncertainty, macro_data or {})
+
+        return sig
+
+    def _apply_uncertainty(self, sig: StrategySignal, uncertainty: dict, macro_data: dict) -> StrategySignal:
+        confidence_adjustment = uncertainty.get("confidence_adjustment", 1.0)
+        try:
+            confidence_adjustment = float(confidence_adjustment)
+        except (TypeError, ValueError):
+            confidence_adjustment = 1.0
+
+        sig.confidence = min(95, max(0, sig.confidence * confidence_adjustment))
+
+        if uncertainty.get("high_uncertainty"):
+            if not self._macro_confirmation(sig.direction, macro_data):
+                return StrategySignal(
+                    strategy="uncertain",
+                    direction="WAIT",
+                    confidence=0,
+                    entry_rules=[],
+                    exit_rules=[],
+                    reasoning="High uncertainty without macro confirmation",
+                    regime=sig.regime or "ranging",
+                )
+
+        return sig
+
+    @staticmethod
+    def _macro_confirmation(direction: str, macro_data: dict) -> bool:
+        if direction not in ("BUY", "SELL"):
+            return True
+        differential = macro_data.get("differential", {}) if macro_data else {}
+        bias = differential.get("bias") or differential.get("interpretation")
+        if not bias:
+            return False
+        bias_text = str(bias).lower()
+        if direction == "BUY" and ("eur stronger" in bias_text or "usd weaker" in bias_text):
+            return True
+        if direction == "SELL" and ("usd stronger" in bias_text or "eur weaker" in bias_text):
+            return True
+        return False
 
     def _detect_regime(self, indicators: dict) -> str:
         """
