@@ -47,8 +47,8 @@ class Forecaster:
         price_str = "\n".join(f"  {k}: {v}" for k, v in price_info.items()) if price_info else "N/A"
         
         # Use existing formatting helpers or results from skills
-        ta_str = self._format_ta_for_prompt(ta_results.get("h1_analysis", {}), "H1") + \
-                 "\n" + self._format_ta_for_prompt(ta_results.get("d1_analysis", {}), "D1")
+        ta_timeframe = ta_results.get("timeframe") or price_info.get("timeframe") or "H1"
+        ta_str = self._format_ta_for_prompt(ta_results, ta_timeframe)
         
         patterns_str = self._format_patterns_for_prompt(ta_results.get("patterns", []))
         levels_str = self._format_levels_for_prompt(
