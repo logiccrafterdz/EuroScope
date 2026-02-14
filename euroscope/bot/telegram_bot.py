@@ -75,6 +75,7 @@ class EuroScopeBot:
         # Phase 5 integrations
         self.user_settings = UserSettings(self.storage)
         self.notifications = NotificationManager(self.storage)
+        self.notifications.set_orchestrator(self.orchestrator)
         
         # Setup alert handler to send to Telegram
         self.alerts.register_handler(AlertChannel.TELEGRAM, self._on_alert_triggered)
@@ -183,6 +184,43 @@ class EuroScopeBot:
             parse_mode="Markdown",
         )
 
+    async def cmd_settings(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /settings — show user preferences menu."""
+        if not await self._check_auth(update):
+            return
+        
+        text, keyboard = self.user_settings.build_settings_keyboard(update.effective_chat.id)
+        await update.message.reply_text(text, reply_markup=keyboard, parse_mode="Markdown")
+
+    async def cmd_alert(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /alert [above/below] [rate] — set a price alert."""
+        if not await self._check_auth(update):
+            return
+
+        args = context.args
+        usage = "💡 *Usage*: `/alert above 1.0850` or `/alert below 1.0700`"
+        
+        if len(args) < 2:
+            await update.message.reply_text(usage, parse_mode="Markdown")
+            return
+
+        condition = args[0].lower()
+        if condition not in ("above", "below"):
+            await update.message.reply_text(f"❌ Invalid condition '{condition}'. Use 'above' or 'below'.", parse_mode="Markdown")
+            return
+
+        try:
+            target = float(args[1])
+        except ValueError:
+            await update.message.reply_text("❌ Invalid price target. Please use a number like `1.0850`.", parse_mode="Markdown")
+            return
+
+        alert_id = self.storage.add_alert(condition, target, update.effective_chat.id)
+        await update.message.reply_text(
+            f"✅ *Alert Set!*\nI'll notify you when EUR/USD moves *{condition}* `{target}`.",
+            parse_mode="Markdown"
+        )
+
     async def cmd_help(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /help — show all commands."""
         if not await self._check_auth(update):
@@ -202,10 +240,11 @@ class EuroScopeBot:
             "├ /strategy — Strategy recommendation\n"
             "├ /risk — Risk assessment\n"
             "├ /trades — Open paper trades\n"
+            "├ /alert [above/below] [price] — Set price level alert\n"
             "├ /performance — Trading stats\n"
             "├ /report — Full daily report\n"
             "├ /accuracy — Prediction track record\n"
-            "├ /settings — Bot preferences\n"
+            "├ /settings — Bot preferences & alerts\n"
             "├ /menu — Interactive menu\n"
             "└ /ask [question] — Ask about EUR/USD\n\n"
             "💡 _Just type any message to chat!_"
@@ -772,6 +811,7 @@ class EuroScopeBot:
             "backtest": self.cmd_backtest,
             "report": self.cmd_report,
             "accuracy": self.cmd_accuracy,
+            "alert": self.cmd_alert,
             "strategy": self.cmd_strategy,
             "risk": self.cmd_risk,
             "trades": self.cmd_trades,
@@ -810,6 +850,8 @@ class EuroScopeBot:
             BotCommand("backtest", "Run strategy backtest"),
             BotCommand("news", "Latest news (DuckDuckGo)"),
             BotCommand("health", "System status"),
+            BotCommand("alert", "Set price level alert"),
+            BotCommand("settings", "Bot preferences & alerts"),
             BotCommand("help", "List all commands"),
         ]
         await application.bot.set_my_commands(cmds)

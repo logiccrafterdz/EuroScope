@@ -244,12 +244,26 @@ class Storage:
         ).fetchall()
         return [dict(r) for r in rows]
 
+    def get_user_alerts(self, chat_id: int) -> list[dict]:
+        """Get all active alerts for a specific user."""
+        self._conn.row_factory = sqlite3.Row
+        rows = self._conn.execute(
+            "SELECT * FROM alerts WHERE chat_id = ? AND triggered = 0",
+            (chat_id,)
+        ).fetchall()
+        return [dict(r) for r in rows]
+
     def trigger_alert(self, alert_id: int):
         with self._conn:
             self._conn.execute(
                 "UPDATE alerts SET triggered=1, triggered_at=? WHERE id=?",
                 (datetime.utcnow().isoformat(), alert_id)
             )
+
+    def delete_alert(self, alert_id: int):
+        """Permanently delete an alert."""
+        with self._conn:
+            self._conn.execute("DELETE FROM alerts WHERE id=?", (alert_id,))
 
     # --- Memory (key-value for learning) ---
 

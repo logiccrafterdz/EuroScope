@@ -23,6 +23,9 @@ TOGGLE_DAILY_REPORT = f"{SETTINGS_PREFIX}toggle_report"
 SET_TIMEFRAME = f"{SETTINGS_PREFIX}tf:"
 SET_RISK = f"{SETTINGS_PREFIX}risk:"
 SET_REPORT_HOUR = f"{SETTINGS_PREFIX}hour:"
+SET_MIN_CONFIDENCE = f"{SETTINGS_PREFIX}conf:"
+MANAGE_ALERTS = f"{SETTINGS_PREFIX}manage_alerts"
+DELETE_ALERT = f"{SETTINGS_PREFIX}del_alert:"
 SETTINGS_BACK = f"{SETTINGS_PREFIX}back"
 
 TIMEFRAMES = ["H1", "H4", "D1"]
@@ -93,6 +96,16 @@ class UserSettings:
                     f"🕐 Report Hour: {prefs.get('daily_report_hour', 8):02d}:00",
                     callback_data=f"{SET_REPORT_HOUR}cycle"
                 ),
+                InlineKeyboardButton(
+                    f"🧠 Min Conf: {prefs.get('alert_min_confidence', 60)}%",
+                    callback_data=f"{SET_MIN_CONFIDENCE}cycle"
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    "🔔 Manage Price Alerts",
+                    callback_data=MANAGE_ALERTS
+                )
             ],
             [InlineKeyboardButton("🔙 Main Menu", callback_data="menu:main")],
         ]
@@ -146,12 +159,53 @@ class UserSettings:
             new_hour = (current + 2) % 24  # Cycle by 2-hour increments
             self.storage.save_user_preferences(chat_id, daily_report_hour=new_hour)
 
+        elif data == f"{SET_MIN_CONFIDENCE}cycle":
+            current = prefs.get("alert_min_confidence", 60.0)
+            confs = [60.0, 70.0, 80.0, 90.0]
+            idx = confs.index(current) if current in confs else 0
+            new_conf = confs[(idx + 1) % len(confs)]
+            self.storage.save_user_preferences(chat_id, alert_min_confidence=new_conf)
+
+        elif data == MANAGE_ALERTS:
+            text, keyboard = self.build_alerts_keyboard(chat_id)
+            await query.edit_message_text(text, reply_markup=keyboard, parse_mode="Markdown")
+            return True
+
+        elif data.startswith(DELETE_ALERT):
+            alert_id = int(data.split(":")[-1])
+            self.storage.delete_alert(alert_id)
+            await query.answer("🗑️ Alert Deleted")
+            text, keyboard = self.build_alerts_keyboard(chat_id)
+            await query.edit_message_text(text, reply_markup=keyboard, parse_mode="Markdown")
+            return True
+
         elif data == SETTINGS_BACK:
-            # Will be handled by main callback router
-            return False
+            # Refresh settings display from sub-menu
+            text, keyboard = self.build_settings_keyboard(chat_id)
+            await query.edit_message_text(text, reply_markup=keyboard, parse_mode="Markdown")
+            return True
 
         # Refresh settings display
         text, keyboard = self.build_settings_keyboard(chat_id)
         await query.answer("✅ Updated")
         await query.edit_message_text(text, reply_markup=keyboard, parse_mode="Markdown")
         return True
+
+    def build_alerts_keyboard(self, chat_id: int) -> tuple[str, InlineKeyboardMarkup]:
+        """Build the alerts management keyboard."""
+        alerts = self.storage.get_user_alerts(chat_id)
+        
+        if not alerts:
+            text = "🔔 *Price Alerts*\n\nYou have no active price alerts."
+            keyboard = [[InlineKeyboardButton("🔙 Back to Settings", callback_data=SETTINGS_BACK)]]
+            return text, InlineKeyboardMarkup(keyboard)
+
+        text = "🔔 *Active Price Alerts*\nTap to delete an alert:"
+        keyboard = []
+        for a in alerts:
+            condition = "≥" if a['condition'] == "above" else "≤"
+            btn_text = f"❌ {condition} {a['target_value']}"
+            keyboard.append([InlineKeyboardButton(btn_text, callback_data=f"{DELETE_ALERT}{a['id']}")])
+        
+        keyboard.append([InlineKeyboardButton("🔙 Back to Settings", callback_data=SETTINGS_BACK)])
+        return text, InlineKeyboardMarkup(keyboard)

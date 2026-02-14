@@ -31,10 +31,15 @@ class NotificationManager:
     def __init__(self, storage: Storage):
         self.storage = storage
         self._bot: Optional[Bot] = None
+        self._orchestrator = None
 
     def set_bot(self, bot: Bot):
         """Set the bot instance for sending messages."""
         self._bot = bot
+
+    def set_orchestrator(self, orchestrator):
+        """Set the orchestrator for running analysis skills."""
+        self._orchestrator = orchestrator
 
     # ─── Scheduled Reports ───────────────────────────────────
 
@@ -66,28 +71,84 @@ class NotificationManager:
             logger.info(f"Scheduled daily report for chat {chat_id} at {hour:02d}:00 UTC")
 
     async def _daily_report_job(self, context: ContextTypes.DEFAULT_TYPE):
-        """Job callback for daily report. Sends a prompt to generate report."""
+        """Job callback for daily report. Sends a smart briefing summary."""
         chat_id = context.job.data["chat_id"]
-
         if not self._bot:
-            logger.warning("Bot not set, cannot send daily report")
             return
+
+        # Fetch basic context for briefing
+        price_text = "Price data unavailable"
+        news_text = "No major news headlines"
+
+        if self._orchestrator:
+            try:
+                # 1. Get current price
+                p_res = await self._orchestrator.run_skill("market_data", "get_price")
+                if p_res.success:
+                    price_text = f"Current: `{p_res.data.get('price', '?')}` (`{p_res.data.get('bid', '?')}` / `{p_res.data.get('ask', '?')}`)"
+                
+                # 2. Get top news
+                n_res = await self._orchestrator.run_skill("fundamental_analysis", "get_news", limit=3)
+                if n_res.success and n_res.data:
+                    news_text = "\n".join([f"• {a['title']}" for a in n_res.data[:3]])
+            except Exception as e:
+                logger.error(f"Error gathering daily briefing data: {e}")
+
+        msg = (
+            "🌅 *Your Morning Briefing*\n\n"
+            "📊 *Market Overview*\n"
+            f"EUR/USD: {price_text}\n\n"
+            "📰 *Top Headlines*\n"
+            f"{news_text}\n\n"
+            "💡 _Use /report for a deep AI analysis._"
+        )
 
         try:
             await self._bot.send_message(
                 chat_id=chat_id,
-                text=(
-                    "📋 *Scheduled Daily Report*\n\n"
-                    "Use /report to generate your comprehensive daily analysis.\n"
-                    "Or tap the button below!"
-                ),
+                text=msg,
                 parse_mode="Markdown",
             )
-            logger.info(f"Sent daily report notification to {chat_id}")
+            logger.info(f"Sent smart morning briefing to {chat_id}")
         except Exception as e:
             logger.error(f"Failed to send daily report to {chat_id}: {e}")
 
     # ─── Signal Alerts ───────────────────────────────────────
+
+    async def notify_new_signal(self, chat_id: int, signal: dict):
+        """
+        Notify user of a new signal, respecting confidence thresholds.
+        """
+        if not self._bot:
+            return
+
+        prefs = self.storage.get_user_preferences(chat_id)
+        if prefs and not prefs.get("alert_on_signals"):
+            return
+
+        # Check confidence threshold
+        min_conf = prefs.get("alert_min_confidence", 60.0)
+        signal_conf = signal.get("confidence", 0.0)
+        if signal_conf < min_conf:
+            logger.info(f"Signal {signal.get('id')} confidence ({signal_conf}) below threshold ({min_conf}) for chat {chat_id}. Skipping notify.")
+            return
+
+        msg = (
+            f"🚀 *New Trading Signal*\n\n"
+            f"#{signal['id']} *{signal['direction']}* @ `{signal['entry_price']}`\n"
+            f"🛑 SL: `{signal['stop_loss']}`\n"
+            f"🎯 TP: `{signal['take_profit']}`\n"
+            f"🧠 Confidence: `{signal_conf}%`\n"
+            f"📊 Timeframe: `{signal['timeframe']}`\n\n"
+            f"📝 *Reasoning*: {signal.get('reasoning', 'No reasoning provided.')}"
+        )
+
+        try:
+            await self._bot.send_message(
+                chat_id=chat_id, text=msg, parse_mode="Markdown"
+            )
+        except Exception as e:
+            logger.error(f"Failed to send new signal alert to {chat_id}: {e}")
 
     async def notify_signal_closed(self, chat_id: int, signal_result: dict):
         """
