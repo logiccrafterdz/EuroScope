@@ -7,6 +7,7 @@ enabling reactive, event-driven workflows.
 
 import asyncio
 import logging
+import time
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -124,3 +125,52 @@ class EventBus:
     @property
     def topics(self) -> list[str]:
         return sorted(self._subscribers.keys())
+
+
+class SignalExecutorSubscriber:
+    def __init__(self, executor, cooldown_seconds: int = 600, halt_seconds: int = 300):
+        self.executor = executor
+        self.cooldown_seconds = cooldown_seconds
+        self.halt_seconds = halt_seconds
+        self._last_triggered = 0.0
+
+    async def handle(self, event: Event):
+        now = time.time()
+        if now - self._last_triggered < self.cooldown_seconds:
+            return
+        self._last_triggered = now
+        if self.executor:
+            self.executor.set_emergency_halt(self.halt_seconds)
+
+
+class AlertSuppressionSubscriber:
+    def __init__(self, alerts, cooldown_seconds: int = 600, suppress_seconds: int = 300):
+        self.alerts = alerts
+        self.cooldown_seconds = cooldown_seconds
+        self.suppress_seconds = suppress_seconds
+        self._last_triggered = 0.0
+
+    async def handle(self, event: Event):
+        now = time.time()
+        if now - self._last_triggered < self.cooldown_seconds:
+            return
+        self._last_triggered = now
+        if self.alerts:
+            self.alerts.suppress(self.suppress_seconds)
+
+
+class TelegramEmergencySubscriber:
+    def __init__(self, send_fn, chat_ids: list[int], cooldown_seconds: int = 600):
+        self.send_fn = send_fn
+        self.chat_ids = chat_ids
+        self.cooldown_seconds = cooldown_seconds
+        self._last_triggered = 0.0
+
+    async def handle(self, event: Event):
+        now = time.time()
+        if now - self._last_triggered < self.cooldown_seconds:
+            return
+        self._last_triggered = now
+        if not self.send_fn or not self.chat_ids:
+            return
+        await self.send_fn(self.chat_ids, "⚠️ EMERGENCY: Market regime shift detected — trading paused")

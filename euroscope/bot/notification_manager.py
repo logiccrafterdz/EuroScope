@@ -272,3 +272,12 @@ class NotificationManager:
         return {
             "bot_connected": self._bot is not None,
         }
+
+    async def broadcast_message(self, chat_ids: list[int], text: str, parse_mode: str = "Markdown"):
+        if not self._bot:
+            return
+        for chat_id in chat_ids:
+            try:
+                await self._bot.send_message(chat_id=chat_id, text=text, parse_mode=parse_mode)
+            except Exception as e:
+                logger.error(f"Failed to broadcast message to {chat_id}: {e}")

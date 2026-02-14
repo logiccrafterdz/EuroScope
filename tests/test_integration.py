@@ -8,6 +8,7 @@ error handling, and full pipeline execution.
 import sys
 import types
 import asyncio
+import time
 
 # Mock yfinance if not installed
 for mod_name in ("yfinance", "mplfinance", "mplfinance.original_flavor",
@@ -23,7 +24,7 @@ import pandas as pd
 from euroscope.skills.base import BaseSkill, SkillCategory, SkillContext, SkillResult
 from euroscope.skills.registry import SkillsRegistry
 from euroscope.brain.orchestrator import Orchestrator, SkillChain
-from euroscope.automation.events import EventBus, Event
+from euroscope.automation.events import EventBus, Event, SignalExecutorSubscriber, AlertSuppressionSubscriber, TelegramEmergencySubscriber
 from euroscope.automation.alerts import SmartAlerts, setup_default_alerts
 from euroscope.automation.heartbeat import HeartbeatService
 from euroscope.automation.cron import CronScheduler, TaskFrequency
@@ -180,6 +181,59 @@ class TestDataFlowPipeline:
         assert not result.success
         assert result.error == "EMERGENCY: market regime shift"
         assert len(ctx.open_positions) == 0
+
+    @pytest.mark.asyncio
+    async def test_regime_shift_subscribers_react_and_cooldown(self):
+        from euroscope.skills.deviation_monitor import DeviationMonitorSkill
+        from euroscope.skills.signal_executor import SignalExecutorSkill
+
+        df = pd.DataFrame({
+            "High": [1.1] * 20,
+            "Low": [1.0] * 20,
+            "Close": [1.05] * 20,
+            "Volume": [100] * 19 + [1000],
+        })
+
+        class BufferSkill:
+            def get_buffer(self):
+                return {"candles": df, "timeframe": "M1"}
+
+        ctx = SkillContext()
+        bus = EventBus()
+        alerts = SmartAlerts()
+        executor = SignalExecutorSkill()
+        storage = Storage(":memory:")
+        send_fn = AsyncMock()
+
+        signal_sub = SignalExecutorSubscriber(executor)
+        alert_sub = AlertSuppressionSubscriber(alerts)
+        telegram_sub = TelegramEmergencySubscriber(send_fn, [12345])
+
+        bus.subscribe("market.regime_shift", signal_sub.handle)
+        bus.subscribe("market.regime_shift", alert_sub.handle)
+        bus.subscribe("market.regime_shift", telegram_sub.handle)
+
+        monitor = DeviationMonitorSkill(event_bus=bus, market_data_skill=BufferSkill(), storage=storage, global_context=ctx)
+        start = time.time()
+        await monitor._check_once()
+        now = time.time()
+
+        assert now - signal_sub._last_triggered <= 1.0
+        assert now - alert_sub._last_triggered <= 1.0
+        assert now - telegram_sub._last_triggered <= 1.0
+        assert executor._emergency_halt is True
+        assert alerts._suppress_until >= now
+        send_fn.assert_awaited_once()
+
+        last_signal = signal_sub._last_triggered
+        last_alert = alert_sub._last_triggered
+        last_telegram = telegram_sub._last_triggered
+        await bus.emit(Event("market.regime_shift", "test", {}))
+
+        assert signal_sub._last_triggered == last_signal
+        assert alert_sub._last_triggered == last_alert
+        assert telegram_sub._last_triggered == last_telegram
+        assert send_fn.await_count == 1
 
     def test_trades_output_includes_causal_chain(self):
         from euroscope.learning.pattern_tracker import PatternTracker

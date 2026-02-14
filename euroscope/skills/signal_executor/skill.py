@@ -39,6 +39,8 @@ class SignalExecutorSkill(BaseSkill):
         self._counter = 0
         self._storage: Storage | None = None
         self._bus = None
+        self._emergency_halt = False
+        self._emergency_halt_until = 0.0
 
     def set_storage(self, storage):
         self._storage = storage
@@ -56,6 +58,9 @@ class SignalExecutorSkill(BaseSkill):
         elif action == "trade_history":
             return await self._trade_history()
         return SkillResult(success=False, error=f"Unknown action: {action}")
+
+    async def execute_trade(self, context: SkillContext, **params) -> SkillResult:
+        return await self._open_trade(context, **params)
 
     async def _open_trade(self, context: SkillContext, **params) -> SkillResult:
         abort_reason = self._guard_trade(context)
@@ -84,6 +89,11 @@ class SignalExecutorSkill(BaseSkill):
                           metadata={"trade_id": trade.trade_id})
 
     def _guard_trade(self, context: SkillContext) -> str | None:
+        now = time.time()
+        if self._emergency_halt and now < self._emergency_halt_until:
+            return "EMERGENCY: market regime shift"
+        if self._emergency_halt and now >= self._emergency_halt_until:
+            self._emergency_halt = False
         if context.metadata.get("emergency_mode") is True:
             return "EMERGENCY: market regime shift"
         if context.metadata.get("uncertainty_score", 0) > 0.65:
@@ -91,6 +101,10 @@ class SignalExecutorSkill(BaseSkill):
         if context.metadata.get("confidence_adjustment", 1.0) < 0.5:
             return "CONFIDENCE: signal degraded"
         return None
+
+    def set_emergency_halt(self, duration_seconds: int = 300):
+        self._emergency_halt = True
+        self._emergency_halt_until = time.time() + duration_seconds
 
     async def _record_abort(self, context: SkillContext, params: dict, reason: str):
         signal = context.signals or params

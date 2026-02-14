@@ -49,7 +49,7 @@ from .notification_manager import NotificationManager
 from ..skills.registry import SkillsRegistry
 from ..skills.base import SkillContext
 from ..workspace import WorkspaceManager
-from ..automation import HeartbeatService, EventBus, SmartAlerts, AlertChannel, setup_default_alerts, CronScheduler, TaskFrequency
+from ..automation import HeartbeatService, EventBus, SmartAlerts, AlertChannel, setup_default_alerts, CronScheduler, TaskFrequency, SignalExecutorSubscriber, AlertSuppressionSubscriber, TelegramEmergencySubscriber
 
 logger = logging.getLogger("euroscope.bot")
 
@@ -125,6 +125,17 @@ class EuroScopeBot:
             global_context=self.orchestrator.global_context
         )
 
+        signal_executor_skill = self.registry.get("signal_executor")
+        self._signal_executor_subscriber = SignalExecutorSubscriber(signal_executor_skill)
+        self._alert_suppression_subscriber = AlertSuppressionSubscriber(self.alerts)
+        self._telegram_emergency_subscriber = TelegramEmergencySubscriber(
+            self._send_emergency_message,
+            self.config.telegram.allowed_users or []
+        )
+        self.bus.subscribe("market.regime_shift", self._signal_executor_subscriber.handle)
+        self.bus.subscribe("market.regime_shift", self._alert_suppression_subscriber.handle)
+        self.bus.subscribe("market.regime_shift", self._telegram_emergency_subscriber.handle)
+
     def _on_alert_triggered(self, alert):
         """Callback for SmartAlerts — sends to allowed users."""
         try:
@@ -132,6 +143,9 @@ class EuroScopeBot:
             loop.create_task(self.notifications.broadcast_alert(alert))
         except RuntimeError:
             logger.warning("Alert triggered outside event loop — skipped.")
+
+    async def _send_emergency_message(self, chat_ids: list[int], text: str):
+        await self.notifications.broadcast_message(chat_ids, text)
 
 
     def _is_authorized(self, user_id: int) -> bool:
