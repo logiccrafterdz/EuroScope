@@ -13,12 +13,16 @@ class UncertaintyAssessmentSkill(BaseSkill):
     version = "1.0.0"
     capabilities = ["assess"]
 
-    def __init__(self, vector_memory=None):
+    def __init__(self, vector_memory=None, pattern_tracker=None):
         super().__init__()
         self._vector_memory = vector_memory
+        self._pattern_tracker = pattern_tracker
 
     def set_vector_memory(self, vector_memory):
         self._vector_memory = vector_memory
+
+    def set_pattern_tracker(self, pattern_tracker):
+        self._pattern_tracker = pattern_tracker
 
     async def execute(self, context: SkillContext, action: str, **params) -> SkillResult:
         if action != "assess":
@@ -38,6 +42,18 @@ class UncertaintyAssessmentSkill(BaseSkill):
         regime = self._infer_regime(adx, atr_pips)
         technical_uncertainty = self._technical_uncertainty(adx, rsi, macd_hist, patterns)
         behavioral_uncertainty, behavioral_meta = self._behavioral_uncertainty(candles, timeframe)
+
+        behavioral_uncertainty, behavioral_meta = self._apply_causal_adjustment(
+            context=context,
+            patterns=patterns,
+            timeframe=timeframe,
+            adx=adx,
+            atr_pips=atr_pips,
+            rsi=rsi,
+            macd_hist=macd_hist,
+            behavioral_uncertainty=behavioral_uncertainty,
+            behavioral_meta=behavioral_meta,
+        )
 
         combined_uncertainty = round(
             min(1.0, (technical_uncertainty * 0.7) + (behavioral_uncertainty * 0.3)),
@@ -190,6 +206,40 @@ class UncertaintyAssessmentSkill(BaseSkill):
             {"success_rate": round(success_rate, 2), "known_outcomes": known, "matches": matches},
         )
 
+    def _apply_causal_adjustment(
+        self,
+        context: SkillContext,
+        patterns: list,
+        timeframe: str,
+        adx: Optional[float],
+        atr_pips: Optional[float],
+        rsi: Optional[float],
+        macd_hist: Optional[float],
+        behavioral_uncertainty: float,
+        behavioral_meta: dict,
+    ) -> tuple[float, dict]:
+        if not self._pattern_tracker:
+            return behavioral_uncertainty, behavioral_meta
+        trigger = self._pattern_tracker.classify_trigger(context)
+        price_reaction = self._infer_price_reaction(adx, atr_pips)
+        indicator_response = self._infer_indicator_response(rsi, macd_hist, adx)
+        pattern_name = patterns[0].get("pattern") if patterns else None
+        causal_context = {
+            "trigger": trigger,
+            "price_reaction": price_reaction,
+            "indicator_response": indicator_response,
+            "pattern_name": pattern_name,
+            "timeframe": timeframe,
+        }
+        causal_multiplier = self._pattern_tracker.match_causal_pattern(causal_context)
+        causal_similarity = self._pattern_tracker.get_last_causal_similarity()
+        behavioral_meta["causal_multiplier"] = causal_multiplier
+        behavioral_meta["causal_similarity"] = causal_similarity
+        if causal_similarity is not None and causal_similarity < 0.4:
+            behavioral_meta["causal_mismatch"] = True
+            behavioral_uncertainty = round(min(1.0, behavioral_uncertainty + 0.25), 3)
+        return behavioral_uncertainty, behavioral_meta
+
     @staticmethod
     def _extract_success(meta: dict) -> Optional[bool]:
         if "is_success" in meta:
@@ -211,6 +261,31 @@ class UncertaintyAssessmentSkill(BaseSkill):
             if any(token in normalized for token in ("loss", "fail", "negative")):
                 return False
         return None
+
+    @staticmethod
+    def _infer_price_reaction(adx: Optional[float], atr_pips: Optional[float]) -> str:
+        if adx is not None and adx >= 25 and atr_pips is not None and atr_pips >= 12:
+            return "strong_break"
+        if adx is not None and adx >= 20:
+            return "weak_break"
+        if adx is not None and adx < 18:
+            return "consolidation"
+        return "rejection"
+
+    @staticmethod
+    def _infer_indicator_response(
+        rsi: Optional[float],
+        macd_hist: Optional[float],
+        adx: Optional[float],
+    ) -> str:
+        if rsi is None or macd_hist is None:
+            return "neutral"
+        hist_abs = abs(macd_hist)
+        if adx is not None and adx >= 20 and (rsi >= 55 or rsi <= 45) and hist_abs >= 0.00005:
+            return "confirmed"
+        if hist_abs < 0.00002 and 45 <= rsi <= 55:
+            return "diverged"
+        return "neutral"
 
     @staticmethod
     def _price_action_signature(candles, timeframe: str) -> str:

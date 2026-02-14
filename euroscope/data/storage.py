@@ -165,10 +165,13 @@ class Storage:
                     is_success INTEGER,
                     price_at_detection REAL,
                     price_at_resolution REAL,
-                    resolved_at TEXT
+                    resolved_at TEXT,
+                    causal_chain TEXT
                 );
             """)
             self._ensure_user_preferences_columns()
+            self._ensure_pattern_stats_columns()
+            logger.info(f"Database initialized at {self.db_path}")
 
     def _ensure_user_preferences_columns(self):
         cols = {
@@ -178,7 +181,18 @@ class Storage:
             self._conn.execute(
                 "ALTER TABLE user_preferences ADD COLUMN compact_mode INTEGER DEFAULT 0"
             )
-        logger.info(f"Database initialized at {self.db_path}")
+
+    def _ensure_pattern_stats_columns(self):
+        cols = {
+            row[1] for row in self._conn.execute("PRAGMA table_info(pattern_stats)")
+        }
+        if "causal_chain" not in cols:
+            self._conn.execute(
+                "ALTER TABLE pattern_stats ADD COLUMN causal_chain TEXT"
+            )
+        self._conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_pattern_stats_name_time ON pattern_stats(pattern_name, detected_at)"
+        )
 
     # --- Predictions ---
 
@@ -582,17 +596,19 @@ class Storage:
 
     def save_pattern_detection(self, pattern_name: str, timeframe: str,
                                 predicted_direction: str,
-                                price_at_detection: float) -> int:
+                                price_at_detection: float,
+                                causal_chain: Optional[dict] = None) -> int:
         """Record a new pattern detection."""
         now = datetime.utcnow().isoformat()
+        causal_payload = json.dumps(causal_chain) if causal_chain else None
         with self._conn:
             cursor = self._conn.execute(
                 """INSERT INTO pattern_stats
                    (pattern_name, timeframe, detected_at, predicted_direction,
-                    price_at_detection)
-                   VALUES (?, ?, ?, ?, ?)""",
+                    price_at_detection, causal_chain)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
                 (pattern_name, timeframe, now, predicted_direction,
-                 price_at_detection)
+                 price_at_detection, causal_payload)
             )
             return cursor.lastrowid
 
@@ -645,6 +661,31 @@ class Storage:
             (limit,)
         ).fetchall()
         return [dict(r) for r in rows]
+
+    def get_similar_patterns(
+        self,
+        pattern_name: str,
+        timeframe: Optional[str] = None,
+        min_similarity: float = 0.7,
+        limit: int = 5,
+    ) -> list[dict]:
+        self._conn.row_factory = sqlite3.Row
+        if not pattern_name:
+            return []
+        query = """SELECT *,
+                          1.0 as similarity
+                   FROM pattern_stats
+                   WHERE pattern_name=?
+                   AND is_success IS NOT NULL"""
+        params: list[Any] = [pattern_name]
+        if timeframe:
+            query += " AND timeframe=?"
+            params.append(timeframe)
+        query += " ORDER BY detected_at DESC LIMIT ?"
+        params.append(limit)
+        rows = self._conn.execute(query, params).fetchall()
+        results = [dict(r) for r in rows]
+        return [r for r in results if r.get("similarity", 0) >= min_similarity]
 
     def __del__(self):
         """Close connection on deletion."""

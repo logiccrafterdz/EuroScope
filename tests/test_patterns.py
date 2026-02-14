@@ -7,6 +7,8 @@ import pandas as pd
 import pytest
 
 from euroscope.analysis.patterns import PatternDetector, find_swing_points
+from euroscope.data.storage import Storage
+from euroscope.learning.pattern_tracker import PatternTracker
 
 
 class TestSwingPoints:
@@ -78,3 +80,66 @@ class TestPatternDetector:
         d1 = PatternDetector(tolerance=0.0005)
         d2 = PatternDetector(tolerance=0.002)
         assert d1.tolerance != d2.tolerance
+
+
+class TestPatternTrackerCausal:
+    def test_match_causal_pattern_high_confidence(self):
+        storage = Storage(":memory:")
+        tracker = PatternTracker(storage=storage)
+        chain = {
+            "trigger": "macro_event",
+            "price_reaction": "strong_break",
+            "indicator_response": "confirmed",
+            "outcome": "profitable",
+        }
+        pid = tracker.record_detection(
+            "head_and_shoulders", "H1", "SELL", 1.085, causal_chain=chain
+        )
+        tracker.resolve(pid, "SUCCESS", 1.08, True)
+        context = {
+            "trigger": "macro_event",
+            "price_reaction": "strong_break",
+            "indicator_response": "confirmed",
+            "pattern_name": "head_and_shoulders",
+            "timeframe": "H1",
+        }
+        multiplier = tracker.match_causal_pattern(context)
+        assert multiplier >= 1.1
+
+    def test_match_causal_pattern_macro_mismatch(self):
+        storage = Storage(":memory:")
+        tracker = PatternTracker(storage=storage)
+        chain = {
+            "trigger": "quiet_market",
+            "price_reaction": "consolidation",
+            "indicator_response": "neutral",
+            "outcome": "profitable",
+        }
+        pid = tracker.record_detection(
+            "head_and_shoulders", "H1", "SELL", 1.085, causal_chain=chain
+        )
+        tracker.resolve(pid, "SUCCESS", 1.08, True)
+        context = {
+            "trigger": "macro_event",
+            "price_reaction": "strong_break",
+            "indicator_response": "confirmed",
+            "pattern_name": "head_and_shoulders",
+            "timeframe": "H1",
+        }
+        multiplier = tracker.match_causal_pattern(context)
+        assert multiplier <= 0.5
+
+    def test_match_causal_pattern_without_causal_chain(self):
+        storage = Storage(":memory:")
+        tracker = PatternTracker(storage=storage)
+        pid = tracker.record_detection("double_top", "H1", "SELL", 1.085)
+        tracker.resolve(pid, "SUCCESS", 1.08, True)
+        context = {
+            "trigger": "macro_event",
+            "price_reaction": "strong_break",
+            "indicator_response": "confirmed",
+            "pattern_name": "double_top",
+            "timeframe": "H1",
+        }
+        multiplier = tracker.match_causal_pattern(context)
+        assert multiplier >= 1.0
