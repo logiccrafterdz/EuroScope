@@ -12,7 +12,7 @@ class BacktestingSkill(BaseSkill):
     emoji = "🔬"
     category = SkillCategory.ANALYTICS
     version = "1.0.0"
-    capabilities = ["run", "compare", "format_result", "walk_forward"]
+    capabilities = ["run", "run_backtest", "compare", "format_result", "walk_forward"]
 
     def __init__(self, price_provider=None):
         super().__init__()

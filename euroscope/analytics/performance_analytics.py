@@ -65,32 +65,32 @@ class PerformanceAnalytics:
 
     def calculate(self, period: str = "daily") -> PerformanceSnapshot:
         """
-        Calculate full performance snapshot from closed trades.
-
-        Args:
-            period: "daily", "weekly", or "all"
-
-        Returns:
-            PerformanceSnapshot with all metrics
+        Calculate full performance snapshot from closed trades in DB.
         """
         closed = self.storage.get_signals(status="closed", limit=500)
+        snap = self.compute_from_trades(closed)
+        snap.period = period
+        return snap
 
-        snap = PerformanceSnapshot(period=period)
-
-        if not closed:
+    def compute_from_trades(self, trades: list[dict]) -> PerformanceSnapshot:
+        """
+        Calculate metrics from a list of trade dictionaries.
+        """
+        snap = PerformanceSnapshot()
+        if not trades:
             return snap
 
         # Basic counts
-        pnls = [t.get("pnl_pips", 0) for t in closed]
+        pnls = [t.get("pnl_pips", 0) for t in trades]
         wins = [p for p in pnls if p > 0]
         losses = [p for p in pnls if p <= 0]
 
-        snap.total_trades = len(closed)
+        snap.total_trades = len(trades)
         snap.wins = len(wins)
         snap.losses = len(losses)
-        snap.win_rate = round(len(wins) / len(closed) * 100, 1) if closed else 0
+        snap.win_rate = round(len(wins) / len(trades) * 100, 1) if trades else 0
         snap.total_pnl = round(sum(pnls), 1)
-        snap.avg_pnl = round(snap.total_pnl / len(closed), 1) if closed else 0
+        snap.avg_pnl = round(snap.total_pnl / len(trades), 1) if trades else 0
         snap.best_trade = round(max(pnls), 1) if pnls else 0
         snap.worst_trade = round(min(pnls), 1) if pnls else 0
 
@@ -115,15 +115,15 @@ class PerformanceAnalytics:
         snap.expectancy = self._expectancy(wins, losses, snap.win_rate / 100)
 
         # Average Risk-Reward
-        snap.avg_risk_reward = self._avg_risk_reward(closed)
+        snap.avg_risk_reward = self._avg_risk_reward(trades)
 
         # Average Duration
-        snap.avg_duration_hours = self._avg_duration(closed)
+        snap.avg_duration_hours = self._avg_duration(trades)
 
         # Breakdowns
-        snap.by_strategy = self._breakdown_by_strategy(closed)
-        snap.by_day = self._breakdown_by_day(closed)
-        snap.by_session = self._breakdown_by_session(closed)
+        snap.by_strategy = self._breakdown_by_strategy(trades)
+        snap.by_day = self._breakdown_by_day(trades)
+        snap.by_session = self._breakdown_by_session(trades)
 
         return snap
 
