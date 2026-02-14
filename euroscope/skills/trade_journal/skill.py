@@ -38,6 +38,7 @@ class TradeJournalSkill(BaseSkill):
             # Enrich from context if available
             indicators = params.get("indicators") or context.analysis.get("indicators", {})
             patterns = params.get("patterns") or context.analysis.get("patterns", [])
+            causal_chain = params.get("causal_chain") or context.metadata.get("causal_chain")
 
             trade_id = self.storage.save_trade_journal(
                 direction=params.get("direction", "BUY"),
@@ -51,6 +52,7 @@ class TradeJournalSkill(BaseSkill):
                 indicators=indicators,
                 patterns=patterns if isinstance(patterns, list) else [],
                 reasoning=params.get("reasoning", ""),
+                causal_chain=causal_chain,
             )
             return SkillResult(
                 success=True,
@@ -95,6 +97,13 @@ class TradeJournalSkill(BaseSkill):
                     f"{icon} #{t['id']} {t['direction']} @ `{t['entry_price']}` "
                     f"[{t['strategy']}] {t['pnl_pips']:+.1f}p"
                 )
+                chain = t.get("causal_chain")
+                if isinstance(chain, dict):
+                    reaction = chain.get("reaction") or chain.get("price_reaction")
+                    lines.append(
+                        f"↳ Causal: {chain.get('trigger')} / {reaction} / "
+                        f"{chain.get('indicator_response')} / {chain.get('outcome')}"
+                    )
             if len(trades) > 10:
                 lines.append(f"\n_...and {len(trades) - 10} more_")
 

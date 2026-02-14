@@ -181,6 +181,36 @@ class TestDataFlowPipeline:
         assert result.error == "EMERGENCY: market regime shift"
         assert len(ctx.open_positions) == 0
 
+    def test_trades_output_includes_causal_chain(self):
+        from euroscope.learning.pattern_tracker import PatternTracker
+        from euroscope.skills.trade_journal.skill import TradeJournalSkill
+
+        storage = Storage(":memory:")
+        tracker = PatternTracker(storage=storage)
+        chain = {
+            "trigger": "macro_event",
+            "price_reaction": "strong_break",
+            "indicator_response": "confirmed",
+            "outcome": "profitable",
+        }
+        tracker.record_detection("double_top", "H1", "SELL", 1.0850, causal_chain=chain)
+
+        ctx = SkillContext()
+        ctx.metadata["causal_chain"] = chain
+        skill = TradeJournalSkill()
+        skill.storage = storage
+
+        result = skill.execute(ctx, "log_trade",
+                               direction="SELL", entry_price=1.0850,
+                               strategy="pattern")
+        assert result.success
+
+        journal = skill.execute(ctx, "get_journal", status="open")
+        assert journal.success
+        formatted = journal.metadata.get("formatted", "")
+        assert "Causal:" in formatted
+        assert "macro_event" in formatted
+
 
 # ── 6.3 Error Handling ──────────────────────────────────────
 

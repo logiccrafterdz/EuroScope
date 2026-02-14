@@ -749,10 +749,17 @@ class EuroScopeBot:
         if not await self._check_auth(update):
             return
 
-        result = await self.orchestrator.run_skill("signal_executor", "list_trades")
+        result = await self.orchestrator.run_skill(
+            "trade_journal",
+            "get_journal",
+            status="open",
+            limit=50,
+        )
         if not result.success:
-            await update.message.reply_text(f"❌ {result.error}")
-            return
+            result = await self.orchestrator.run_skill("signal_executor", "list_trades")
+            if not result.success:
+                await update.message.reply_text(f"❌ {result.error}")
+                return
 
         formatted = result.metadata.get("formatted", str(result.data))
         await update.message.reply_text(safe_markdown(formatted), parse_mode="Markdown")

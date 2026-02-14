@@ -33,6 +33,22 @@ class TestTradeJournal:
         assert journal[0]["strategy"] == "trend_following"
         assert journal[0]["status"] == "open"
 
+    def test_causal_chain_persisted(self, storage):
+        chain = {
+            "trigger": "macro_event",
+            "reaction": "strong_break",
+            "indicator_response": "confirmed",
+            "outcome": "profitable",
+        }
+        tid = storage.save_trade_journal(
+            direction="BUY", entry_price=1.0850,
+            strategy="trend_following",
+            causal_chain=chain,
+        )
+        trade = storage.get_trade_with_causal(tid)
+        assert trade is not None
+        assert trade["causal_chain"] == chain
+
     def test_close_and_stats(self, storage):
         tid = storage.save_trade_journal(
             direction="BUY", entry_price=1.0850,

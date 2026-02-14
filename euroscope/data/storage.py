@@ -150,6 +150,7 @@ class Storage:
                     confidence REAL DEFAULT 0.0,
                     indicators_snapshot TEXT DEFAULT '{}',
                     patterns_snapshot TEXT DEFAULT '[]',
+                    causal_chain TEXT,
                     reasoning TEXT DEFAULT '',
                     closed_at TEXT,
                     status TEXT DEFAULT 'open'
@@ -171,6 +172,7 @@ class Storage:
             """)
             self._ensure_user_preferences_columns()
             self._ensure_pattern_stats_columns()
+            self._ensure_trade_journal_columns()
             logger.info(f"Database initialized at {self.db_path}")
 
     def _ensure_user_preferences_columns(self):
@@ -193,6 +195,15 @@ class Storage:
         self._conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_pattern_stats_name_time ON pattern_stats(pattern_name, detected_at)"
         )
+
+    def _ensure_trade_journal_columns(self):
+        cols = {
+            row[1] for row in self._conn.execute("PRAGMA table_info(trade_journal)")
+        }
+        if "causal_chain" not in cols:
+            self._conn.execute(
+                "ALTER TABLE trade_journal ADD COLUMN causal_chain TEXT"
+            )
 
     # --- Predictions ---
 
@@ -496,20 +507,25 @@ class Storage:
                            strategy: str = "", timeframe: str = "H1",
                            regime: str = "", confidence: float = 0.0,
                            indicators: dict = None, patterns: list = None,
-                           reasoning: str = "") -> int:
+                           reasoning: str = "", causal_chain: Any = None) -> int:
         """Save a new trade journal entry."""
         now = datetime.utcnow().isoformat()
+        if isinstance(causal_chain, (dict, list)):
+            causal_payload = json.dumps(causal_chain)
+        else:
+            causal_payload = causal_chain
         with self._conn:
             cursor = self._conn.execute(
                 """INSERT INTO trade_journal
                    (timestamp, direction, entry_price, stop_loss, take_profit,
                     strategy, timeframe, regime, confidence,
-                    indicators_snapshot, patterns_snapshot, reasoning, status)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open')""",
+                    indicators_snapshot, patterns_snapshot, causal_chain, reasoning, status)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open')""",
                 (now, direction, entry_price, stop_loss, take_profit,
                  strategy, timeframe, regime, confidence,
                  json.dumps(indicators or {}),
                  json.dumps(patterns or []),
+                 causal_payload,
                  reasoning)
             )
             return cursor.lastrowid
@@ -542,7 +558,22 @@ class Storage:
 
         self._conn.row_factory = sqlite3.Row
         rows = self._conn.execute(query, params).fetchall()
-        return [dict(r) for r in rows]
+        trades = [dict(r) for r in rows]
+        for t in trades:
+            t["causal_chain"] = self._parse_json_payload(t.get("causal_chain"))
+        return trades
+
+    def get_trade_with_causal(self, trade_id: int) -> Optional[dict]:
+        self._conn.row_factory = sqlite3.Row
+        row = self._conn.execute(
+            "SELECT * FROM trade_journal WHERE id=?",
+            (trade_id,),
+        ).fetchone()
+        if not row:
+            return None
+        trade = dict(row)
+        trade["causal_chain"] = self._parse_json_payload(trade.get("causal_chain"))
+        return trade
 
     def get_trade_journal_stats(self, strategy: str = None) -> dict:
         """Get aggregate stats from trade journal."""
@@ -591,6 +622,17 @@ class Storage:
             data["pnl"] = round(data["pnl"], 1)
 
         return by_strat
+
+    @staticmethod
+    def _parse_json_payload(raw: Any) -> Any:
+        if raw is None:
+            return None
+        if isinstance(raw, (dict, list)):
+            return raw
+        try:
+            return json.loads(raw)
+        except (TypeError, ValueError):
+            return raw
 
     # ── Pattern Stats ─────────────────────────────────────────
 
