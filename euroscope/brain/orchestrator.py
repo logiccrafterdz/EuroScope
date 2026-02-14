@@ -6,6 +6,7 @@ dynamic tool calling and skills chaining.
 """
 
 import logging
+import time
 from typing import Optional
 
 from ..skills.base import SkillContext, SkillResult
@@ -69,6 +70,11 @@ class Orchestrator:
         self.registry.discover()
         self.chain = SkillChain(self.registry)
         self.vector_memory: Optional[VectorMemory] = None
+        self.global_context = SkillContext()
+        self.alerts = None
+
+    def set_alerts(self, alerts):
+        self.alerts = alerts
 
     def inject_dependencies(self, **deps):
         """
@@ -108,6 +114,22 @@ class Orchestrator:
         Complete analysis pipeline using skills.
         Runs: market_data → technical_analysis → risk_management → trading_strategy
         """
+        if context is None:
+            context = self.global_context
+
+        now = time.time()
+        emergency_until = context.metadata.get("emergency_until", 0)
+        if emergency_until and now >= emergency_until:
+            context.metadata["emergency_mode"] = False
+            context.metadata["emergency_until"] = 0
+
+        if context.metadata.get("emergency_mode"):
+            if self.alerts:
+                self.alerts.suppress(300)
+            if self.registry.get("crisis_analysis"):
+                await self.run_pipeline([("crisis_analysis", "full")], context)
+            return context
+
         params = {"market_data": market_params} if market_params else {}
         ctx = await self.run_pipeline(
             [

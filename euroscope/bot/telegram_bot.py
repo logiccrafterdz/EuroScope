@@ -70,7 +70,7 @@ class EuroScopeBot:
         self.bus = EventBus()
         self.alerts = SmartAlerts()
         setup_default_alerts(self.alerts)
-        self.heartbeat = HeartbeatService(interval=300) # 5 min health checks
+        self.heartbeat = HeartbeatService(interval=300, event_bus=self.bus)
         self.cron = CronScheduler()
 
         # Phase 5 integrations
@@ -103,6 +103,9 @@ class EuroScopeBot:
         self.adaptive_tuner = AdaptiveTuner(self.storage)
         
         self.forecaster = Forecaster(self.agent, self.memory, self.orchestrator, pattern_tracker=self.pattern_tracker)
+
+        self.orchestrator.set_alerts(self.alerts)
+        market_data_skill = self.registry.get("market_data")
         
         # Inject dependencies into the skills system
         self.orchestrator.inject_dependencies(
@@ -115,7 +118,11 @@ class EuroScopeBot:
             vector_memory=self.vector_memory,
             pattern_tracker=self.pattern_tracker,
             adaptive_tuner=self.adaptive_tuner,
-            risk_manager=RiskManager()
+            risk_manager=RiskManager(),
+            event_bus=self.bus,
+            heartbeat=self.heartbeat,
+            market_data_skill=market_data_skill,
+            global_context=self.orchestrator.global_context
         )
 
     def _on_alert_triggered(self, alert):

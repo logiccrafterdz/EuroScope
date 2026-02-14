@@ -74,6 +74,8 @@ class SmartAlerts:
         self._history: list[Alert] = []
         self._handlers: dict[AlertChannel, Callable] = {}
         self._max_history = 200
+        self._suppress_until = 0.0
+        self._essential_priorities = {AlertPriority.CRITICAL}
 
     def add_rule(self, name: str, condition: Callable,
                  title: str = "", message_template: str = "",
@@ -146,6 +148,8 @@ class SmartAlerts:
                 if rule.condition(data):
                     alert = rule.alert_template(data)
                     alert.source = source or alert.source
+                    if now < self._suppress_until and alert.priority not in self._essential_priorities:
+                        continue
                     rule.last_triggered = now
                     triggered.append(alert)
                     self._history.append(alert)
@@ -167,6 +171,12 @@ class SmartAlerts:
             self._history = self._history[-self._max_history:]
 
         return triggered
+
+    def suppress(self, duration_seconds: int = 300, essential_priorities: set = None):
+        import time
+        if essential_priorities is not None:
+            self._essential_priorities = set(essential_priorities)
+        self._suppress_until = max(self._suppress_until, time.time() + duration_seconds)
 
     def disable_rule(self, name: str):
         if name in self._rules:

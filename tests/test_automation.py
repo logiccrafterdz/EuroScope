@@ -5,6 +5,7 @@ Tests for Phase 5 — Heartbeat, Cron, EventBus, SmartAlerts.
 import asyncio
 import time
 import pytest
+import pandas as pd
 from unittest.mock import MagicMock
 
 from euroscope.automation.heartbeat import HeartbeatService
@@ -13,6 +14,8 @@ from euroscope.automation.events import EventBus, Event
 from euroscope.automation.alerts import (
     SmartAlerts, AlertPriority, AlertChannel, Alert, setup_default_alerts,
 )
+from euroscope.skills.base import SkillContext
+from euroscope.skills.deviation_monitor import DeviationMonitorSkill
 
 
 # ── HeartbeatService Tests ───────────────────────────────────
@@ -251,3 +254,31 @@ class TestSmartAlerts:
         triggered = alerts.check({"rsi": 25})
         names = [a.source for a in triggered]
         assert "rsi_oversold" in names
+
+
+class TestDeviationMonitor:
+    @pytest.mark.asyncio
+    async def test_price_velocity_triggers_emergency_mode(self):
+        candles = pd.DataFrame(
+            [
+                {"Close": 1.0000},
+                {"Close": 1.0000},
+                {"Close": 1.0020},
+            ]
+        )
+
+        class MarketDataStub:
+            def get_buffer(self):
+                return {"candles": candles, "timeframe": "M1"}
+
+        bus = EventBus()
+        context = SkillContext()
+        skill = DeviationMonitorSkill(
+            event_bus=bus,
+            market_data_skill=MarketDataStub(),
+            global_context=context,
+        )
+        skill.set_event_bus(bus)
+
+        await bus.emit(Event("tick.30s", "test"))
+        assert context.metadata.get("emergency_mode") is True

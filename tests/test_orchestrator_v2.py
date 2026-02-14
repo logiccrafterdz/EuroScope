@@ -13,7 +13,7 @@ for mod_name in ("yfinance", "mplfinance", "mplfinance.original_flavor", "matplo
         sys.modules[mod_name] = types.ModuleType(mod_name)
 
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, patch, AsyncMock
 from euroscope.skills.base import SkillCategory, SkillContext, SkillResult
 
 
@@ -127,6 +127,28 @@ class TestOrchestratorV2:
         assert "consensus" in result
         assert "specialists" in result
         assert "formatted" in result
+
+    @pytest.mark.asyncio
+    async def test_emergency_mode_skips_pipeline(self):
+        from euroscope.brain.orchestrator import Orchestrator
+        o = Orchestrator()
+        ctx = SkillContext()
+        ctx.metadata["emergency_mode"] = True
+
+        crisis = MagicMock()
+        crisis.name = "crisis_analysis"
+        crisis.safe_execute = AsyncMock(return_value=SkillResult(success=True, data={}))
+
+        market = MagicMock()
+        market.name = "market_data"
+        market.safe_execute = AsyncMock(return_value=SkillResult(success=True, data={}))
+
+        o.registry._skills["crisis_analysis"] = crisis
+        o.registry._skills["market_data"] = market
+
+        await o.run_full_analysis_pipeline(context=ctx)
+        crisis.safe_execute.assert_called_once()
+        market.safe_execute.assert_not_called()
 
 
 # ── WorkspaceManager Tests ───────────────────────────────────

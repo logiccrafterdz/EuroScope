@@ -2,6 +2,8 @@
 Market Data Skill — Wraps PriceProvider for the skills framework.
 """
 
+from datetime import datetime
+
 from ..base import BaseSkill, SkillCategory, SkillContext, SkillResult
 
 
@@ -16,6 +18,7 @@ class MarketDataSkill(BaseSkill):
     def __init__(self, provider=None):
         super().__init__()
         self._provider = provider
+        self._buffer: dict = {}
 
     def set_price_provider(self, provider):
         """Standard setter for price provider (DI)."""
@@ -53,9 +56,17 @@ class MarketDataSkill(BaseSkill):
                 return SkillResult(success=False, error="No candle data returned")
             context.market_data["candles"] = df
             context.market_data["timeframe"] = timeframe
+            self._buffer = {
+                "candles": df,
+                "timeframe": timeframe,
+                "updated_at": datetime.utcnow().isoformat(),
+            }
             return SkillResult(success=True, data=df, next_skill="technical_analysis")
         except Exception as e:
             return SkillResult(success=False, error=str(e))
+
+    def get_buffer(self) -> dict:
+        return dict(self._buffer)
 
     async def _check_status(self, context: SkillContext) -> SkillResult:
         """Check if the EUR/USD market is currently open (Sun 5PM - Fri 5PM ET)."""

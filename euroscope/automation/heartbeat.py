@@ -11,6 +11,8 @@ import time
 from datetime import datetime
 from typing import Callable, Optional
 
+from .events import Event
+
 logger = logging.getLogger("euroscope.automation.heartbeat")
 
 
@@ -25,14 +27,17 @@ class HeartbeatService:
         await hb.start()
     """
 
-    def __init__(self, interval: int = 60):
+    def __init__(self, interval: int = 60, event_bus=None):
         self.interval = interval
         self._checks: dict[str, Callable] = {}
         self._results: dict[str, dict] = {}
         self._listeners: list[Callable] = []
         self._running = False
         self._task: Optional[asyncio.Task] = None
+        self._tick_task: Optional[asyncio.Task] = None
+        self._event_bus = event_bus
         self._tick_count = 0
+        self._tick_interval = 30
 
     def register_check(self, name: str, check_fn: Callable):
         """
@@ -56,6 +61,7 @@ class HeartbeatService:
             return
         self._running = True
         self._task = asyncio.create_task(self._loop())
+        self._tick_task = asyncio.create_task(self._tick_loop())
         logger.info(f"Heartbeat started (interval={self.interval}s)")
 
     async def stop(self):
@@ -65,6 +71,12 @@ class HeartbeatService:
             self._task.cancel()
             try:
                 await self._task
+            except asyncio.CancelledError:
+                pass
+        if self._tick_task:
+            self._tick_task.cancel()
+            try:
+                await self._tick_task
             except asyncio.CancelledError:
                 pass
         logger.info("Heartbeat stopped")
@@ -77,6 +89,15 @@ class HeartbeatService:
             except Exception as e:
                 logger.error(f"Heartbeat tick error: {e}")
             await asyncio.sleep(self.interval)
+
+    async def _tick_loop(self):
+        while self._running:
+            if self._event_bus:
+                try:
+                    await self._event_bus.emit(Event("tick.30s", "heartbeat", {"tick": self._tick_count}))
+                except Exception as e:
+                    logger.error(f"Heartbeat tick event error: {e}")
+            await asyncio.sleep(self._tick_interval)
 
     async def tick(self) -> dict[str, dict]:
         """Run all checks once and return results."""

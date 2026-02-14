@@ -4,20 +4,20 @@
 
 EuroScope is a skills-based multi-agent system that provides institutional-grade analysis, pattern detection, macro data, AI forecasting, adaptive learning, and interactive Telegram control — all focused 100% on EUR/USD.
 
-## 🚀 Key Features
+## Key Features
 
 | Category | Features |
 |:---|:---|
-| 🧠 **AI Brain** | Multi-Agent Specialists (Tech, Fund, Sentiment, Risk), Vector Memory (ChromaDB), LLM Router with fallback |
-| 🔧 **Skills Engine** | 9+ auto-discovered skills, Orchestrator, SkillsRegistry, dynamic prompt generation |
-| 🛡️ **Trading** | Risk Management, Strategy Engine (Trend/MR/Breakout), Signal Executor, Paper Trading |
-| 📊 **Analytics** | Performance Metrics (Sharpe/Sortino), Walk-Forward Backtesting, Equity Curves |
-| 🔍 **Analysis** | RSI, MACD, Patterns (H&S, Double Top), Fibonacci & Pivot levels, Sentiment |
-| 📰 **Macro** | FRED & ECB integration (Rate differentials, CPI, GDP), Economic Calendar |
-| 📓 **Learning** | Trade Journal, Prediction Tracker, Pattern Success Rates, Adaptive Parameter Tuner |
-| 🤖 **Telegram V3** | Inline keyboards, Smart Alerts, Cron Scheduler, Heartbeat Service |
+| **AI Brain** | Multi-Agent Specialists (Tech, Fund, Sentiment, Risk), Vector Memory (ChromaDB), LLM Router with fallback |
+| **Skills Engine** | 9+ auto-discovered skills, Orchestrator, SkillsRegistry, dynamic prompt generation |
+| **Trading** | Risk Management, Strategy Engine (Trend/MR/Breakout), Signal Executor, Paper Trading |
+| **Analytics** | Performance Metrics (Sharpe/Sortino), Walk-Forward Backtesting, Equity Curves |
+| **Analysis** | RSI, MACD, Patterns (H&S, Double Top), Fibonacci & Pivot levels, Sentiment |
+| **Macro** | FRED & ECB integration (Rate differentials, CPI, GDP), Economic Calendar |
+| **Learning** | Trade Journal, Prediction Tracker, Pattern Success Rates, Adaptive Parameter Tuner |
+| **Telegram V3** | Inline keyboards, Smart Alerts, Cron Scheduler, Heartbeat Service |
 
-## 🤖 Bot Commands
+## Bot Commands
 
 | Command | Description |
 |:---|:---|
@@ -36,7 +36,7 @@ EuroScope is a skills-based multi-agent system that provides institutional-grade
 | `/health` | System health & runtime stats |
 | `/settings` | Personal alert preferences |
 
-## 🛠️ Quick Start
+## Quick Start
 
 ### 1. Clone & Install
 ```bash
@@ -63,7 +63,7 @@ Edit `.env` with your API keys:
 python -m euroscope.main
 ```
 
-## 🏗️ Architecture (Skills-Based V3)
+## Architecture (Skills-Based V3)
 
 ```
 euroscope/
@@ -99,13 +99,13 @@ Each skill lives in its own folder under `skills/` with:
 
 The `SkillsRegistry` auto-discovers skills at startup. The `Orchestrator` routes requests and assembles multi-skill analysis pipelines.
 
-## 🧪 Testing
+## Testing
 **406+ tests** covering all modules:
 ```bash
 python -m pytest tests/
 ```
 
-## 🧰 Tech Stack
+## Tech Stack
 - **Python 3.12+**
 - **python-telegram-bot** (Async)
 - **DeepSeek & OpenAI** (Multi-LLM)
@@ -114,5 +114,5 @@ python -m pytest tests/
 - **SQLite** (Persistence)
 - **psutil** (Runtime monitoring)
 
-## ⚖️ License
+## License
 Private project.
