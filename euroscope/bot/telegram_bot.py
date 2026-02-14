@@ -166,6 +166,15 @@ class EuroScopeBot:
             ],
         ])
 
+    def _is_compact_mode(self, chat_id: int) -> bool:
+        prefs = self.user_settings.get_prefs(chat_id)
+        return bool(prefs.get("compact_mode"))
+
+    def _format_for_user(self, chat_id: int, text: str, max_length: int = 4096) -> str:
+        if self._is_compact_mode(chat_id):
+            return truncate(text, max_length=1200)
+        return truncate(text, max_length=max_length)
+
     # ─── Command Handlers ────────────────────────────────────
 
     async def cmd_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -301,6 +310,7 @@ class EuroScopeBot:
         if not await self._check_auth(update):
             return
 
+        chat_id = update.effective_chat.id
         tf = context.args[0].upper() if context.args else "H1"
         await update.message.reply_text(f"⏳ Running {tf} technical analysis...")
 
@@ -311,7 +321,18 @@ class EuroScopeBot:
 
         # Formatting is now part of what we get back or can be handled by skill
         formatted = result.metadata.get("formatted", str(result.data))
-        await update.message.reply_text(safe_markdown(formatted), parse_mode="Markdown")
+        formatted = self._format_for_user(chat_id, formatted)
+        keyboard = InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton("📈 Chart", callback_data="cmd:chart"),
+                InlineKeyboardButton("🎯 Signals", callback_data="cmd:signals"),
+                InlineKeyboardButton("🔮 Forecast", callback_data="cmd:forecast"),
+            ],
+            [InlineKeyboardButton("🔙 Menu", callback_data="menu:main")],
+        ])
+        await update.message.reply_text(
+            safe_markdown(formatted), reply_markup=keyboard, parse_mode="Markdown"
+        )
 
     async def cmd_chart(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /chart command."""
@@ -341,6 +362,7 @@ class EuroScopeBot:
         if not await self._check_auth(update):
             return
 
+        chat_id = update.effective_chat.id
         await update.message.reply_text("⏳ Scanning for patterns...")
 
         result = await self.orchestrator.run_skill("technical_analysis", "detect_patterns")
@@ -349,13 +371,15 @@ class EuroScopeBot:
             return
 
         formatted = result.metadata.get("formatted", str(result.data))
-        await update.message.reply_text(safe_markdown(truncate(formatted)), parse_mode="Markdown")
+        formatted = self._format_for_user(chat_id, formatted)
+        await update.message.reply_text(safe_markdown(formatted), parse_mode="Markdown")
 
     async def cmd_levels(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /levels command."""
         if not await self._check_auth(update):
             return
 
+        chat_id = update.effective_chat.id
         await update.message.reply_text("⏳ Calculating key levels...")
         result = await self.orchestrator.run_skill("technical_analysis", "find_levels")
         if not result.success:
@@ -363,13 +387,15 @@ class EuroScopeBot:
             return
 
         formatted = result.metadata.get("formatted", str(result.data))
-        await update.message.reply_text(safe_markdown(truncate(formatted)), parse_mode="Markdown")
+        formatted = self._format_for_user(chat_id, formatted)
+        await update.message.reply_text(safe_markdown(formatted), parse_mode="Markdown")
 
     async def cmd_signals(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /signals command."""
         if not await self._check_auth(update):
             return
 
+        chat_id = update.effective_chat.id
         tf = context.args[0].upper() if context.args else "H1"
         await update.message.reply_text(f"⏳ Generating {tf} signals...")
 
@@ -389,13 +415,24 @@ class EuroScopeBot:
             return
 
         formatted = result.metadata.get("formatted", str(result.data))
-        await update.message.reply_text(safe_markdown(truncate(formatted)), parse_mode="Markdown")
+        formatted = self._format_for_user(chat_id, formatted)
+        keyboard = InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton("🛡️ Risk", callback_data="cmd:risk"),
+                InlineKeyboardButton("📋 Trades", callback_data="cmd:trades"),
+            ],
+            [InlineKeyboardButton("🔙 Menu", callback_data="menu:main")],
+        ])
+        await update.message.reply_text(
+            safe_markdown(formatted), reply_markup=keyboard, parse_mode="Markdown"
+        )
 
     async def cmd_news(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /news command."""
         if not await self._check_auth(update):
             return
 
+        chat_id = update.effective_chat.id
         await update.message.reply_text("⏳ Fetching EUR/USD news...")
         result = await self.orchestrator.run_skill("fundamental_analysis", "get_news")
         if not result.success:
@@ -403,26 +440,39 @@ class EuroScopeBot:
             return
 
         formatted = result.metadata.get("formatted", str(result.data))
-        await update.message.reply_text(safe_markdown(truncate(formatted)), parse_mode="Markdown")
+        formatted = self._format_for_user(chat_id, formatted)
+        keyboard = InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton("📅 Calendar", callback_data="cmd:calendar"),
+                InlineKeyboardButton("🔮 Forecast", callback_data="cmd:forecast"),
+            ],
+            [InlineKeyboardButton("🔙 Menu", callback_data="menu:main")],
+        ])
+        await update.message.reply_text(
+            safe_markdown(formatted), reply_markup=keyboard, parse_mode="Markdown"
+        )
 
     async def cmd_calendar(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /calendar command."""
         if not await self._check_auth(update):
             return
 
+        chat_id = update.effective_chat.id
         result = await self.orchestrator.run_skill("fundamental_analysis", "get_calendar")
         if not result.success:
             await update.message.reply_text(f"❌ {result.error}")
             return
 
         formatted = result.metadata.get("formatted", str(result.data))
-        await update.message.reply_text(safe_markdown(truncate(formatted)), parse_mode="Markdown")
+        formatted = self._format_for_user(chat_id, formatted)
+        await update.message.reply_text(safe_markdown(formatted), parse_mode="Markdown")
 
     async def cmd_forecast(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /forecast command."""
         if not await self._check_auth(update):
             return
 
+        chat_id = update.effective_chat.id
         tf = " ".join(context.args) if context.args else "24 hours"
         await update.message.reply_text(f"⏳ Generating AI forecast for {tf}...")
 
@@ -434,13 +484,24 @@ class EuroScopeBot:
             f"{'─' * 25}\n\n"
         )
         full_msg = header + result["text"]
-        await update.message.reply_text(safe_markdown(truncate(full_msg)), parse_mode="Markdown")
+        full_msg = self._format_for_user(chat_id, full_msg)
+        keyboard = InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton("📊 Analysis", callback_data="cmd:analysis"),
+                InlineKeyboardButton("🎯 Signals", callback_data="cmd:signals"),
+            ],
+            [InlineKeyboardButton("🔙 Menu", callback_data="menu:main")],
+        ])
+        await update.message.reply_text(
+            safe_markdown(full_msg), reply_markup=keyboard, parse_mode="Markdown"
+        )
 
     async def cmd_report(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /report — comprehensive analysis report using skills pipeline."""
         if not await self._check_auth(update):
             return
 
+        chat_id = update.effective_chat.id
         await update.message.reply_text("⏳ Generating comprehensive report using skills pipeline...")
 
         # Run the full analysis pipeline
@@ -478,7 +539,8 @@ class EuroScopeBot:
             lines.append(f"�️ *Risk*: {'Approved ✅' if risk.get('approved') else 'Rejected ❌'}")
             lines.append(f"   SL: `{risk.get('stop_loss')}` | TP: `{risk.get('take_profit')}`")
 
-        await update.message.reply_text(safe_markdown(truncate("\n".join(lines))), parse_mode="Markdown")
+        report = self._format_for_user(chat_id, "\n".join(lines))
+        await update.message.reply_text(safe_markdown(report), parse_mode="Markdown")
 
     async def cmd_accuracy(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /accuracy command."""
@@ -528,6 +590,7 @@ class EuroScopeBot:
         if not await self._check_auth(update):
             return
 
+        chat_id = update.effective_chat.id
         await update.message.reply_text("⏳ Analyzing market regime...")
         ctx = SkillContext()
 
@@ -545,6 +608,7 @@ class EuroScopeBot:
             return
 
         formatted = result.metadata.get("formatted", str(result.data))
+        formatted = self._format_for_user(chat_id, formatted)
         keyboard = InlineKeyboardMarkup([
             [
                 InlineKeyboardButton("🛡️ Risk Check", callback_data="cmd:risk"),
@@ -553,7 +617,7 @@ class EuroScopeBot:
             [InlineKeyboardButton("🔙 Menu", callback_data="menu:main")],
         ])
         await update.message.reply_text(
-            safe_markdown(truncate(formatted)), reply_markup=keyboard, parse_mode="Markdown"
+            safe_markdown(formatted), reply_markup=keyboard, parse_mode="Markdown"
         )
 
     async def cmd_risk(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -735,19 +799,22 @@ class EuroScopeBot:
         if cmd_name == "trades":
             result = await self.orchestrator.run_skill("signal_executor", "list_trades")
             text = result.metadata.get("formatted", str(result.data))
-            await bot.send_message(chat_id, text, parse_mode="Markdown")
+            text = self._format_for_user(chat_id, text)
+            await bot.send_message(chat_id, safe_markdown(text), parse_mode="Markdown")
             return
 
         if cmd_name == "performance":
             result = await self.orchestrator.run_skill("performance_analytics", "get_snapshot")
             text = result.metadata.get("formatted", str(result.data))
-            await bot.send_message(chat_id, text, parse_mode="Markdown")
+            text = self._format_for_user(chat_id, text)
+            await bot.send_message(chat_id, safe_markdown(text), parse_mode="Markdown")
             return
 
         if cmd_name == "calendar":
             result = await self.orchestrator.run_skill("fundamental_analysis", "get_calendar")
             text = result.metadata.get("formatted", str(result.data))
-            await bot.send_message(chat_id, truncate(text), parse_mode="Markdown")
+            text = self._format_for_user(chat_id, text)
+            await bot.send_message(chat_id, safe_markdown(text), parse_mode="Markdown")
             return
 
         if cmd_name == "price":

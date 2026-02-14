@@ -272,3 +272,4 @@ class TestUserPreferences:
         assert prefs["preferred_timeframe"] == "H1"
         assert prefs["alert_min_confidence"] == 60.0
         assert prefs["daily_report_hour"] == 8
+        assert prefs["compact_mode"] == 0

@@ -20,6 +20,7 @@ SETTINGS_PREFIX = "settings:"
 TOGGLE_SIGNAL_ALERTS = f"{SETTINGS_PREFIX}toggle_signals"
 TOGGLE_NEWS_ALERTS = f"{SETTINGS_PREFIX}toggle_news"
 TOGGLE_DAILY_REPORT = f"{SETTINGS_PREFIX}toggle_report"
+TOGGLE_COMPACT_MODE = f"{SETTINGS_PREFIX}toggle_compact"
 SET_TIMEFRAME = f"{SETTINGS_PREFIX}tf:"
 SET_RISK = f"{SETTINGS_PREFIX}risk:"
 SET_REPORT_HOUR = f"{SETTINGS_PREFIX}hour:"
@@ -64,6 +65,7 @@ class UserSettings:
             f"📰 News Alerts: {news_icon}\n"
             f"📋 Daily Report: {report_icon} (at {prefs.get('daily_report_hour', 8):02d}:00 UTC)\n"
             f"📈 Min Confidence: {prefs.get('alert_min_confidence', 60)}%\n"
+            f"🧾 Display: {'Compact' if prefs.get('compact_mode') else 'Expanded'}\n"
         )
 
         keyboard = [
@@ -100,6 +102,12 @@ class UserSettings:
                     f"🧠 Min Conf: {prefs.get('alert_min_confidence', 60)}%",
                     callback_data=f"{SET_MIN_CONFIDENCE}cycle"
                 ),
+            ],
+            [
+                InlineKeyboardButton(
+                    f"🧾 Display: {'Compact' if prefs.get('compact_mode') else 'Expanded'}",
+                    callback_data=TOGGLE_COMPACT_MODE
+                )
             ],
             [
                 InlineKeyboardButton(
@@ -141,6 +149,10 @@ class UserSettings:
         elif data == TOGGLE_DAILY_REPORT:
             new_val = 0 if prefs.get("daily_report_enabled") else 1
             self.storage.save_user_preferences(chat_id, daily_report_enabled=new_val)
+
+        elif data == TOGGLE_COMPACT_MODE:
+            new_val = 0 if prefs.get("compact_mode") else 1
+            self.storage.save_user_preferences(chat_id, compact_mode=new_val)
 
         elif data == f"{SET_TIMEFRAME}cycle":
             current = prefs.get("preferred_timeframe", "H1")

@@ -97,6 +97,7 @@ class UserPreference:
     daily_report_hour: int = 8          # UTC hour for daily report
     language: str = "en"                # "en", "ar"
     max_signals_per_day: int = 5
+    compact_mode: bool = False
     created_at: str = ""
     updated_at: str = ""
     id: Optional[int] = None

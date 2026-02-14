@@ -120,6 +120,7 @@ class TestUserPreference:
         assert pref.chat_id == 12345
         assert pref.risk_tolerance == "medium"
         assert pref.preferred_timeframe == "H1"
+        assert pref.compact_mode is False
         assert pref.created_at != ""
         assert pref.updated_at != ""
 
@@ -130,7 +131,9 @@ class TestUserPreference:
             preferred_timeframe="H4",
             language="ar",
             alert_min_confidence=80.0,
+            compact_mode=True,
         )
         assert pref.risk_tolerance == "high"
         assert pref.language == "ar"
         assert pref.alert_min_confidence == 80.0
+        assert pref.compact_mode is True
