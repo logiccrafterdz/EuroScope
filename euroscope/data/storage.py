@@ -130,6 +130,7 @@ class Storage:
                     language TEXT DEFAULT 'en',
                     max_signals_per_day INTEGER DEFAULT 5,
                     compact_mode INTEGER DEFAULT 0,
+                    backtest_slippage_enabled INTEGER DEFAULT 1,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL
                 );
@@ -182,6 +183,10 @@ class Storage:
         if "compact_mode" not in cols:
             self._conn.execute(
                 "ALTER TABLE user_preferences ADD COLUMN compact_mode INTEGER DEFAULT 0"
+            )
+        if "backtest_slippage_enabled" not in cols:
+            self._conn.execute(
+                "ALTER TABLE user_preferences ADD COLUMN backtest_slippage_enabled INTEGER DEFAULT 1"
             )
 
     def _ensure_pattern_stats_columns(self):
@@ -462,6 +467,7 @@ class Storage:
             "language": "en",
             "max_signals_per_day": 5,
             "compact_mode": 0,
+            "backtest_slippage_enabled": 1,
         }
         defaults.update(kwargs)
 
@@ -470,8 +476,9 @@ class Storage:
                 """INSERT INTO user_preferences
                    (chat_id, risk_tolerance, preferred_timeframe, alert_on_signals,
                     alert_on_news, alert_min_confidence, daily_report_enabled,
-                    daily_report_hour, language, max_signals_per_day, compact_mode, created_at, updated_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    daily_report_hour, language, max_signals_per_day, compact_mode,
+                    backtest_slippage_enabled, created_at, updated_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                    ON CONFLICT(chat_id) DO UPDATE SET
                     risk_tolerance=excluded.risk_tolerance,
                     preferred_timeframe=excluded.preferred_timeframe,
@@ -483,12 +490,14 @@ class Storage:
                     language=excluded.language,
                     max_signals_per_day=excluded.max_signals_per_day,
                     compact_mode=excluded.compact_mode,
+                    backtest_slippage_enabled=excluded.backtest_slippage_enabled,
                     updated_at=excluded.updated_at""",
                 (chat_id, defaults["risk_tolerance"], defaults["preferred_timeframe"],
                  defaults["alert_on_signals"], defaults["alert_on_news"],
                  defaults["alert_min_confidence"], defaults["daily_report_enabled"],
                  defaults["daily_report_hour"], defaults["language"],
-                 defaults["max_signals_per_day"], defaults["compact_mode"], now, now)
+                 defaults["max_signals_per_day"], defaults["compact_mode"],
+                 defaults["backtest_slippage_enabled"], now, now)
             )
             return cursor.lastrowid
 

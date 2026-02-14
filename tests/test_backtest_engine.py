@@ -5,6 +5,8 @@ Tests for BacktestEngine — candle replay, strategy comparison, edge cases.
 import pytest
 
 from euroscope.analytics.backtest_engine import BacktestEngine, BacktestResult, BacktestTrade
+from euroscope.trading.risk_manager import TradeRisk
+from euroscope.trading.strategy_engine import StrategySignal
 
 
 def _make_candles(n=100, start_price=1.0900, direction="up"):
@@ -165,6 +167,111 @@ class TestStrategyComparison:
         candles = _make_candles(200)
         results = engine.compare_strategies(candles, strategies=["trend_following"])
         assert len(results) == 1
+
+
+# ── Slippage Model ───────────────────────────────────────
+
+class TestSlippageModel:
+
+    def test_high_regime_slippage_applied(self):
+        engine = BacktestEngine()
+        regime = engine._get_volatility_regime(
+            {"adx": 40},
+            volume=4000,
+            avg_volume=1000,
+            deviation_triggered=False,
+            emergency_mode=False,
+        )
+        slippage_pips, slippage_price = engine._calculate_realistic_slippage(regime)
+        assert regime == "high"
+        assert slippage_pips == 4.0
+        assert slippage_price == 0.0004
+
+    def test_extreme_regime_slippage_does_not_break_stop_distance(self):
+        engine = BacktestEngine()
+        slippage_pips, slippage_price = engine._calculate_realistic_slippage("extreme")
+        entry_price, stop_loss, take_profit = engine._simulate_fill(
+            "BUY", 1.1000, 1.0950, 1.1100, slippage_price
+        )
+        stop_pips = abs(entry_price - stop_loss) * 10000
+        assert slippage_pips == 7.0
+        assert stop_pips > 0
+
+    def test_sharpe_ratio_drops_in_high_volatility_period(self, monkeypatch):
+        engine = BacktestEngine()
+
+        def fixed_signal(*_args, **_kwargs):
+            return StrategySignal(
+                strategy="trend_following",
+                direction="BUY",
+                confidence=80.0,
+                regime="trending",
+            )
+
+        def fixed_risk(direction, entry_price, **_kwargs):
+            parity = int(entry_price * 10000) % 2
+            tp_distance = 0.0012 if parity == 0 else 0.0008
+            return TradeRisk(
+                direction=direction,
+                entry_price=entry_price,
+                stop_loss=entry_price - 0.0010,
+                take_profit=entry_price + tp_distance,
+                stop_pips=10.0,
+                tp_pips=tp_distance * 10000,
+                risk_reward=round((tp_distance * 10000) / 10.0, 2),
+                position_size=1.0,
+                risk_amount=100.0,
+                risk_score=3,
+                warnings=[],
+                approved=True,
+            )
+
+        monkeypatch.setattr(engine.strategy_engine, "detect_strategy", fixed_signal)
+        monkeypatch.setattr(engine.risk_manager, "assess_trade", fixed_risk)
+        monkeypatch.setattr(engine.technical, "analyze", lambda _df: {
+            "indicators": {
+                "ADX": {"value": 30},
+                "RSI": {"value": 60},
+                "ATR": {"value": 0.0008},
+                "MACD": {},
+            },
+            "overall_bias": "bullish",
+        })
+        monkeypatch.setattr(engine.patterns, "detect_all", lambda _df: [])
+
+        base_candles = []
+        price = 1.1000
+        for i in range(160):
+            delta = 0.0002 if i % 2 == 0 else -0.0001
+            open_price = price
+            close_price = price + delta
+            high = max(open_price, close_price) + 0.0025
+            low = min(open_price, close_price) - 0.0003
+            base_candles.append({
+                "open": round(open_price, 5),
+                "high": round(high, 5),
+                "low": round(low, 5),
+                "close": round(close_price, 5),
+                "volume": 1500 + i * 5,
+            })
+            price = close_price
+        june_candles = [
+            {**c, "volatility_regime": "high"} for c in base_candles
+        ]
+        july_candles = [
+            {**c, "volatility_regime": "normal"} for c in base_candles
+        ]
+
+        june_result = engine.run(
+            june_candles, lookback=10, slippage_pips=1.5, commission_pips=0.7, slippage_enabled=True
+        )
+        july_result = engine.run(
+            july_candles, lookback=10, slippage_pips=1.5, commission_pips=0.7, slippage_enabled=True
+        )
+
+        assert june_result.total_trades > 0
+        assert july_result.total_trades > 0
+        assert june_result.sharpe_ratio < july_result.sharpe_ratio
 
 
 # ── Formatting ───────────────────────────────────────────

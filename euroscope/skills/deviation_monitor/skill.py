@@ -1,5 +1,6 @@
 import logging
 import time
+from datetime import datetime
 from typing import Optional
 
 import pandas as pd
@@ -77,9 +78,10 @@ class DeviationMonitorSkill(BaseSkill):
         result = self._detect_deviation(candles)
         if not result:
             return
-
+        session = result.get("session") or self._detect_trading_session(datetime.utcnow())
+        emergency_seconds = 86400 if session == "weekend" else 300
         context.metadata["emergency_mode"] = True
-        context.metadata["emergency_until"] = now + 300
+        context.metadata["emergency_until"] = now + emergency_seconds
         context.metadata["deviation_monitor_last_activation"] = now
         context.metadata["deviation_monitor_last_trigger"] = result
 
@@ -93,10 +95,9 @@ class DeviationMonitorSkill(BaseSkill):
 
     def _detect_deviation(self, candles) -> Optional[dict]:
         df = candles.tail(20) if hasattr(candles, "tail") else candles
-        volume_trigger = self._volume_spike(df)
-        volatility_trigger = self._volatility_spike(df)
-        velocity_trigger = self._price_velocity(df)
-        triggers = [t for t in (volume_trigger, volatility_trigger, velocity_trigger) if t]
+        session = self._detect_trading_session(datetime.utcnow())
+        thresholds = self._session_thresholds(session)
+        triggers = self._check_deviation_triggers(df, thresholds)
         if not triggers:
             return None
         primary = triggers[0]
@@ -104,9 +105,41 @@ class DeviationMonitorSkill(BaseSkill):
             "trigger": primary["type"],
             "magnitude": primary["magnitude"],
             "details": triggers,
+            "session": session,
         }
 
-    def _volume_spike(self, df) -> Optional[dict]:
+    @staticmethod
+    def _detect_trading_session(current_utc: datetime) -> str:
+        if current_utc.weekday() >= 5:
+            return "weekend"
+        hour = current_utc.hour
+        if 12 <= hour < 16:
+            return "overlap"
+        if 7 <= hour < 16:
+            return "london"
+        if 12 <= hour < 21:
+            return "newyork"
+        if 0 <= hour < 7:
+            return "asian"
+        return "asian"
+
+    @staticmethod
+    def _session_thresholds(session: str) -> dict:
+        if session in ("asian", "weekend"):
+            return {"volume": 3.0, "velocity": 0.0015, "volatility": 2.5}
+        if session == "overlap":
+            return {"volume": 5.0, "velocity": 0.0030, "volatility": 4.0}
+        if session in ("london", "newyork"):
+            return {"volume": 4.5, "velocity": 0.0025, "volatility": 3.5}
+        return {"volume": 3.0, "velocity": 0.0015, "volatility": 2.5}
+
+    def _check_deviation_triggers(self, df, thresholds: dict) -> list[dict]:
+        volume_trigger = self._volume_spike(df, thresholds["volume"])
+        volatility_trigger = self._volatility_spike(df, thresholds["volatility"])
+        velocity_trigger = self._price_velocity(df, thresholds["velocity"])
+        return [t for t in (volume_trigger, volatility_trigger, velocity_trigger) if t]
+
+    def _volume_spike(self, df, threshold: float) -> Optional[dict]:
         if "Volume" not in df:
             return None
         if len(df) < 5:
@@ -117,11 +150,11 @@ class DeviationMonitorSkill(BaseSkill):
         if pd.isna(current) or pd.isna(sma) or sma == 0:
             return None
         ratio = current / sma
-        if ratio > 3.0:
+        if ratio > threshold:
             return {"type": "volume_spike", "magnitude": round(float(ratio), 2)}
         return None
 
-    def _volatility_spike(self, df) -> Optional[dict]:
+    def _volatility_spike(self, df, threshold: float) -> Optional[dict]:
         required = {"High", "Low", "Close"}
         if not required.issubset(df.columns):
             return None
@@ -144,11 +177,11 @@ class DeviationMonitorSkill(BaseSkill):
         if pd.isna(current_atr) or pd.isna(atr_sma) or atr_sma == 0:
             return None
         ratio = current_atr / atr_sma
-        if ratio > 2.5:
+        if ratio > threshold:
             return {"type": "volatility_spike", "magnitude": round(float(ratio), 2)}
         return None
 
-    def _price_velocity(self, df) -> Optional[dict]:
+    def _price_velocity(self, df, threshold: float) -> Optional[dict]:
         if "Close" not in df:
             return None
         if len(df) < 3:
@@ -159,8 +192,7 @@ class DeviationMonitorSkill(BaseSkill):
         if pd.isna(current) or pd.isna(past) or current == 0:
             return None
         change = abs(current - past)
-        threshold = current * 0.0015
-        if change > threshold:
+        if change > current * threshold:
             return {"type": "price_velocity", "magnitude": round(float(change / current), 4)}
         return None
 

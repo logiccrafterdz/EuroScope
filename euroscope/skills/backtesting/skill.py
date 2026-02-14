@@ -48,19 +48,28 @@ class BacktestingSkill(BaseSkill):
 
         strategy = params.get("strategy_filter")
         lookback = params.get("lookback", 50)
-        slippage = params.get("slippage", 0.5)
+        slippage = params.get("slippage", 1.5)
         commission = params.get("commission", 0.7)
+        slippage_enabled = params.get("slippage_enabled")
+        if slippage_enabled is None:
+            slippage_enabled = context.user_prefs.get("backtest_slippage_enabled", True)
         try:
             if not strategy:
                 # Run comparison of all strategies
-                results = self.engine.compare_strategies(candles, slippage=slippage, commission=commission)
+                results = self.engine.compare_strategies(
+                    candles,
+                    slippage=slippage,
+                    commission=commission,
+                    slippage_enabled=slippage_enabled,
+                )
                 formatted = self.engine.format_comparison(results)
                 return SkillResult(success=True, data={k: v.__dict__ for k, v in results.items()}, metadata={"formatted": formatted})
 
             result = self.engine.run(candles, strategy_filter=strategy, 
                                      lookback=lookback, 
                                      slippage_pips=slippage, 
-                                     commission_pips=commission)
+                                     commission_pips=commission,
+                                     slippage_enabled=slippage_enabled)
             formatted = self.engine.format_result(result)
             return SkillResult(success=True, data=result.__dict__, metadata={"formatted": formatted})
         except Exception as e:
@@ -69,12 +78,16 @@ class BacktestingSkill(BaseSkill):
     def _compare(self, context: SkillContext, **params) -> SkillResult:
         candles = params.get("candles", [])
         strategies = params.get("strategies")
-        slippage = params.get("slippage", 0.5)
+        slippage = params.get("slippage", 1.5)
         commission = params.get("commission", 0.7)
+        slippage_enabled = params.get("slippage_enabled")
+        if slippage_enabled is None:
+            slippage_enabled = context.user_prefs.get("backtest_slippage_enabled", True)
         try:
             results = self.engine.compare_strategies(candles, strategies, 
                                                      slippage=slippage, 
-                                                     commission=commission)
+                                                     commission=commission,
+                                                     slippage_enabled=slippage_enabled)
             data = {}
             for name, r in results.items():
                 data[name] = {
@@ -93,14 +106,18 @@ class BacktestingSkill(BaseSkill):
         strategy = params.get("strategy")
         window_size = params.get("window_size", 500)
         step_size = params.get("step_size", 100)
-        slippage = params.get("slippage", 0.5)
+        slippage = params.get("slippage", 1.5)
         commission = params.get("commission", 0.7)
+        slippage_enabled = params.get("slippage_enabled")
+        if slippage_enabled is None:
+            slippage_enabled = context.user_prefs.get("backtest_slippage_enabled", True)
         try:
             results = self.engine.walk_forward_analysis(candles, strategy, 
                                                         window_size=window_size, 
                                                         step_size=step_size,
                                                         slippage=slippage,
-                                                        commission=commission)
+                                                        commission=commission,
+                                                        slippage_enabled=slippage_enabled)
             data = []
             for r in results:
                 data.append({

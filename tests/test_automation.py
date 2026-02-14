@@ -4,10 +4,12 @@ Tests for Phase 5 — Heartbeat, Cron, EventBus, SmartAlerts.
 
 import asyncio
 import time
-import pytest
-import pandas as pd
+from datetime import datetime
 from unittest.mock import MagicMock
 
+import pandas as pd
+import pytest
+import euroscope.skills.deviation_monitor.skill as deviation_module
 from euroscope.automation.heartbeat import HeartbeatService
 from euroscope.automation.cron import CronScheduler, TaskFrequency, ScheduledTask
 from euroscope.automation.events import EventBus, Event
@@ -258,7 +260,7 @@ class TestSmartAlerts:
 
 class TestDeviationMonitor:
     @pytest.mark.asyncio
-    async def test_price_velocity_triggers_emergency_mode(self):
+    async def test_price_velocity_triggers_emergency_mode(self, monkeypatch):
         candles = pd.DataFrame(
             [
                 {"Close": 1.0000},
@@ -279,6 +281,83 @@ class TestDeviationMonitor:
             global_context=context,
         )
         skill.set_event_bus(bus)
+        monkeypatch.setattr(skill, "_detect_trading_session", lambda _: "asian")
 
         await bus.emit(Event("tick.30s", "test"))
         assert context.metadata.get("emergency_mode") is True
+
+    def test_overlap_velocity_below_threshold_no_trigger(self, monkeypatch):
+        candles = pd.DataFrame(
+            [
+                {"Close": 1.0000},
+                {"Close": 1.0000},
+                {"Close": 1.0020},
+            ]
+        )
+
+        target_dt = datetime(2023, 6, 15, 14, 0, 0)
+
+        class FixedDateTime:
+            @classmethod
+            def utcnow(cls):
+                return target_dt
+
+        monkeypatch.setattr(deviation_module, "datetime", FixedDateTime)
+        skill = DeviationMonitorSkill()
+        result = skill._detect_deviation(candles)
+        assert result is None
+
+    def test_asian_velocity_above_threshold_triggers(self, monkeypatch):
+        candles = pd.DataFrame(
+            [
+                {"Close": 1.0000},
+                {"Close": 1.0000},
+                {"Close": 1.0020},
+            ]
+        )
+
+        target_dt = datetime(2023, 6, 15, 3, 0, 0)
+
+        class FixedDateTime:
+            @classmethod
+            def utcnow(cls):
+                return target_dt
+
+        monkeypatch.setattr(deviation_module, "datetime", FixedDateTime)
+        skill = DeviationMonitorSkill()
+        result = skill._detect_deviation(candles)
+        assert result is not None
+        assert result.get("trigger") == "price_velocity"
+
+    @pytest.mark.asyncio
+    async def test_overlap_lagarde_speech_triggers(self, monkeypatch):
+        candles = pd.DataFrame(
+            [
+                {"Close": 1.0000},
+                {"Close": 1.0000},
+                {"Close": 1.0050},
+            ]
+        )
+
+        target_dt = datetime(2023, 6, 15, 14, 0, 0)
+
+        class FixedDateTime:
+            @classmethod
+            def utcnow(cls):
+                return target_dt
+
+        monkeypatch.setattr(deviation_module, "datetime", FixedDateTime)
+
+        class MarketDataStub:
+            def get_buffer(self):
+                return {"candles": candles, "timeframe": "M1"}
+
+        context = SkillContext()
+        skill = DeviationMonitorSkill(
+            market_data_skill=MarketDataStub(),
+            global_context=context,
+        )
+
+        await skill._check_once()
+        assert context.metadata.get("emergency_mode") is True
+        assert context.metadata.get("deviation_monitor_last_trigger", {}).get("session") == "overlap"

@@ -98,6 +98,7 @@ class UserPreference:
     language: str = "en"                # "en", "ar"
     max_signals_per_day: int = 5
     compact_mode: bool = False
+    backtest_slippage_enabled: bool = True
     created_at: str = ""
     updated_at: str = ""
     id: Optional[int] = None

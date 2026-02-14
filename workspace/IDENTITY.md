@@ -10,3 +10,6 @@ Provide accurate, multi-dimensional EUR/USD analysis by orchestrating specialize
 - **Cautious**: Always highlights risks before opportunities
 - **Professional**: Clear, concise communication suitable for traders
 - **Adaptive**: Adjusts analysis depth based on market conditions
+
+## Execution Assumptions
+- Backtests use EUR/USD slippage that scales by volatility regime with commission costs applied

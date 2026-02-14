@@ -34,6 +34,7 @@ class BacktestTrade:
     strategy: str = ""
     entry_bar: int = 0
     exit_bar: int = 0
+    slippage_pips: float = 0.0
 
 
 @dataclass
@@ -71,8 +72,8 @@ class BacktestEngine:
         self.risk_manager = RiskManager(risk_config or RiskConfig())
 
     def run(self, candles: list[dict], strategy_filter: Optional[str] = None,
-            lookback: int = 50, slippage_pips: float = 0.5,
-            commission_pips: float = 0.7) -> BacktestResult:
+            lookback: int = 50, slippage_pips: float = 1.5,
+            commission_pips: float = 0.7, slippage_enabled: bool = True) -> BacktestResult:
         """
         Run a backtest on historical candles.
 
@@ -105,7 +106,8 @@ class BacktestEngine:
 
             # If we have an open trade, check SL/TP
             if open_trade:
-                closed = self._check_exit(open_trade, high, low, i, slippage=slippage_pips, commission=commission_pips)
+                applied_slippage = open_trade.slippage_pips if slippage_enabled else 0.0
+                closed = self._check_exit(open_trade, high, low, i, slippage=applied_slippage, commission=commission_pips)
                 if closed:
                     result.trades.append(closed)
                     open_trade = None
@@ -163,14 +165,40 @@ class BacktestEngine:
             if not trade_risk.approved:
                 continue
 
+            slippage_pips_applied = 0.0
+            slippage_price = 0.0
+            if slippage_enabled:
+                volume = df["Volume"].iloc[-1] if "Volume" in df.columns else None
+                avg_volume = df["Volume"].tail(20).mean() if "Volume" in df.columns else None
+                regime = self._get_volatility_regime(
+                    indicators,
+                    volume,
+                    avg_volume,
+                    deviation_triggered=current.get("deviation_triggered"),
+                    emergency_mode=current.get("emergency_mode"),
+                    regime_override=current.get("volatility_regime"),
+                )
+                slippage_pips_applied, slippage_price = self._calculate_realistic_slippage(
+                    regime, base_normal=slippage_pips
+                )
+
+            entry_price, stop_loss, take_profit = self._simulate_fill(
+                sig.direction,
+                price,
+                trade_risk.stop_loss,
+                trade_risk.take_profit,
+                slippage_price,
+            )
+
             # Open virtual trade
             open_trade = BacktestTrade(
                 direction=sig.direction,
-                entry_price=price,
-                stop_loss=trade_risk.stop_loss,
-                take_profit=trade_risk.take_profit,
+                entry_price=entry_price,
+                stop_loss=stop_loss,
+                take_profit=take_profit,
                 strategy=sig.strategy,
                 entry_bar=i,
+                slippage_pips=slippage_pips_applied,
             )
 
         # Close any remaining open trade at last bar's close
@@ -191,8 +219,9 @@ class BacktestEngine:
 
     def compare_strategies(self, candles: list[dict],
                             strategies: list[str] = None,
-                            slippage: float = 0.5,
-                            commission: float = 0.7) -> dict[str, BacktestResult]:
+                            slippage: float = 1.5,
+                            commission: float = 0.7,
+                            slippage_enabled: bool = True) -> dict[str, BacktestResult]:
         """
         Run backtest for multiple strategies on the same data.
 
@@ -212,13 +241,15 @@ class BacktestEngine:
         for strat in strategies:
             results[strat] = self.run(candles, strategy_filter=strat, 
                                       slippage_pips=slippage, 
-                                      commission_pips=commission)
+                                      commission_pips=commission,
+                                      slippage_enabled=slippage_enabled)
         return results
 
     def walk_forward_analysis(self, candles: list[dict], strategy: str,
                                window_size: int = 500, step_size: int = 100,
-                               slippage: float = 0.5,
-                               commission: float = 0.7) -> list[BacktestResult]:
+                               slippage: float = 1.5,
+                               commission: float = 0.7,
+                               slippage_enabled: bool = True) -> list[BacktestResult]:
         """
         Perform Walk-Forward analysis by running backtests on sliding windows.
 
@@ -233,11 +264,63 @@ class BacktestEngine:
             end = start + window_size
             window_candles = candles[start:end]
             res = self.run(window_candles, strategy_filter=strategy,
-                           slippage_pips=slippage, commission_pips=commission)
+                           slippage_pips=slippage, commission_pips=commission,
+                           slippage_enabled=slippage_enabled)
             results.append(res)
         return results
 
     # ── Internal ─────────────────────────────────────────────
+
+    @staticmethod
+    def _get_volatility_regime(indicators: dict, volume: Optional[float],
+                               avg_volume: Optional[float],
+                               deviation_triggered: bool = False,
+                               emergency_mode: bool = False,
+                               regime_override: Optional[str] = None) -> str:
+        if regime_override in ("normal", "elevated", "high", "extreme"):
+            return regime_override
+        if emergency_mode:
+            return "extreme"
+        if deviation_triggered:
+            return "high"
+
+        adx = indicators.get("adx")
+        volume_ratio = None
+        if volume is not None and avg_volume and avg_volume > 0:
+            volume_ratio = volume / avg_volume
+
+        if (adx is not None and adx > 35) or (volume_ratio is not None and volume_ratio > 3.0):
+            return "high"
+        if (adx is not None and 25 <= adx <= 35) or (volume_ratio is not None and 1.5 <= volume_ratio <= 3.0):
+            return "elevated"
+        if (adx is not None and adx < 25) and (volume_ratio is None or volume_ratio < 1.5):
+            return "normal"
+        if volume_ratio is not None and volume_ratio < 1.5:
+            return "normal"
+        return "elevated"
+
+    @staticmethod
+    def _calculate_realistic_slippage(regime: str, base_normal: float = 1.5) -> tuple[float, float]:
+        default_map = {
+            "normal": 1.5,
+            "elevated": 2.5,
+            "high": 4.0,
+            "extreme": 7.0,
+        }
+        scale = base_normal / 1.5 if base_normal else 0.0
+        base = default_map.get(regime, 1.5) * scale
+        slippage_price = base * 0.0001
+        return round(base, 2), slippage_price
+
+    @staticmethod
+    def _simulate_fill(direction: str, entry_price: float,
+                       stop_loss: float, take_profit: float,
+                       slippage_price: float) -> tuple[float, float, float]:
+        if slippage_price == 0:
+            return entry_price, stop_loss, take_profit
+        if direction == "BUY":
+            return entry_price + slippage_price, stop_loss + slippage_price, take_profit + slippage_price
+        return entry_price - slippage_price, stop_loss - slippage_price, take_profit - slippage_price
 
     @staticmethod
     def _check_exit(trade: BacktestTrade, high: float, low: float,

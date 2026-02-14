@@ -21,6 +21,7 @@ TOGGLE_SIGNAL_ALERTS = f"{SETTINGS_PREFIX}toggle_signals"
 TOGGLE_NEWS_ALERTS = f"{SETTINGS_PREFIX}toggle_news"
 TOGGLE_DAILY_REPORT = f"{SETTINGS_PREFIX}toggle_report"
 TOGGLE_COMPACT_MODE = f"{SETTINGS_PREFIX}toggle_compact"
+TOGGLE_BACKTEST_SLIPPAGE = f"{SETTINGS_PREFIX}toggle_backtest_slippage"
 SET_TIMEFRAME = f"{SETTINGS_PREFIX}tf:"
 SET_RISK = f"{SETTINGS_PREFIX}risk:"
 SET_REPORT_HOUR = f"{SETTINGS_PREFIX}hour:"
@@ -56,6 +57,7 @@ class UserSettings:
         sig_icon = "✅" if prefs.get("alert_on_signals") else "❌"
         news_icon = "✅" if prefs.get("alert_on_news") else "❌"
         report_icon = "✅" if prefs.get("daily_report_enabled") else "❌"
+        backtest_icon = "✅" if prefs.get("backtest_slippage_enabled") else "❌"
 
         text = (
             "⚙️ *Settings*\n\n"
@@ -66,6 +68,7 @@ class UserSettings:
             f"📋 Daily Report: {report_icon} (at {prefs.get('daily_report_hour', 8):02d}:00 UTC)\n"
             f"📈 Min Confidence: {prefs.get('alert_min_confidence', 60)}%\n"
             f"🧾 Display: {'Compact' if prefs.get('compact_mode') else 'Expanded'}\n"
+            f"🧪 Backtest Slippage: {backtest_icon}\n"
         )
 
         keyboard = [
@@ -107,6 +110,12 @@ class UserSettings:
                 InlineKeyboardButton(
                     f"🧾 Display: {'Compact' if prefs.get('compact_mode') else 'Expanded'}",
                     callback_data=TOGGLE_COMPACT_MODE
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    f"{backtest_icon} Backtest Slippage",
+                    callback_data=TOGGLE_BACKTEST_SLIPPAGE
                 )
             ],
             [
@@ -153,6 +162,10 @@ class UserSettings:
         elif data == TOGGLE_COMPACT_MODE:
             new_val = 0 if prefs.get("compact_mode") else 1
             self.storage.save_user_preferences(chat_id, compact_mode=new_val)
+
+        elif data == TOGGLE_BACKTEST_SLIPPAGE:
+            new_val = 0 if prefs.get("backtest_slippage_enabled") else 1
+            self.storage.save_user_preferences(chat_id, backtest_slippage_enabled=new_val)
 
         elif data == f"{SET_TIMEFRAME}cycle":
             current = prefs.get("preferred_timeframe", "H1")

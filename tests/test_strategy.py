@@ -2,9 +2,17 @@
 Tests for strategy engine: regime detection and strategy recommendation.
 """
 
+import asyncio
+import time
+from unittest.mock import AsyncMock
+
+import pandas as pd
 import pytest
 
 from euroscope.trading.strategy_engine import StrategyEngine, StrategySignal
+from euroscope.skills.base import SkillContext
+from euroscope.skills.deviation_monitor import DeviationMonitorSkill
+from euroscope.skills.trading_strategy.skill import TradingStrategySkill
 
 
 @pytest.fixture
@@ -170,3 +178,96 @@ class TestFormatting:
         macro_data = {"differential": {"bias": "EUR stronger"}}
         sig = engine.detect_strategy(indicators, levels, uncertainty=uncertainty, macro_data=macro_data)
         assert sig.direction == "BUY"
+
+
+class TestTradingStrategyFallback:
+
+    @pytest.mark.asyncio
+    async def test_llm_timeout_triggers_fallback(self):
+        skill = TradingStrategySkill()
+        skill.set_agent(object())
+
+        async def slow_llm(*args, **kwargs):
+            await asyncio.sleep(3)
+            return None
+
+        skill._generate_llm_signal = slow_llm
+        skill._llm_refine_strategy = AsyncMock(return_value=None)
+
+        ctx = SkillContext()
+        ctx.analysis["indicators"] = {
+            "overall_bias": "bullish",
+            "indicators": {
+                "ADX": {"value": 30},
+                "RSI": {"value": 60},
+                "MACD": {"histogram": 0.01},
+            },
+        }
+        ctx.analysis["levels"] = {"current_price": 1.0950}
+
+        start = time.perf_counter()
+        result = await skill._detect(ctx)
+        elapsed = time.perf_counter() - start
+
+        assert elapsed < 1.6
+        assert result.success
+        assert result.data.get("source") == "technical_fallback"
+
+    @pytest.mark.asyncio
+    async def test_emergency_mode_skips_llm(self):
+        df = pd.DataFrame({
+            "High": [1.1] * 20,
+            "Low": [1.0] * 20,
+            "Close": [1.05] * 20,
+            "Volume": [100] * 19 + [1000],
+        })
+
+        class BufferSkill:
+            def get_buffer(self):
+                return {"candles": df, "timeframe": "M1"}
+
+        ctx = SkillContext()
+        monitor = DeviationMonitorSkill(market_data_skill=BufferSkill(), global_context=ctx)
+        await monitor._check_once()
+        assert ctx.metadata.get("emergency_mode") is True
+
+        skill = TradingStrategySkill()
+        skill.set_agent(object())
+        skill._generate_llm_signal = AsyncMock(return_value=None)
+        skill._llm_refine_strategy = AsyncMock(return_value=None)
+
+        ctx.analysis["indicators"] = {
+            "overall_bias": "bullish",
+            "indicators": {
+                "ADX": {"value": 30},
+                "RSI": {"value": 60},
+                "MACD": {"histogram": 0.01},
+            },
+        }
+        ctx.analysis["levels"] = {"current_price": 1.0950}
+
+        result = await skill._detect(ctx)
+        assert result.success
+        assert result.data.get("source") == "technical_fallback"
+        assert skill._generate_llm_signal.await_count == 0
+
+    @pytest.mark.asyncio
+    async def test_sideways_market_returns_neutral(self):
+        skill = TradingStrategySkill()
+
+        ctx = SkillContext()
+        ctx.metadata["emergency_mode"] = True
+        ctx.analysis["indicators"] = {
+            "overall_bias": "neutral",
+            "indicators": {
+                "ADX": {"value": 15},
+                "RSI": {"value": 50},
+                "MACD": {"histogram": 0.0},
+            },
+        }
+        ctx.analysis["levels"] = {"current_price": 1.0900}
+
+        result = await skill._detect(ctx)
+        assert result.success
+        assert result.data.get("strategy") == "NEUTRAL"
+        assert result.data.get("direction") == "WAIT"

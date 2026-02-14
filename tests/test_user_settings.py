@@ -30,6 +30,7 @@ class TestDefaults:
         assert prefs["daily_report_enabled"] == 1
         assert prefs["daily_report_hour"] == 8
         assert prefs["compact_mode"] == 0
+        assert prefs["backtest_slippage_enabled"] == 1
 
     def test_idempotent(self, settings):
         prefs1 = settings.get_prefs(12345)
