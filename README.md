@@ -1,4 +1,4 @@
-# 🌐 EuroScope
+# <img src="assets/robot_logo.png" width="40" height="40" align="center"> EuroScope
 
 **AI-powered expert bot specialized exclusively in the EUR/USD forex pair.**
 

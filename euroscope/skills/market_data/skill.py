@@ -47,6 +47,13 @@ class MarketDataSkill(BaseSkill):
             return SkillResult(success=False, error="No price provider configured")
         try:
             timeframe = params.get("timeframe", "H1")
+            count = params.get("count", 100)
+            df = await self._provider.get_candles(timeframe=timeframe, count=count)
+            if df is None or (hasattr(df, 'empty') and df.empty):
+                return SkillResult(success=False, error="No candle data returned")
+            context.market_data["candles"] = df
+            context.market_data["timeframe"] = timeframe
+            return SkillResult(success=True, data=df, next_skill="technical_analysis")
         except Exception as e:
             return SkillResult(success=False, error=str(e))
 
