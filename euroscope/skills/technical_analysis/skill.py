@@ -79,7 +79,7 @@ class TechnicalAnalysisSkill(BaseSkill):
         
         # MACD
         macd = ind.get("MACD", {})
-        lines.append(f"*MACD*: `{macd.get('macd', 0):.5f}` ({macd.get('signaltext', 'N/A')})")
+        lines.append(f"*MACD*: `{macd.get('macd', 0):.5f}` ({macd.get('signal_text', 'N/A')})")
         
         # Bands
         bb = ind.get("Bollinger", {})
