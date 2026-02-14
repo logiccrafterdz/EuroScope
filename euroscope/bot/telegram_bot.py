@@ -34,6 +34,7 @@ from ..learning.adaptive_tuner import AdaptiveTuner
 from ..data.provider import PriceProvider
 from ..data.news import NewsEngine
 from ..data.calendar import EconomicCalendar
+from ..data.fundamental import FundamentalDataProvider
 from ..data.storage import Storage
 from ..forecast.engine import Forecaster
 from ..trading.risk_manager import RiskManager
@@ -80,6 +81,7 @@ class EuroScopeBot:
         
         # Sub-systems
         self.price_provider = PriceProvider()
+        self.macro_provider = FundamentalDataProvider(config.data.fred_api_key)
         self.news_engine = NewsEngine(config.data.brave_api_key, self.storage) # Key ignored in DDG version
         self.calendar = EconomicCalendar()
         
@@ -103,6 +105,7 @@ class EuroScopeBot:
         # Inject dependencies into the skills system
         self.orchestrator.inject_dependencies(
             price_provider=self.price_provider,
+            macro_provider=self.macro_provider,
             news_engine=self.news_engine,
             calendar=self.calendar,
             storage=self.storage,
@@ -448,6 +451,39 @@ class EuroScopeBot:
 
     # ─── New Phase 3-4 Commands ──────────────────────────────
 
+    async def cmd_macro(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /macro — show interest rates and yield spreads."""
+        if not await self._check_auth(update):
+            return
+
+        await update.message.reply_text("⏳ Fetching institutional macro data...")
+        result = await self.orchestrator.run_skill("fundamental_analysis", "get_macro")
+        
+        if not result.success:
+            await update.message.reply_text(f"❌ {result.error}")
+            return
+
+        formatted = result.metadata.get("formatted", str(result.data))
+        await update.message.reply_text(safe_markdown(formatted), parse_mode="Markdown")
+
+    async def cmd_backtest(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /backtest — run historical simulation."""
+        if not await self._check_auth(update):
+            return
+
+        days = int(context.args[0]) if context.args and context.args[0].isdigit() else 30
+        await update.message.reply_text(f"⏳ Running {days}-day strategy backtest...")
+
+        # Backtest skilled is technically part of analytics or a dedicated skill
+        # Assuming we have a backtesting skill or we call the engine directly via a skill
+        result = await self.orchestrator.run_skill("backtesting", "run_backtest", days=days)
+        if not result.success:
+            await update.message.reply_text(f"❌ {result.error}")
+            return
+
+        formatted = result.metadata.get("formatted", str(result.data))
+        await update.message.reply_text(safe_markdown(formatted), parse_mode="Markdown")
+
     async def cmd_strategy(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /strategy — detect market regime and recommend strategy."""
         if not await self._check_auth(update):
@@ -732,6 +768,8 @@ class EuroScopeBot:
             "news": self.cmd_news,
             "calendar": self.cmd_calendar,
             "forecast": self.cmd_forecast,
+            "macro": self.cmd_macro,
+            "backtest": self.cmd_backtest,
             "report": self.cmd_report,
             "accuracy": self.cmd_accuracy,
             "strategy": self.cmd_strategy,
@@ -768,6 +806,8 @@ class EuroScopeBot:
             BotCommand("chart", "Generate candle chart"),
             BotCommand("signals", "Trading signals"),
             BotCommand("forecast", "AI-powered forecast"),
+            BotCommand("macro", "Macro interest rates & yields"),
+            BotCommand("backtest", "Run strategy backtest"),
             BotCommand("news", "Latest news (DuckDuckGo)"),
             BotCommand("health", "System status"),
             BotCommand("help", "List all commands"),

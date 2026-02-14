@@ -16,6 +16,12 @@ class PerformanceAnalyticsSkill(BaseSkill):
 
     def __init__(self, storage=None):
         super().__init__()
+        self.storage = storage
+        self._analytics = PerformanceAnalytics(storage) if storage else None
+
+    def set_storage(self, storage):
+        """Standard setter for auto-injection."""
+        self.storage = storage
         self._analytics = PerformanceAnalytics(storage)
 
     async def execute(self, context: SkillContext, action: str, **params) -> SkillResult:
@@ -48,10 +54,12 @@ class PerformanceAnalyticsSkill(BaseSkill):
             return SkillResult(success=False, error=str(e))
 
     async def _snapshot(self, **params) -> SkillResult:
-        trades = params.get("trades", [])
+        if not self._analytics:
+            return SkillResult(success=False, error="Performance analytics engine not initialized")
         try:
-            snap = self._analytics.compute_from_trades(trades)
-            return SkillResult(success=True, data=snap.__dict__)
+            snap = self._analytics.calculate(period=params.get("period", "all"))
+            formatted = self._analytics.format_performance_report(snap)
+            return SkillResult(success=True, data=snap.__dict__, metadata={"formatted": formatted})
         except Exception as e:
             return SkillResult(success=False, error=str(e))
 

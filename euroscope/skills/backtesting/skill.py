@@ -14,51 +14,59 @@ class BacktestingSkill(BaseSkill):
     version = "1.0.0"
     capabilities = ["run", "compare", "format_result", "walk_forward"]
 
-    def __init__(self):
+    def __init__(self, price_provider=None):
         super().__init__()
+        self._provider = price_provider
         self.engine = BacktestEngine()
 
-    def execute(self, context: SkillContext, action: str, **params) -> SkillResult:
-        if action == "run":
-            return self._run(context, **params)
+    def set_price_provider(self, provider):
+        """Standard setter for auto-injection."""
+        self._provider = provider
+
+    async def execute(self, context: SkillContext, action: str, **params) -> SkillResult:
+        if action in ("run", "run_backtest"):
+            return await self._run(context, **params)
         elif action == "compare":
-            return self._compare(context, **params)
+            return await self._compare(context, **params)
         elif action == "format_result":
-            return self._format(**params)
+            return await self._format(**params)
         elif action == "walk_forward":
-            return self._walk_forward(context, **params)
+            return await self._walk_forward(context, **params)
         return SkillResult(success=False, error=f"Unknown action: {action}")
 
-    def _run(self, context: SkillContext, **params) -> SkillResult:
+    async def _run(self, context: SkillContext, **params) -> SkillResult:
         candles = params.get("candles", [])
+        days = params.get("days", 30)
+
+        # Fetch candles if not provided (V3 automation)
+        if not candles and self._provider:
+            # Approx 24 H1 candles per day
+            candles = await self._provider.get_candles("H1", count=days * 24)
+
+        if not candles:
+            return SkillResult(success=False, error="No historical data available for backtest")
+
         strategy = params.get("strategy_filter")
         lookback = params.get("lookback", 50)
         slippage = params.get("slippage", 0.5)
         commission = params.get("commission", 0.7)
         try:
+            if not strategy:
+                # Run comparison of all strategies
+                results = self.engine.compare_strategies(candles, slippage=slippage, commission=commission)
+                formatted = self.engine.format_comparison(results)
+                return SkillResult(success=True, data={k: v.__dict__ for k, v in results.items()}, metadata={"formatted": formatted})
+
             result = self.engine.run(candles, strategy_filter=strategy, 
                                      lookback=lookback, 
                                      slippage_pips=slippage, 
                                      commission_pips=commission)
-            data = {
-                "strategy": result.strategy,
-                "total_trades": result.total_trades,
-                "wins": result.wins,
-                "losses": result.losses,
-                "win_rate": result.win_rate,
-                "total_pnl": result.total_pnl,
-                "avg_pnl": result.avg_pnl,
-                "max_drawdown": result.max_drawdown,
-                "profit_factor": result.profit_factor,
-                "sharpe_ratio": result.sharpe_ratio,
-                "bars_tested": result.bars_tested,
-                "equity_curve": result.equity_curve,
-            }
-            return SkillResult(success=True, data=data)
+            formatted = self.engine.format_result(result)
+            return SkillResult(success=True, data=result.__dict__, metadata={"formatted": formatted})
         except Exception as e:
             return SkillResult(success=False, error=str(e))
 
-    def _compare(self, context: SkillContext, **params) -> SkillResult:
+    async def _compare(self, context: SkillContext, **params) -> SkillResult:
         candles = params.get("candles", [])
         strategies = params.get("strategies")
         slippage = params.get("slippage", 0.5)
@@ -80,7 +88,7 @@ class BacktestingSkill(BaseSkill):
         except Exception as e:
             return SkillResult(success=False, error=str(e))
 
-    def _walk_forward(self, context: SkillContext, **params) -> SkillResult:
+    async def _walk_forward(self, context: SkillContext, **params) -> SkillResult:
         candles = params.get("candles", [])
         strategy = params.get("strategy")
         window_size = params.get("window_size", 500)
@@ -104,7 +112,7 @@ class BacktestingSkill(BaseSkill):
         except Exception as e:
             return SkillResult(success=False, error=str(e))
 
-    def _format(self, **params) -> SkillResult:
+    async def _format(self, **params) -> SkillResult:
         result = params.get("result")
         if not result:
             return SkillResult(success=False, error="No result to format")

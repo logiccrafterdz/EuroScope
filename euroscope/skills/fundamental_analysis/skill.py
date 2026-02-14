@@ -11,26 +11,33 @@ class FundamentalAnalysisSkill(BaseSkill):
     emoji = "📰"
     category = SkillCategory.ANALYSIS
     version = "1.0.0"
-    capabilities = ["get_news", "get_calendar", "get_sentiment", "full"]
+    capabilities = ["get_news", "get_calendar", "get_sentiment", "get_macro", "full"]
 
-    def __init__(self, news_engine=None, calendar=None):
+    def __init__(self, news_engine=None, calendar=None, macro_provider=None):
         super().__init__()
         self._news = news_engine
         self._calendar = calendar
+        self._macro = macro_provider
 
-    def set_engines(self, news_engine=None, calendar=None):
+    def set_engines(self, news_engine=None, calendar=None, macro_provider=None):
         if news_engine:
             self._news = news_engine
         if calendar:
             self._calendar = calendar
+        if macro_provider:
+            self._macro = macro_provider
+
+    def set_macro_provider(self, macro_provider):
+        """Standard setter for auto-injection."""
+        self._macro = macro_provider
 
     async def execute(self, context: SkillContext, action: str, **params) -> SkillResult:
         if action == "get_news":
             return await self._get_news(context)
         elif action == "get_calendar":
             return await self._get_calendar(context)
-        elif action == "get_sentiment":
-            return await self._get_sentiment(context)
+        elif action == "get_macro":
+            return await self._get_macro(context)
         elif action == "full":
             return await self._full(context)
         return SkillResult(success=False, error=f"Unknown action: {action}")
@@ -78,14 +85,33 @@ class FundamentalAnalysisSkill(BaseSkill):
         except Exception as e:
             return SkillResult(success=False, error=str(e))
 
+    async def _get_macro(self, context: SkillContext) -> SkillResult:
+        if not self._macro:
+            return SkillResult(success=False, error="No macro provider configured")
+        try:
+            # Macro data is usually blocking but fast with caching, 
+            # we wrap it or assume it's acceptable in this context.
+            context_str = self._macro.get_macro_context_for_ai()
+            data = {
+                "differential": self._macro.get_interest_rate_differential(),
+                "spread": self._macro.get_yield_spread(),
+                "cpi": self._macro.get_us_cpi()
+            }
+            context.analysis["macro_data"] = data
+            return SkillResult(success=True, data=data, metadata={"formatted": context_str})
+        except Exception as e:
+            return SkillResult(success=False, error=str(e))
+
     async def _full(self, context: SkillContext) -> SkillResult:
         news = await self._get_news(context)
         cal = await self._get_calendar(context)
         sent = await self._get_sentiment(context)
+        macro = await self._get_macro(context)
         data = {
             "news": news.data if news.success else [],
             "calendar": cal.data if cal.success else [],
             "sentiment": sent.data if sent.success else {},
+            "macro": macro.data if macro.success else {},
         }
         return SkillResult(success=True, data=data)
 
