@@ -108,14 +108,27 @@ class Orchestrator:
         Complete analysis pipeline using skills.
         Runs: market_data → technical_analysis → risk_management → trading_strategy
         """
-        steps = [
-            ("market_data", "get_candles"),
-            ("technical_analysis", "full"),
-            ("risk_management", "assess_trade"),
-            ("trading_strategy", "detect_signal"),
-        ]
         params = {"market_data": market_params} if market_params else {}
-        ctx = await self.run_pipeline(steps, context, params)
+        ctx = await self.run_pipeline(
+            [
+                ("market_data", "get_candles"),
+                ("technical_analysis", "full"),
+                ("trading_strategy", "detect_signal"),
+            ],
+            context,
+            params,
+        )
+
+        market_state = self._infer_market_state(ctx)
+        if market_state:
+            ctx.metadata.update(market_state)
+
+        if market_state.get("regime") in ("trending", "breakout") or market_state.get("volatility") == "high":
+            await self.run_pipeline([("fundamental_analysis", "full")], ctx)
+
+        direction = ctx.signals.get("direction")
+        if direction in ("BUY", "SELL"):
+            await self.run_pipeline([("risk_management", "assess_trade")], ctx)
 
         # Store in vector memory if available
         if self.vector_memory and ctx.analysis:
@@ -125,11 +138,33 @@ class Orchestrator:
                     formatted,
                     metadata={
                         "timeframe": market_params.get("timeframe", "H1"),
-                        "overall_bias": ctx.analysis.get("indicators", {}).get("overall_bias", "NEUTRAL")
+                        "overall_bias": ctx.analysis.get("indicators", {}).get("overall_bias", "NEUTRAL"),
+                        "regime": ctx.metadata.get("regime", "ranging"),
+                        "volatility": ctx.metadata.get("volatility", "unknown"),
                     }
                 )
 
         return ctx
+
+    @staticmethod
+    def _infer_market_state(ctx: SkillContext) -> dict:
+        indicators = ctx.analysis.get("indicators", {})
+        ind = indicators.get("indicators", {})
+        adx = ind.get("ADX", {}).get("value")
+        atr_pips = ind.get("ATR", {}).get("pips")
+        regime = ctx.signals.get("regime")
+
+        if not regime:
+            if adx is not None and adx > 25:
+                regime = "trending"
+            elif adx is not None and adx < 20:
+                regime = "ranging"
+            else:
+                regime = "ranging"
+
+        volatility = "high" if atr_pips is not None and atr_pips >= 12 else "normal"
+
+        return {"regime": regime, "volatility": volatility}
 
     def get_available_skills(self) -> str:
         """Get LLM-ready description of all available skills."""

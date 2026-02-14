@@ -19,10 +19,11 @@ logger = logging.getLogger("euroscope.forecast")
 class Forecaster:
     """Generates AI-powered EUR/USD forecasts with self-learning."""
 
-    def __init__(self, agent: Agent, memory: Memory, orchestrator: Orchestrator):
+    def __init__(self, agent: Agent, memory: Memory, orchestrator: Orchestrator, pattern_tracker=None):
         self.agent = agent
         self.memory = memory
         self.orchestrator = orchestrator
+        self.pattern_tracker = pattern_tracker
 
     async def generate_forecast(self, timeframe: str = "24 hours") -> dict:
         """Generate a comprehensive AI forecast for EUR/USD."""
@@ -36,7 +37,11 @@ class Forecaster:
         news_text = ctx.get_result("fundamental_analysis")["data"].get("formatted", "No news available") if ctx.get_result("fundamental_analysis") else "No news available"
 
         # Learning context
-        learning = self.memory.get_learning_context()
+        learning = self._build_learning_context(
+            price_info=price_info,
+            ta_results=ta_results,
+            timeframe=timeframe,
+        )
 
         # Build data strings for the AI
         price_str = "\n".join(f"  {k}: {v}" for k, v in price_info.items()) if price_info else "N/A"
@@ -75,6 +80,15 @@ class Forecaster:
                 target_price=price_info.get("price"),
                 timeframe=timeframe,
             )
+            if self.agent.vector_memory:
+                self.agent.vector_memory.store_analysis(
+                    forecast_text[:800],
+                    metadata={
+                        "timeframe": timeframe,
+                        "direction": direction,
+                        "confidence": confidence,
+                    },
+                )
 
         return {
             "text": forecast_text,
@@ -83,6 +97,35 @@ class Forecaster:
             "prediction_id": pred_id,
             "price": price_info.get("price"),
         }
+
+    def _build_learning_context(self, price_info: dict, ta_results: dict, timeframe: str) -> str:
+        parts = [self.memory.get_learning_context()]
+
+        patterns = ta_results.get("patterns", []) if ta_results else []
+        if self.pattern_tracker and patterns:
+            rates = self.pattern_tracker.get_success_rates()
+            tf = ta_results.get("timeframe") or price_info.get("timeframe") or "H1"
+            lines = []
+            for p in patterns:
+                name = p.get("name") or p.get("pattern")
+                key = f"{name}_{tf}"
+                entry = rates.get(key)
+                if entry:
+                    lines.append(
+                        f"- {entry['pattern']} ({entry['timeframe']}): {entry['success_rate']}% "
+                        f"({entry['successes']}/{entry['total']})"
+                    )
+            if lines:
+                parts.append("Pattern performance for similar setups:\n" + "\n".join(lines))
+
+        if self.agent.vector_memory:
+            bias = ta_results.get("indicators", {}).get("overall_bias", "")
+            context_seed = f"EUR/USD price {price_info.get('price')} bias {bias} timeframe {timeframe}"
+            historical = self.agent.vector_memory.get_relevant_context(context_seed)
+            if historical:
+                parts.append(historical)
+
+        return "\n\n".join(p for p in parts if p)
 
     def _parse_forecast(self, text: str) -> tuple[str, float]:
         """Extract direction and confidence from AI forecast text."""

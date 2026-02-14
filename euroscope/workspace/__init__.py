@@ -182,6 +182,60 @@ class WorkspaceManager:
         self._write("MEMORY.md", "\n".join(lines))
         logger.info("MEMORY.md refreshed with learning insights")
 
+    def refresh_identity(self, storage=None):
+        from ..learning.pattern_tracker import PatternTracker
+        from ..brain.memory import Memory
+        from ..data.storage import Storage as _Storage
+
+        storage = storage or _Storage()
+        memory = Memory(storage)
+        tracker = PatternTracker(storage)
+        stats = storage.get_trade_journal_stats()
+
+        accuracy = storage.get_accuracy_stats(30)
+        accuracy_line = (
+            f"Prediction accuracy (30d): {accuracy.get('accuracy', 0)}% "
+            f"({accuracy.get('total', 0)} predictions)"
+        )
+
+        top_patterns = []
+        rates = tracker.get_success_rates()
+        if rates:
+            sorted_rates = sorted(rates.values(), key=lambda x: x["success_rate"], reverse=True)
+            top_patterns = sorted_rates[:3]
+
+        best_strategy = None
+        by_strategy = stats.get("by_strategy", {})
+        if by_strategy:
+            best_strategy = max(by_strategy.items(), key=lambda x: x[1]["win_rate"])[0]
+
+        lines = [
+            "## Adaptive Profile",
+            accuracy_line,
+        ]
+        if best_strategy:
+            lines.append(f"Best-performing strategy: {best_strategy}")
+        if top_patterns:
+            patterns_text = ", ".join(f"{p['pattern']} {p['timeframe']} ({p['success_rate']}%)" for p in top_patterns)
+            lines.append(f"Top patterns: {patterns_text}")
+
+        identity = self._read("IDENTITY.md")
+        updated = self._upsert_section(identity, "## Adaptive Profile", "\n".join(lines))
+        self._write("IDENTITY.md", updated)
+        logger.info("IDENTITY.md refreshed with adaptive profile")
+
+    @staticmethod
+    def _upsert_section(text: str, header: str, section_text: str) -> str:
+        if header not in text:
+            return text.rstrip() + "\n\n" + section_text.strip() + "\n"
+
+        start = text.index(header)
+        next_header = text.find("\n## ", start + len(header))
+        if next_header == -1:
+            return text[:start].rstrip() + "\n\n" + section_text.strip() + "\n"
+
+        return text[:start].rstrip() + "\n\n" + section_text.strip() + "\n\n" + text[next_header:].lstrip()
+
     def build_system_prompt(self) -> str:
         """
         Build a complete system prompt from all workspace files.

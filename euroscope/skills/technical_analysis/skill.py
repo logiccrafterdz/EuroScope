@@ -101,8 +101,9 @@ class TechnicalAnalysisSkill(BaseSkill):
             tf = context.market_data.get("timeframe", "H1")
             price = float(df['Close'].iloc[-1])
             for p in patterns:
-                self._tracker.record_detection(p["name"], tf, p["signal"], price)
-                multipliers[p["name"]] = self._tracker.get_confidence_multiplier(p["name"], tf)
+                name, signal = self._normalize_pattern(p)
+                self._tracker.record_detection(name, tf, signal, price)
+                multipliers[name] = self._tracker.get_confidence_multiplier(name, tf)
 
         formatted = self._format_patterns(patterns)
         return SkillResult(success=True, data=patterns, metadata={
@@ -116,10 +117,9 @@ class TechnicalAnalysisSkill(BaseSkill):
         
         lines = ["🧩 *Detected Patterns*"]
         for p in patterns:
-            name = p.get("name", "Unknown")
-            bias = p.get("signal", "Neutral")
-            icon = "🟢" if bias == "Bullish" else "🔴" if bias == "Bearish" else "⚪"
-            lines.append(f"{icon} {name} ({bias})")
+            name, signal = self._normalize_pattern(p)
+            icon = "🟢" if signal == "BULLISH" else "🔴" if signal == "BEARISH" else "⚪"
+            lines.append(f"{icon} {name} ({signal.capitalize()})")
         return "\n".join(lines)
 
     async def _find_levels(self, context: SkillContext, df) -> SkillResult:
@@ -148,13 +148,27 @@ class TechnicalAnalysisSkill(BaseSkill):
             tf = context.market_data.get("timeframe", "H1")
             price = float(df['Close'].iloc[-1])
             for p in patterns:
-                self._tracker.record_detection(p["name"], tf, p["signal"], price)
-                multipliers[p["name"]] = self._tracker.get_confidence_multiplier(p["name"], tf)
+                name, signal = self._normalize_pattern(p)
+                self._tracker.record_detection(name, tf, signal, price)
+                multipliers[name] = self._tracker.get_confidence_multiplier(name, tf)
 
         data = {"indicators": ta, "patterns": patterns, "levels": levels}
         context.analysis.update(data)
+        if multipliers:
+            context.metadata["pattern_multipliers"] = multipliers
         
         return SkillResult(
             success=True, data=data, next_skill="risk_management",
             metadata={"pattern_multipliers": multipliers}
         )
+
+    @staticmethod
+    def _normalize_pattern(pattern: dict) -> tuple[str, str]:
+        name = pattern.get("name") or pattern.get("pattern") or "Unknown"
+        raw_signal = pattern.get("signal") or pattern.get("type") or "neutral"
+        signal = str(raw_signal).strip().lower()
+        if signal == "bullish":
+            return name, "BULLISH"
+        if signal == "bearish":
+            return name, "BEARISH"
+        return name, "NEUTRAL"

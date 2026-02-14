@@ -110,3 +110,26 @@ class Memory:
         entries.append(f"[{datetime.utcnow().strftime('%Y-%m-%d')}] {insight}")
         entries = entries[-5:]
         self.storage.set_memory("learning_insights", "\n".join(entries))
+
+    def resolve_pending_predictions(self, current_price: float, min_move_pips: float = 5.0) -> dict:
+        preds = self.storage.get_unresolved_predictions()
+        resolved = 0
+        skipped = 0
+        for p in preds:
+            entry = p.get("target_price")
+            if not entry:
+                skipped += 1
+                continue
+            move_pips = (current_price - entry) * 10000
+            if abs(move_pips) < min_move_pips:
+                continue
+            direction = p.get("direction", "").upper()
+            if direction == "BULLISH":
+                actual = "BULLISH" if move_pips > 0 else "BEARISH"
+            elif direction == "BEARISH":
+                actual = "BEARISH" if move_pips < 0 else "BULLISH"
+            else:
+                actual = "NEUTRAL"
+            self.evaluate_prediction(p["id"], actual, current_price)
+            resolved += 1
+        return {"resolved": resolved, "skipped": skipped}

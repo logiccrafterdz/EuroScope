@@ -101,7 +101,7 @@ class EuroScopeBot:
         self.pattern_tracker = PatternTracker(self.storage)
         self.adaptive_tuner = AdaptiveTuner(self.storage)
         
-        self.forecaster = Forecaster(self.agent, self.memory, self.orchestrator)
+        self.forecaster = Forecaster(self.agent, self.memory, self.orchestrator, pattern_tracker=self.pattern_tracker)
         
         # Inject dependencies into the skills system
         self.orchestrator.inject_dependencies(
@@ -863,6 +863,7 @@ class EuroScopeBot:
         # 3. Schedule learning tasks
         self.cron.schedule("resolve_patterns", TaskFrequency.HOURLY, self._task_resolve_patterns)
         self.cron.schedule("daily_tuning", TaskFrequency.DAILY, self._task_daily_tuning, delay=3600)
+        self.cron.schedule("weekly_reflection", TaskFrequency.WEEKLY, self._task_weekly_reflection, delay=7200)
 
         logger.info("⚡ Background services & Commands registered.")
 
@@ -893,6 +894,7 @@ class EuroScopeBot:
 
         current_price = price_data["price"]
         self.pattern_tracker.resolve_pending(current_price)
+        self.memory.resolve_pending_predictions(current_price)
         logger.info("Cron: Pattern resolution complete.")
 
     async def _task_daily_tuning(self):
@@ -906,6 +908,36 @@ class EuroScopeBot:
             parse_mode="Markdown"
         )
         logger.info("Cron: Daily tuning complete.")
+
+    async def _task_weekly_reflection(self):
+        logger.info("Cron: Running weekly reflection...")
+        accuracy = self.storage.get_accuracy_stats(30)
+        patterns = self.pattern_tracker.get_success_rates()
+        stats = self.storage.get_trade_journal_stats()
+        tuner = self.adaptive_tuner.analyze()
+
+        lines = [
+            "Weekly Reflection",
+            f"Prediction accuracy (30d): {accuracy.get('accuracy', 0)}% ({accuracy.get('total', 0)})",
+            f"Trades: {stats.get('total', 0)} | Win rate: {stats.get('win_rate', 0)}% | Avg PnL: {stats.get('avg_pnl', 0):+.1f}p",
+        ]
+
+        if patterns:
+            top = sorted(patterns.values(), key=lambda x: x["success_rate"], reverse=True)[:3]
+            weak = sorted(patterns.values(), key=lambda x: x["success_rate"])[:2]
+            lines.append("Top patterns: " + ", ".join(f"{p['pattern']} {p['timeframe']} ({p['success_rate']}%)" for p in top))
+            lines.append("Weak patterns: " + ", ".join(f"{p['pattern']} {p['timeframe']} ({p['success_rate']}%)" for p in weak))
+
+        if tuner.get("ready") and tuner.get("recommendations"):
+            lines.append("Tuning focus: " + ", ".join(r["param"] for r in tuner["recommendations"][:3]))
+
+        insight = " | ".join(lines)
+        self.memory.save_insight(insight)
+        if self.vector_memory:
+            self.vector_memory.store_insight(insight, tags=["reflection", "weekly"])
+        self.workspace.refresh_memory(self.storage)
+        self.workspace.refresh_identity(self.storage)
+        logger.info("Cron: Weekly reflection complete.")
 
     def run(self):
         """Start the Telegram bot polling and automation services."""

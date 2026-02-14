@@ -34,8 +34,8 @@ class RiskManagementSkill(BaseSkill):
         return SkillResult(success=False, error=f"Unknown action: {action}")
 
     async def _assess(self, context: SkillContext, **params) -> SkillResult:
-        direction = params.get("direction", "BUY")
-        entry = params.get("entry_price", 0)
+        direction = params.get("direction") or context.signals.get("direction") or "BUY"
+        entry = params.get("entry_price") or context.signals.get("entry_price") or 0
         atr = params.get("atr")
         support = params.get("support", context.analysis.get("levels", {}).get("support", []))
         resistance = params.get("resistance", context.analysis.get("levels", {}).get("resistance", []))

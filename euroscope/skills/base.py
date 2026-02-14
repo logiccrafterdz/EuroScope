@@ -8,6 +8,7 @@ Every skill extends BaseSkill and provides:
 - Auto-discoverable by SkillsRegistry
 """
 
+import inspect
 import logging
 import os
 from abc import ABC, abstractmethod
@@ -177,7 +178,8 @@ class BaseSkill(ABC):
                 error=f"Unknown action '{action}'. Available: {self.capabilities}",
             )
         try:
-            result = await self.execute(context, action, **params)
+            maybe_result = self.execute(context, action, **params)
+            result = await maybe_result if inspect.isawaitable(maybe_result) else maybe_result
             context.add_result(self.name, result)
             return result
         except Exception as e:
