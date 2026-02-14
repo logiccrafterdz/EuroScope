@@ -22,10 +22,15 @@ class TechnicalAnalysisSkill(BaseSkill):
         self.patterns = PatternDetector()
         self.levels = LevelAnalyzer()
         self._provider = None
+        self._tracker = None
 
     def set_provider(self, provider):
         """Inject the PriceProvider instance."""
         self._provider = provider
+
+    def set_pattern_tracker(self, tracker):
+        """Inject the PatternTracker instance."""
+        self._tracker = tracker
 
     async def execute(self, context: SkillContext, action: str, **params) -> SkillResult:
         df = params.get("df", context.market_data.get("candles"))
@@ -33,7 +38,7 @@ class TechnicalAnalysisSkill(BaseSkill):
         # Auto-fetch if missing and provider available
         if (df is None or (hasattr(df, 'empty') and df.empty)) and self._provider:
             tf = params.get("timeframe", context.market_data.get("timeframe", "H1"))
-            df = self._provider.get_candles(timeframe=tf)
+            df = await self._provider.get_candles(timeframe=tf)
             if df is not None:
                 context.market_data["candles"] = df
                 context.market_data["timeframe"] = tf
@@ -89,8 +94,21 @@ class TechnicalAnalysisSkill(BaseSkill):
     async def _detect_patterns(self, context: SkillContext, df) -> SkillResult:
         patterns = self.patterns.detect_all(df)
         context.analysis["patterns"] = patterns
+        
+        # Record patterns if tracker available
+        multipliers = {}
+        if self._tracker:
+            tf = context.market_data.get("timeframe", "H1")
+            price = float(df['Close'].iloc[-1])
+            for p in patterns:
+                self._tracker.record_detection(p["name"], tf, p["signal"], price)
+                multipliers[p["name"]] = self._tracker.get_confidence_multiplier(p["name"], tf)
+
         formatted = self._format_patterns(patterns)
-        return SkillResult(success=True, data=patterns, metadata={"formatted": formatted})
+        return SkillResult(success=True, data=patterns, metadata={
+            "formatted": formatted,
+            "pattern_multipliers": multipliers
+        })
 
     def _format_patterns(self, patterns: list) -> str:
         if not patterns:
@@ -124,8 +142,19 @@ class TechnicalAnalysisSkill(BaseSkill):
         patterns = self.patterns.detect_all(df)
         levels = self.levels.find_support_resistance(df)
 
+        # Record patterns if tracker available
+        multipliers = {}
+        if self._tracker:
+            tf = context.market_data.get("timeframe", "H1")
+            price = float(df['Close'].iloc[-1])
+            for p in patterns:
+                self._tracker.record_detection(p["name"], tf, p["signal"], price)
+                multipliers[p["name"]] = self._tracker.get_confidence_multiplier(p["name"], tf)
+
         data = {"indicators": ta, "patterns": patterns, "levels": levels}
         context.analysis.update(data)
+        
         return SkillResult(
             success=True, data=data, next_skill="risk_management",
+            metadata={"pattern_multipliers": multipliers}
         )

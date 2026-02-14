@@ -19,14 +19,17 @@ class Storage:
     """SQLite-based storage for EuroScope."""
 
     def __init__(self, db_path: str = "data/euroscope.db"):
-        self.db_path = Path(db_path)
-        self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        self.db_path = Path(db_path) if db_path != ":memory:" else db_path
+        if isinstance(self.db_path, Path):
+            self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        self._conn = sqlite3.connect(self.db_path, check_same_thread=False)
         self._init_db()
 
     def _init_db(self):
         """Create tables if they don't exist."""
-        with sqlite3.connect(self.db_path) as conn:
-            conn.executescript("""
+        with self._conn:
+            self._conn.executescript("""
                 CREATE TABLE IF NOT EXISTS predictions (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     timestamp TEXT NOT NULL,
@@ -170,8 +173,8 @@ class Storage:
 
     def save_prediction(self, timeframe: str, direction: str, confidence: float,
                         reasoning: str = "", target_price: float = None) -> int:
-        with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.execute(
+        with self._conn:
+            cursor = self._conn.execute(
                 """INSERT INTO predictions (timestamp, timeframe, direction, confidence, reasoning, target_price)
                    VALUES (?, ?, ?, ?, ?, ?)""",
                 (datetime.utcnow().isoformat(), timeframe, direction, confidence, reasoning, target_price)
@@ -179,20 +182,19 @@ class Storage:
             return cursor.lastrowid
 
     def resolve_prediction(self, pred_id: int, outcome: str, accuracy: float):
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute(
+        with self._conn:
+            self._conn.execute(
                 """UPDATE predictions SET actual_outcome=?, accuracy_score=?, resolved_at=? WHERE id=?""",
                 (outcome, accuracy, datetime.utcnow().isoformat(), pred_id)
             )
 
     def get_accuracy_stats(self, days: int = 30) -> dict:
-        with sqlite3.connect(self.db_path) as conn:
-            rows = conn.execute(
-                """SELECT direction, accuracy_score FROM predictions
-                   WHERE resolved_at IS NOT NULL
-                   AND timestamp > datetime('now', ?)""",
-                (f"-{days} days",)
-            ).fetchall()
+        rows = self._conn.execute(
+            """SELECT direction, accuracy_score FROM predictions
+                WHERE resolved_at IS NOT NULL
+                AND timestamp > datetime('now', ?)""",
+            (f"-{days} days",)
+        ).fetchall()
 
         if not rows:
             return {"total": 0, "accuracy": 0.0, "message": "No resolved predictions yet"}
@@ -219,34 +221,32 @@ class Storage:
         }
 
     def get_unresolved_predictions(self) -> list[dict]:
-        with sqlite3.connect(self.db_path) as conn:
-            conn.row_factory = sqlite3.Row
-            rows = conn.execute(
-                "SELECT * FROM predictions WHERE resolved_at IS NULL ORDER BY timestamp DESC"
-            ).fetchall()
-            return [dict(r) for r in rows]
+        self._conn.row_factory = sqlite3.Row
+        rows = self._conn.execute(
+            "SELECT * FROM predictions WHERE resolved_at IS NULL ORDER BY timestamp DESC"
+        ).fetchall()
+        return [dict(r) for r in rows]
 
     # --- Alerts ---
 
     def add_alert(self, condition: str, target_value: float, chat_id: int) -> int:
-        with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.execute(
+        with self._conn:
+            cursor = self._conn.execute(
                 "INSERT INTO alerts (created_at, condition, target_value, chat_id) VALUES (?, ?, ?, ?)",
                 (datetime.utcnow().isoformat(), condition, target_value, chat_id)
             )
             return cursor.lastrowid
 
     def get_active_alerts(self) -> list[dict]:
-        with sqlite3.connect(self.db_path) as conn:
-            conn.row_factory = sqlite3.Row
-            rows = conn.execute(
-                "SELECT * FROM alerts WHERE triggered = 0"
-            ).fetchall()
-            return [dict(r) for r in rows]
+        self._conn.row_factory = sqlite3.Row
+        rows = self._conn.execute(
+            "SELECT * FROM alerts WHERE triggered = 0"
+        ).fetchall()
+        return [dict(r) for r in rows]
 
     def trigger_alert(self, alert_id: int):
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute(
+        with self._conn:
+            self._conn.execute(
                 "UPDATE alerts SET triggered=1, triggered_at=? WHERE id=?",
                 (datetime.utcnow().isoformat(), alert_id)
             )
@@ -255,41 +255,39 @@ class Storage:
 
     def set_memory(self, key: str, value: Any):
         data = json.dumps(value) if not isinstance(value, str) else value
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute(
+        with self._conn:
+            self._conn.execute(
                 "INSERT OR REPLACE INTO memory (key, value, updated_at) VALUES (?, ?, ?)",
                 (key, data, datetime.utcnow().isoformat())
             )
 
     def get_memory(self, key: str) -> Optional[str]:
-        with sqlite3.connect(self.db_path) as conn:
-            row = conn.execute("SELECT value FROM memory WHERE key=?", (key,)).fetchone()
-            return row[0] if row else None
+        row = self._conn.execute("SELECT value FROM memory WHERE key=?", (key,)).fetchone()
+        return row[0] if row else None
 
     # --- Market Notes ---
 
     def add_note(self, category: str, content: str, metadata: dict = None):
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute(
+        with self._conn:
+            self._conn.execute(
                 "INSERT INTO market_notes (timestamp, category, content, metadata) VALUES (?, ?, ?, ?)",
                 (datetime.utcnow().isoformat(), category, content,
                  json.dumps(metadata) if metadata else None)
             )
 
     def get_recent_notes(self, category: str = None, limit: int = 20) -> list[dict]:
-        with sqlite3.connect(self.db_path) as conn:
-            conn.row_factory = sqlite3.Row
-            if category:
-                rows = conn.execute(
-                    "SELECT * FROM market_notes WHERE category=? ORDER BY timestamp DESC LIMIT ?",
-                    (category, limit)
-                ).fetchall()
-            else:
-                rows = conn.execute(
-                    "SELECT * FROM market_notes ORDER BY timestamp DESC LIMIT ?",
-                    (limit,)
-                ).fetchall()
-            return [dict(r) for r in rows]
+        self._conn.row_factory = sqlite3.Row
+        if category:
+            rows = self._conn.execute(
+                "SELECT * FROM market_notes WHERE category=? ORDER BY timestamp DESC LIMIT ?",
+                (category, limit)
+            ).fetchall()
+        else:
+            rows = self._conn.execute(
+                "SELECT * FROM market_notes ORDER BY timestamp DESC LIMIT ?",
+                (limit,)
+            ).fetchall()
+        return [dict(r) for r in rows]
 
     # --- Trading Signals ---
 
@@ -298,8 +296,8 @@ class Storage:
                     source: str = "system", reasoning: str = "",
                     risk_reward_ratio: float = 0.0) -> int:
         """Save a new trading signal."""
-        with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.execute(
+        with self._conn:
+            cursor = self._conn.execute(
                 """INSERT INTO trading_signals
                    (created_at, direction, entry_price, stop_loss, take_profit,
                     confidence, timeframe, source, reasoning, risk_reward_ratio)
@@ -312,27 +310,26 @@ class Storage:
     def update_signal_status(self, signal_id: int, status: str, pnl_pips: float = 0.0):
         """Update a signal's status (active, closed, cancelled)."""
         closed_at = datetime.utcnow().isoformat() if status in ("closed", "cancelled") else None
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute(
+        with self._conn:
+            self._conn.execute(
                 "UPDATE trading_signals SET status=?, pnl_pips=?, closed_at=? WHERE id=?",
                 (status, pnl_pips, closed_at, signal_id)
             )
 
     def get_signals(self, status: str = None, limit: int = 20) -> list[dict]:
         """Get trading signals, optionally filtered by status."""
-        with sqlite3.connect(self.db_path) as conn:
-            conn.row_factory = sqlite3.Row
-            if status:
-                rows = conn.execute(
-                    "SELECT * FROM trading_signals WHERE status=? ORDER BY created_at DESC LIMIT ?",
-                    (status, limit)
-                ).fetchall()
-            else:
-                rows = conn.execute(
-                    "SELECT * FROM trading_signals ORDER BY created_at DESC LIMIT ?",
-                    (limit,)
-                ).fetchall()
-            return [dict(r) for r in rows]
+        self._conn.row_factory = sqlite3.Row
+        if status:
+            rows = self._conn.execute(
+                "SELECT * FROM trading_signals WHERE status=? ORDER BY created_at DESC LIMIT ?",
+                (status, limit)
+            ).fetchall()
+        else:
+            rows = self._conn.execute(
+                "SELECT * FROM trading_signals ORDER BY created_at DESC LIMIT ?",
+                (limit,)
+            ).fetchall()
+        return [dict(r) for r in rows]
 
     # --- News Events ---
 
@@ -341,8 +338,8 @@ class Storage:
                         sentiment: str = "neutral", sentiment_score: float = 0.0,
                         currency_impact: str = "", published_at: str = "") -> int:
         """Save a news event."""
-        with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.execute(
+        with self._conn:
+            cursor = self._conn.execute(
                 """INSERT INTO news_events
                    (title, source, url, description, impact_score, sentiment,
                     sentiment_score, currency_impact, published_at, fetched_at)
@@ -355,15 +352,14 @@ class Storage:
 
     def get_recent_news(self, limit: int = 20, min_impact: float = 0.0) -> list[dict]:
         """Get recent news events, optionally filtered by minimum impact."""
-        with sqlite3.connect(self.db_path) as conn:
-            conn.row_factory = sqlite3.Row
-            rows = conn.execute(
-                """SELECT * FROM news_events
-                   WHERE impact_score >= ?
-                   ORDER BY fetched_at DESC LIMIT ?""",
-                (min_impact, limit)
-            ).fetchall()
-            return [dict(r) for r in rows]
+        self._conn.row_factory = sqlite3.Row
+        rows = self._conn.execute(
+            """SELECT * FROM news_events
+                WHERE impact_score >= ?
+                ORDER BY fetched_at DESC LIMIT ?""",
+            (min_impact, limit)
+        ).fetchall()
+        return [dict(r) for r in rows]
 
     # --- Performance Metrics ---
 
@@ -376,8 +372,8 @@ class Storage:
                                 worst_trade_pips: float = 0.0,
                                 avg_trade_duration_hours: float = 0.0) -> int:
         """Save a performance metrics snapshot."""
-        with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.execute(
+        with self._conn:
+            cursor = self._conn.execute(
                 """INSERT INTO performance_metrics
                    (period, total_signals, winning_signals, losing_signals, win_rate,
                     total_pnl_pips, avg_pnl_pips, max_drawdown_pips, profit_factor,
@@ -393,13 +389,12 @@ class Storage:
 
     def get_latest_metrics(self, period: str = "daily") -> Optional[dict]:
         """Get the most recent performance metrics for a period."""
-        with sqlite3.connect(self.db_path) as conn:
-            conn.row_factory = sqlite3.Row
-            row = conn.execute(
-                "SELECT * FROM performance_metrics WHERE period=? ORDER BY calculated_at DESC LIMIT 1",
-                (period,)
-            ).fetchone()
-            return dict(row) if row else None
+        self._conn.row_factory = sqlite3.Row
+        row = self._conn.execute(
+            "SELECT * FROM performance_metrics WHERE period=? ORDER BY calculated_at DESC LIMIT 1",
+            (period,)
+        ).fetchone()
+        return dict(row) if row else None
 
     # --- User Preferences ---
 
@@ -419,8 +414,8 @@ class Storage:
         }
         defaults.update(kwargs)
 
-        with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.execute(
+        with self._conn:
+            cursor = self._conn.execute(
                 """INSERT INTO user_preferences
                    (chat_id, risk_tolerance, preferred_timeframe, alert_on_signals,
                     alert_on_news, alert_min_confidence, daily_report_enabled,
@@ -447,12 +442,11 @@ class Storage:
 
     def get_user_preferences(self, chat_id: int) -> Optional[dict]:
         """Get preferences for a specific user."""
-        with sqlite3.connect(self.db_path) as conn:
-            conn.row_factory = sqlite3.Row
-            row = conn.execute(
-                "SELECT * FROM user_preferences WHERE chat_id=?", (chat_id,)
-            ).fetchone()
-            return dict(row) if row else None
+        self._conn.row_factory = sqlite3.Row
+        row = self._conn.execute(
+            "SELECT * FROM user_preferences WHERE chat_id=?", (chat_id,)
+        ).fetchone()
+        return dict(row) if row else None
 
     # ── Trade Journal ─────────────────────────────────────────
 
@@ -464,8 +458,8 @@ class Storage:
                            reasoning: str = "") -> int:
         """Save a new trade journal entry."""
         now = datetime.utcnow().isoformat()
-        with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.execute(
+        with self._conn:
+            cursor = self._conn.execute(
                 """INSERT INTO trade_journal
                    (timestamp, direction, entry_price, stop_loss, take_profit,
                     strategy, timeframe, regime, confidence,
@@ -480,11 +474,11 @@ class Storage:
             return cursor.lastrowid
 
     def close_trade_journal(self, trade_id: int, exit_price: float,
-                            pnl_pips: float, is_win: bool):
+                             pnl_pips: float, is_win: bool):
         """Close a trade journal entry with outcome."""
         now = datetime.utcnow().isoformat()
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute(
+        with self._conn:
+            self._conn.execute(
                 """UPDATE trade_journal SET exit_price=?, pnl_pips=?,
                    is_win=?, closed_at=?, status='closed'
                    WHERE id=?""",
@@ -505,10 +499,9 @@ class Storage:
         query += " ORDER BY timestamp DESC LIMIT ?"
         params.append(limit)
 
-        with sqlite3.connect(self.db_path) as conn:
-            conn.row_factory = sqlite3.Row
-            rows = conn.execute(query, params).fetchall()
-            return [dict(r) for r in rows]
+        self._conn.row_factory = sqlite3.Row
+        rows = self._conn.execute(query, params).fetchall()
+        return [dict(r) for r in rows]
 
     def get_trade_journal_stats(self, strategy: str = None) -> dict:
         """Get aggregate stats from trade journal."""
@@ -518,9 +511,8 @@ class Storage:
             query += " AND strategy=?"
             params.append(strategy)
 
-        with sqlite3.connect(self.db_path) as conn:
-            conn.row_factory = sqlite3.Row
-            rows = conn.execute(query, params).fetchall()
+        self._conn.row_factory = sqlite3.Row
+        rows = self._conn.execute(query, params).fetchall()
 
         if not rows:
             return {"total": 0, "wins": 0, "losses": 0, "win_rate": 0.0,
@@ -566,8 +558,8 @@ class Storage:
                                 price_at_detection: float) -> int:
         """Record a new pattern detection."""
         now = datetime.utcnow().isoformat()
-        with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.execute(
+        with self._conn:
+            cursor = self._conn.execute(
                 """INSERT INTO pattern_stats
                    (pattern_name, timeframe, detected_at, predicted_direction,
                     price_at_detection)
@@ -581,8 +573,8 @@ class Storage:
                         price_at_resolution: float, is_success: bool):
         """Resolve a pattern detection with actual outcome."""
         now = datetime.utcnow().isoformat()
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute(
+        with self._conn:
+            self._conn.execute(
                 """UPDATE pattern_stats SET actual_outcome=?,
                    price_at_resolution=?, is_success=?, resolved_at=?
                    WHERE id=?""",
@@ -592,16 +584,15 @@ class Storage:
 
     def get_pattern_success_rates(self) -> dict:
         """Get success rates grouped by pattern_name + timeframe."""
-        with sqlite3.connect(self.db_path) as conn:
-            conn.row_factory = sqlite3.Row
-            rows = conn.execute(
-                """SELECT pattern_name, timeframe,
-                   COUNT(*) as total,
-                   SUM(CASE WHEN is_success=1 THEN 1 ELSE 0 END) as successes
-                   FROM pattern_stats
-                   WHERE is_success IS NOT NULL
-                   GROUP BY pattern_name, timeframe"""
-            ).fetchall()
+        self._conn.row_factory = sqlite3.Row
+        rows = self._conn.execute(
+            """SELECT pattern_name, timeframe,
+                COUNT(*) as total,
+                SUM(CASE WHEN is_success=1 THEN 1 ELSE 0 END) as successes
+                FROM pattern_stats
+                WHERE is_success IS NOT NULL
+                GROUP BY pattern_name, timeframe"""
+        ).fetchall()
 
         result = {}
         for r in rows:
@@ -619,13 +610,17 @@ class Storage:
 
     def get_unresolved_patterns(self, limit: int = 50) -> list[dict]:
         """Get pattern detections that haven't been resolved yet."""
-        with sqlite3.connect(self.db_path) as conn:
-            conn.row_factory = sqlite3.Row
-            rows = conn.execute(
-                """SELECT * FROM pattern_stats
-                   WHERE is_success IS NULL
-                   ORDER BY detected_at DESC LIMIT ?""",
-                (limit,)
-            ).fetchall()
-            return [dict(r) for r in rows]
+        self._conn.row_factory = sqlite3.Row
+        rows = self._conn.execute(
+            """SELECT * FROM pattern_stats
+                WHERE is_success IS NULL
+                ORDER BY detected_at DESC LIMIT ?""",
+            (limit,)
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def __del__(self):
+        """Close connection on deletion."""
+        if hasattr(self, "_conn"):
+            self._conn.close()
 

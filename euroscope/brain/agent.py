@@ -14,6 +14,7 @@ import httpx
 from ..config import LLMConfig
 from .prompts import SYSTEM_PROMPT, ANALYSIS_PROMPT, FORECAST_PROMPT, QUESTION_PROMPT
 from .llm_router import LLMRouter
+from .vector_memory import VectorMemory
 
 logger = logging.getLogger("euroscope.brain.agent")
 
@@ -21,15 +22,23 @@ logger = logging.getLogger("euroscope.brain.agent")
 class Agent:
     """LLM-powered EUR/USD expert agent."""
 
-    def __init__(self, config: LLMConfig, router: Optional[LLMRouter] = None):
+    def __init__(self, config: LLMConfig, router: Optional[LLMRouter] = None,
+                 vector_memory: Optional[VectorMemory] = None):
         self.config = config
         self.router = router
+        self.vector_memory = vector_memory
         self.conversation_history: list[dict] = []
         self.max_history = 20
 
     async def chat(self, user_message: str, system_override: str = None) -> str:
         """Send a message to the LLM and get a response."""
         system = system_override or SYSTEM_PROMPT
+
+        # Add vector memory context if available
+        if self.vector_memory:
+            context = self.vector_memory.get_relevant_context(user_message)
+            if context:
+                system += f"\n\n### LONG-TERM MEMORY (PAST CONTEXT)\n{context}"
 
         # Build messages
         messages = [{"role": "system", "content": system}]

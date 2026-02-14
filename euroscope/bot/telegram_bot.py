@@ -28,6 +28,9 @@ from ..brain.agent import Agent
 from ..brain.memory import Memory
 from ..brain.orchestrator import Orchestrator
 from ..brain.llm_router import LLMRouter, LLMProvider
+from ..brain.vector_memory import VectorMemory
+from ..learning.pattern_tracker import PatternTracker
+from ..learning.adaptive_tuner import AdaptiveTuner
 from ..data.provider import PriceProvider
 from ..data.news import NewsEngine
 from ..data.calendar import EconomicCalendar
@@ -44,7 +47,7 @@ from .notification_manager import NotificationManager
 from ..skills.registry import SkillsRegistry
 from ..skills.base import SkillContext
 from ..workspace import WorkspaceManager
-from ..automation import HeartbeatService, EventBus, SmartAlerts, AlertChannel, setup_default_alerts, CronScheduler
+from ..automation import HeartbeatService, EventBus, SmartAlerts, AlertChannel, setup_default_alerts, CronScheduler, TaskFrequency
 
 logger = logging.getLogger("euroscope.bot")
 
@@ -87,8 +90,13 @@ class EuroScopeBot:
             primary_model=config.llm.model,
             fallback_key=config.llm.api_key, # Can add separate fallback keys here
         )
-        self.agent = Agent(config.llm, router=self.router)
+        self.vector_memory = VectorMemory()
+        self.agent = Agent(config.llm, router=self.router, vector_memory=self.vector_memory)
         self.memory = Memory(self.storage)
+        
+        # Learning Module
+        self.pattern_tracker = PatternTracker(self.storage)
+        self.adaptive_tuner = AdaptiveTuner(self.storage)
         
         self.forecaster = Forecaster(self.agent, self.memory, self.orchestrator)
         
@@ -99,6 +107,9 @@ class EuroScopeBot:
             calendar=self.calendar,
             storage=self.storage,
             agent=self.agent,
+            vector_memory=self.vector_memory,
+            pattern_tracker=self.pattern_tracker,
+            adaptive_tuner=self.adaptive_tuner,
             risk_manager=RiskManager()
         )
 
@@ -268,7 +279,7 @@ class EuroScopeBot:
         tf = context.args[0].upper() if context.args else "H1"
         await update.message.reply_text(f"⏳ Generating {tf} chart...")
 
-        candles = self.price_provider.get_candles(tf, count=80)
+        candles = await self.price_provider.get_candles(tf, count=80)
         if candles is None:
             await update.message.reply_text("❌ Could not fetch candle data.")
             return
@@ -554,8 +565,8 @@ class EuroScopeBot:
         question = " ".join(context.args)
         await update.message.reply_text("🤔 Thinking...")
 
-        price = self.price_provider.get_price()
-        h1_candles = self.price_provider.get_candles("H1")
+        price = await self.price_provider.get_price()
+        h1_candles = await self.price_provider.get_candles("H1")
         ta = self.technical.analyze(h1_candles) if h1_candles is not None else {}
         sr = self.levels.find_support_resistance(h1_candles) if h1_candles is not None else {}
 
@@ -579,7 +590,7 @@ class EuroScopeBot:
 
         await update.message.reply_text("🤔 Thinking...")
 
-        price = self.price_provider.get_price()
+        price = await self.price_provider.get_price()
         answer = await self.agent.ask(
             question=text,
             current_price=str(price.get("price", "N/A")),
@@ -766,6 +777,11 @@ class EuroScopeBot:
         # 2. Start automation services
         asyncio.create_task(self.heartbeat.start())
         asyncio.create_task(self.cron.start())
+
+        # 3. Schedule learning tasks
+        self.cron.schedule("resolve_patterns", TaskFrequency.HOURLY, self._task_resolve_patterns)
+        self.cron.schedule("daily_tuning", TaskFrequency.DAILY, self._task_daily_tuning, delay=3600)
+
         logger.info("⚡ Background services & Commands registered.")
 
     async def post_shutdown(self, application: Application):
@@ -783,6 +799,31 @@ class EuroScopeBot:
         result = await self.orchestrator.run_skill("monitoring", "runtime_stats")
         text = result.metadata.get("formatted", "⚠️ Could not fetch health stats.")
         await update.message.reply_text(safe_markdown(text), parse_mode="Markdown")
+
+    # ─── Background Learning Tasks ───────────────────────────
+
+    async def _task_resolve_patterns(self):
+        """Periodically resolve pending patterns using latest price."""
+        logger.info("Cron: Running pattern resolution...")
+        price_data = await self.price_provider.get_price()
+        if "error" in price_data:
+            return
+
+        current_price = price_data["price"]
+        self.pattern_tracker.resolve_pending(current_price)
+        logger.info("Cron: Pattern resolution complete.")
+
+    async def _task_daily_tuning(self):
+        """Analyze trade history once a day and report recommendations."""
+        logger.info("Cron: Running daily strategy tuning...")
+        report = self.adaptive_tuner.format_report()
+        
+        # Broadcast to all authorized users
+        await self.notifications.broadcast_message(
+            f"🧠 *Daily Strategy Optimization*\n\n{report}",
+            parse_mode="Markdown"
+        )
+        logger.info("Cron: Daily tuning complete.")
 
     def run(self):
         """Start the Telegram bot polling and automation services."""

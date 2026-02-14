@@ -12,6 +12,8 @@ from typing import Optional
 import pandas as pd
 import yfinance as yf
 
+from ..utils.resilience import async_retry
+
 logger = logging.getLogger("euroscope.data")
 
 # Yahoo Finance symbol for EUR/USD
@@ -34,7 +36,8 @@ class PriceProvider:
         self._cache: dict[str, tuple[pd.DataFrame, datetime]] = {}
         self._cache_ttl = timedelta(minutes=5)
 
-    def get_price(self) -> dict:
+    @async_retry(max_attempts=3, delay=1.0, exceptions=(Exception,))
+    async def get_price(self) -> dict:
         """Get current EUR/USD price and daily stats."""
         try:
             ticker = yf.Ticker(EURUSD_SYMBOL)
@@ -70,7 +73,8 @@ class PriceProvider:
             logger.error(f"Error fetching price: {e}")
             return {"error": str(e)}
 
-    def get_candles(self, timeframe: str = "H1", count: int = 100) -> Optional[pd.DataFrame]:
+    @async_retry(max_attempts=3, delay=1.0, exceptions=(Exception,))
+    async def get_candles(self, timeframe: str = "H1", count: int = 100) -> Optional[pd.DataFrame]:
         """
         Get OHLCV candle data for the specified timeframe.
 

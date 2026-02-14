@@ -50,6 +50,29 @@ class PatternTracker:
         icon = "✅" if is_success else "❌"
         logger.info(f"Pattern #{pattern_id} resolved: {icon} {actual_outcome}")
 
+    def resolve_pending(self, current_price: float):
+        """
+        Check all unresolved patterns against the current price.
+        Simple logic: if price moved in predicted direction, it's a success.
+        """
+        unresolved = self.get_unresolved(limit=100)
+        for p in unresolved:
+            signal = p["predicted_direction"].upper()
+            entry = p["price_at_detection"]
+            
+            is_success = False
+            if signal == "BULLISH" and current_price > entry:
+                is_success = True
+            elif signal == "BEARISH" and current_price < entry:
+                is_success = True
+                
+            self.resolve(
+                pattern_id=p["id"],
+                actual_outcome="SUCCESS" if is_success else "FAILURE",
+                price_at_resolution=current_price,
+                is_success=is_success
+            )
+
     def get_success_rates(self) -> dict:
         """Get success rates grouped by pattern + timeframe."""
         return self.storage.get_pattern_success_rates()

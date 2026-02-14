@@ -11,6 +11,9 @@ from typing import Optional
 from ..skills.base import SkillContext, SkillResult
 from ..skills.registry import SkillsRegistry
 
+from .llm_router import LLMRouter
+from .vector_memory import VectorMemory
+
 logger = logging.getLogger("euroscope.brain.orchestrator")
 
 
@@ -65,11 +68,14 @@ class Orchestrator:
         self.registry = SkillsRegistry()
         self.registry.discover()
         self.chain = SkillChain(self.registry)
+        self.vector_memory: Optional[VectorMemory] = None
 
     def inject_dependencies(self, **deps):
         """
         Inject shared dependencies into all registered skills.
         """
+        if "vector_memory" in deps:
+            self.vector_memory = deps["vector_memory"]
         for skill in self.registry.list_all():
             for key, val in deps.items():
                 setter = getattr(skill, f"set_{key}", None)
@@ -109,7 +115,21 @@ class Orchestrator:
             ("trading_strategy", "detect_signal"),
         ]
         params = {"market_data": market_params} if market_params else {}
-        return await self.run_pipeline(steps, context, params)
+        ctx = await self.run_pipeline(steps, context, params)
+
+        # Store in vector memory if available
+        if self.vector_memory and ctx.analysis:
+            formatted = ctx.metadata.get("formatted", "")
+            if formatted:
+                self.vector_memory.store_analysis(
+                    formatted,
+                    metadata={
+                        "timeframe": market_params.get("timeframe", "H1"),
+                        "overall_bias": ctx.analysis.get("indicators", {}).get("overall_bias", "NEUTRAL")
+                    }
+                )
+
+        return ctx
 
     def get_available_skills(self) -> str:
         """Get LLM-ready description of all available skills."""
