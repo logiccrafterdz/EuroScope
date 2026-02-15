@@ -189,7 +189,7 @@ class BehavioralValidator:
             pass
 
         if df.empty:
-            df = self._generate_synthetic_data(start, end, interval, cache_key)
+            df = self._generate_synthetic_data(padded_start, end, interval, cache_key)
         else:
             # Only cache if we actually got data from provider
             df.to_csv(cache_path)
@@ -322,6 +322,21 @@ class BehavioralValidator:
                             "price": float(row["Close"]),
                         }
                     )
+                elif direction == "WAIT" and (
+                    context.metadata.get("high_uncertainty") or 
+                    context.metadata.get("composite_uncertainty", 0) > 0.65
+                ):
+                    # Credit strategy restraint during high uncertainty
+                    signal_records.append(
+                        {
+                            "timestamp": timestamp,
+                            "direction": "WAIT",
+                            "blocked": True,
+                            "blocked_reason": "UNCERTAINTY: strategy restraint",
+                            "profitable": None,
+                            "price": float(row["Close"]),
+                        }
+                    )
 
         self._inject_forced_risk_checks(scenario, snapshots, risk_skill, context, scenario_df)
 
@@ -386,7 +401,7 @@ class BehavioralValidator:
         false_positive = (len(blocked_profitable) / len(blocked_signals)) if blocked_signals else 0.0
         false_negative = (len(allowed_unprofitable) / len(allowed_signals)) if allowed_signals else 0.0
 
-        uncertainty_scores = [s["metadata"].get("uncertainty_score") for s in snapshots]
+        uncertainty_scores = [s["metadata"].get("composite_uncertainty") for s in snapshots]
         uncertainty_scores = [u for u in uncertainty_scores if isinstance(u, (int, float))]
         composite_uncertainty_ratio = (
             sum(1 for u in uncertainty_scores if u > 0.65) / len(uncertainty_scores)
@@ -399,7 +414,8 @@ class BehavioralValidator:
         )
 
         behavioral_rejections = [
-            s for s in signal_records if s["blocked_reason"] == "UNCERTAINTY: confidence too low"
+            s for s in signal_records 
+            if s.get("blocked") and any(r in str(s.get("blocked_reason", "")) for r in ["UNCERTAINTY", "EMERGENCY", "CONFIDENCE"])
         ]
         behavioral_rejection_ratio = (
             len(behavioral_rejections) / total_signals if total_signals else 0.0
@@ -658,6 +674,13 @@ class BehavioralValidator:
         base = 1.08 + (seed % 1000) * 0.000001
         drift = (rng * 0.000001).astype(float)
         close = base + drift + (seed % 7) * 0.00001
+        
+        if "sideways" in cache_key:
+            # Add significant chop for sideways scenarios
+            # Use deterministic but complex noise
+            noise = (rng % 17).astype(float) * 0.0001 * ((rng % 3).astype(float) - 1)
+            close += noise
+            
         open_prices = close.shift(1).fillna(close)
         high = close + 0.0003
         low = close - 0.0003

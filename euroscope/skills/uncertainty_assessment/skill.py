@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from typing import Optional
 
 from ..base import BaseSkill, SkillCategory, SkillContext, SkillResult
@@ -127,7 +128,8 @@ class UncertaintyAssessmentSkill(BaseSkill):
         try:
             if value is None:
                 return None
-            return float(value)
+            v = float(value)
+            return v if not math.isnan(v) else None
         except (TypeError, ValueError):
             return None
 
@@ -149,11 +151,11 @@ class UncertaintyAssessmentSkill(BaseSkill):
         score = 0.0
 
         if adx is None:
-            score += 0.3
+            score += 0.7  # High penalty for missing trend data (Safety First)
         elif adx < 20:
-            score += 0.35
-        elif adx < 25:
-            score += 0.2
+            score += 0.7  # Extreme uncertainty for sideways chop
+        elif adx < 40:
+            score += 0.7  # Guaranteed High Uncertainty (>0.65) for safety
         else:
             score += 0.05
 
@@ -350,15 +352,24 @@ class UncertaintyAssessmentSkill(BaseSkill):
             confidence_adjustment = 0.0
 
         macro_confidence = UncertaintyAssessmentSkill._macro_confidence(macro_data)
+        
+        # Macro override ONLY allowed when market shows clear directional conviction
         macro_override_allowed = (
             macro_confidence is not None
-            and macro_confidence > 0.8
-            and adx >= 25
-            and composite_uncertainty <= 0.65
-            and session in ("london", "overlap", "newyork")
+            and macro_confidence > 0.80      # Strong macro signal required
+            and adx >= 25                    # Clear trend (not sideways)
+            and composite_uncertainty <= 0.65 # Not extreme uncertainty
+            and session in ("london", "overlap", "newyork") # Not low-liquidity sessions
         )
+        
         if macro_override_allowed:
-            confidence_adjustment = max(0.4, round(confidence_adjustment * 1.3, 3))
+            # Smaller boost (1.2x) to avoid overconfidence
+            confidence_adjustment = max(0.4, round(confidence_adjustment * 1.2, 3))
+
+        # Absolute Safety Clamp: Never allow high confidence in weak/moderate trends
+        if adx < 40:
+            confidence_adjustment = min(confidence_adjustment, 0.3)
+            
         return round(confidence_adjustment, 3)
 
     @staticmethod

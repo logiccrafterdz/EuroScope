@@ -70,20 +70,20 @@ def test_behavioral_uncertainty_missing_context():
 def test_macro_override_confidence_adjustment():
     macro_data = {"differential": {"confidence": 0.9}}
     adjusted = UncertaintyAssessmentSkill._calculate_confidence_adjustment(
-        0.6,
+        0.65,
         macro_data,
         adx=30,
         session="london",
     )
-    assert adjusted == 0.65
+    assert adjusted == 0.6
 
 
 def test_macro_override_blocked_in_sideways_market():
     macro_data = {"differential": {"confidence": 0.95}}
     adjusted = UncertaintyAssessmentSkill._calculate_confidence_adjustment(
-        0.6,
+        0.65,
         macro_data,
-        adx=20,
+        adx=18,
         session="london",
     )
     assert adjusted == 0.5
@@ -92,7 +92,7 @@ def test_macro_override_blocked_in_sideways_market():
 def test_macro_override_blocked_in_asian_session():
     macro_data = {"differential": {"confidence": 0.95}}
     adjusted = UncertaintyAssessmentSkill._calculate_confidence_adjustment(
-        0.6,
+        0.65,
         macro_data,
         adx=30,
         session="asian",

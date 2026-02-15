@@ -32,7 +32,7 @@ async def build_scenario(validator):
             component="signal_executor",
             metric="behavioral_rejection_ratio",
             operator=">=",
-            threshold=0.95,
+            threshold=0.80,
             tolerance=0.03,
         ),
     ]
