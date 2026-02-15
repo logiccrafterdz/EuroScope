@@ -42,8 +42,8 @@ class TradingStrategySkill(BaseSkill):
 
         # Build indicator dict for StrategyEngine
         ind = {
-            "adx": indicators.get("indicators", {}).get("ADX", {}).get("value"),
-            "rsi": indicators.get("indicators", {}).get("RSI", {}).get("value"),
+            "adx": self._to_float(indicators.get("indicators", {}).get("ADX", {}).get("value")),
+            "rsi": self._to_float(indicators.get("indicators", {}).get("RSI", {}).get("value")),
             "overall_bias": indicators.get("overall_bias"),
             "macd": indicators.get("indicators", {}).get("MACD", {}),
         }

@@ -150,13 +150,13 @@ class TechnicalAnalyzer:
                 "EMA": {
                     "ema20": round(ema20, 5),
                     "ema50": round(ema50, 5),
-                    "ema200": round(ema200_val, 5) if ema200_val else "N/A",
+                    "ema200": round(ema200_val, 5) if ema200_val else None,
                     "trend": self._ema_trend(current_price, ema20, ema50, ema200_val),
                 },
                 "ATR": {"value": round(atr_val, 5), "pips": round(atr_val * 10000, 1)},
                 "ADX": {
-                    "value": round(adx_val, 1) if adx_val else "N/A",
-                    "strength": self._adx_strength(adx_val) if adx_val else "N/A",
+                    "value": round(adx_val, 1) if adx_val else None,
+                    "strength": self._adx_strength(adx_val) if adx_val else "Weak / no trend",
                 },
                 "Stochastic": {
                     "k": round(stoch_k, 1),
