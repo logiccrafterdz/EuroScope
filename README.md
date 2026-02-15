@@ -15,7 +15,8 @@ EuroScope is a skills-based multi-agent system that provides institutional-grade
 | **Analysis** | RSI, MACD, Patterns (H&S, Double Top), Fibonacci & Pivot levels, Sentiment |
 | **Macro** | FRED & ECB integration (Rate differentials, CPI, GDP), Economic Calendar |
 | **Learning** | Trade Journal, Prediction Tracker, Pattern Success Rates, Adaptive Parameter Tuner |
-| **Telegram V3** | Inline keyboards, Smart Alerts, Cron Scheduler, Heartbeat Service |
+| **Telegram V3** | **Fully English Interface**, Inline keyboards, Smart Alerts, Cron Scheduler, Heartbeat Service |
+| **Validation** | Behavioral Testing Suite (5 Scenarios), Historical Scenario Replay, Component Analysis |
 
 ## Bot Commands
 
@@ -57,6 +58,7 @@ Edit `.env` with your API keys:
 - `EUROSCOPE_BRAVE_API_KEY` — News sentiment (optional)
 - `EUROSCOPE_ALPHAVANTAGE_KEY` — AlphaVantage data (optional)
 - `EUROSCOPE_FRED_API_KEY` — FRED macro data (optional)
+- `EUROSCOPE_TIINGO_KEY` — Tiingo API (Recommended for Behavioral Validation)
 
 ### 3. Run
 ```bash
@@ -103,14 +105,29 @@ The `SkillsRegistry` auto-discovers skills at startup. The `Orchestrator` routes
 **406+ tests** covering all modules:
 ```bash
 python -m pytest tests/
+python -m pytest tests/
 ```
+
+### Behavioral Validation
+Run comprehensive behavioral tests against historical market scenarios:
+```bash
+python -m euroscope.testing.report_generator --output behavioral_report.md
+```
+This validates the bot's logic against:
+1.  **Sideways Market Trap** (Avoiding false signals in chop)
+2.  **Lagarde Shock** (Emergency response to news events)
+3.  **Liquidity Sweep** (Detecting stop hunts)
+4.  **Session Transition** (Handling market open volatility)
+5.  **Macro Override** (Fundamental data impact)
 
 ## Tech Stack
 - **Python 3.12+**
 - **python-telegram-bot** (Async)
 - **DeepSeek & OpenAI** (Multi-LLM)
 - **ChromaDB** (Vector Memory)
-- **yfinance** & **pandas**
+- **DeepSeek & OpenAI** (Multi-LLM)
+- **ChromaDB** (Vector Memory)
+- **Tiingo** & **yfinance** & **pandas**
 - **SQLite** (Persistence)
 - **psutil** (Runtime monitoring)
 
