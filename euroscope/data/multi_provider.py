@@ -12,6 +12,7 @@ import pandas as pd
 
 from .provider import PriceProvider
 from .alpha_vantage import AlphaVantageProvider
+from .tiingo import TiingoProvider
 
 logger = logging.getLogger("euroscope.data.multi")
 
@@ -20,12 +21,12 @@ class MultiSourceProvider:
     """
     Unified price provider that tries multiple data sources.
 
-    Tries yfinance first (no API key needed, more reliable for most cases),
-    then falls back to Alpha Vantage if yfinance fails.
+    Tries yfinance first, then Tiingo, then Alpha Vantage.
     """
 
-    def __init__(self, alphavantage_key: str = ""):
+    def __init__(self, alphavantage_key: str = "", tiingo_key: str = ""):
         self.primary = PriceProvider()
+        self.tiingo = TiingoProvider(tiingo_key) if tiingo_key else None
         self.fallback = AlphaVantageProvider(alphavantage_key) if alphavantage_key else None
         self._last_source = "yfinance"
 
@@ -34,16 +35,24 @@ class MultiSourceProvider:
         """Which data source was used for the last successful call."""
         return self._last_source
 
-    def get_price(self) -> dict:
+    async def get_price(self) -> dict:
         """Get current EUR/USD price with automatic failover."""
         # Try primary (yfinance)
-        result = self.primary.get_price()
+        result = await self.primary.get_price()
         if "error" not in result:
             self._last_source = "yfinance"
             result["source"] = "yfinance"
             return result
 
-        logger.warning(f"yfinance price failed: {result.get('error')}, trying fallback...")
+        logger.warning(f"yfinance price failed: {result.get('error')}, trying Tiingo...")
+
+        # Try Tiingo
+        if self.tiingo:
+            result = await self.tiingo.get_price()
+            if "error" not in result:
+                self._last_source = "tiingo"
+                return result
+            logger.warning(f"Tiingo price failed: {result.get('error')}, trying Alpha Vantage...")
 
         # Try fallback (Alpha Vantage)
         if self.fallback:
@@ -55,17 +64,29 @@ class MultiSourceProvider:
 
         return {"error": "All price data sources failed"}
 
-    def get_candles(self, timeframe: str = "H1", count: int = 100) -> Optional[pd.DataFrame]:
+    async def get_candles(self, timeframe: str = "H1", count: int = 100) -> Optional[pd.DataFrame]:
         """Get OHLCV candles with automatic failover."""
         # Try primary
-        df = self.primary.get_candles(timeframe, count)
+        df = await self.primary.get_candles(timeframe, count)
         if df is not None and not df.empty:
             df = self._validate_data(df)
             if df is not None:
                 self._last_source = "yfinance"
                 return df
 
-        logger.warning(f"yfinance candles failed for {timeframe}, trying fallback...")
+        logger.warning(f"yfinance candles failed for {timeframe}, trying Tiingo...")
+
+        # Try Tiingo
+        if self.tiingo:
+            df = await self.tiingo.get_candles(timeframe, count)
+            if df is not None and not df.empty:
+                df = self._validate_data(df)
+                if df is not None:
+                    self._last_source = "tiingo"
+                    return df
+                logger.error(f"Tiingo data failed validation for {timeframe}")
+
+        logger.warning(f"Tiingo candles failed for {timeframe}, trying Alpha Vantage...")
 
         # Try fallback
         if self.fallback:

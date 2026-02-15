@@ -34,6 +34,7 @@ class TelegramConfig:
 class DataConfig:
     brave_api_key: str = ""
     alphavantage_key: str = ""
+    tiingo_key: str = ""
     fred_api_key: str = ""
     symbol: str = "EURUSD=X"  # Yahoo Finance symbol for EUR/USD
     update_interval_minutes: int = 15
@@ -71,6 +72,7 @@ class Config:
             data=DataConfig(
                 brave_api_key=os.getenv("EUROSCOPE_BRAVE_API_KEY", ""),
                 alphavantage_key=os.getenv("EUROSCOPE_ALPHAVANTAGE_KEY", ""),
+                tiingo_key=os.getenv("EUROSCOPE_TIINGO_KEY", ""),
                 fred_api_key=os.getenv("EUROSCOPE_FRED_API_KEY", ""),
             ),
             log_level=os.getenv("EUROSCOPE_LOG_LEVEL", "INFO"),
@@ -85,6 +87,8 @@ class Config:
             warnings.append("⚠️  EUROSCOPE_TELEGRAM_TOKEN not set — Telegram bot disabled")
         if not self.data.alphavantage_key:
             warnings.append("⚠️  EUROSCOPE_ALPHAVANTAGE_KEY not set — AlphaVantage disabled")
+        if not self.data.tiingo_key:
+            warnings.append("⚠️  EUROSCOPE_TIINGO_KEY not set — Tiingo (deep history) disabled")
         if not self.data.fred_api_key:
             warnings.append("⚠️  EUROSCOPE_FRED_API_KEY not set — FRED macro data disabled")
         return warnings
@@ -115,7 +119,7 @@ class Config:
     def print_startup_summary(self):
         """Print a concise startup summary to the console."""
         warnings = self.validate()
-        total = 4  # LLM, Telegram, AlphaVantage, FRED
+        total = 5  # LLM, Telegram, AlphaVantage, Tiingo, FRED
         configured = total - len(warnings)
 
         print(f"  ✅ {configured}/{total} API keys configured")

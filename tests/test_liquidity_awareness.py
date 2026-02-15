@@ -5,8 +5,8 @@ from euroscope.skills.liquidity_awareness import LiquidityAwarenessSkill
 from euroscope.skills.base import SkillContext
 
 
-def _make_df(prices, start="2026-01-06 06:00"):
-    times = pd.date_range(start, periods=len(prices), freq="H")
+def _make_df(prices, start="2026-01-06 06:00", freq="H"):
+    times = pd.date_range(start, periods=len(prices), freq=freq)
     df = pd.DataFrame(
         {
             "Open": prices,
@@ -40,14 +40,19 @@ class TestLiquidityZones:
 class TestMarketIntent:
     def test_liquidity_sweep_detection(self):
         prices = [1.0990 for _ in range(30)]
-        df = _make_df(prices)
+        df = _make_df(prices, start="2026-01-06 06:00", freq="min")
+        df.iloc[-2, df.columns.get_loc("High")] = 1.1010
+        df.iloc[-2, df.columns.get_loc("Low")] = 1.0980
+        df.iloc[-1, df.columns.get_loc("Open")] = 1.0991
         df.iloc[-1, df.columns.get_loc("High")] = 1.1020
-        df.iloc[-1, df.columns.get_loc("Close")] = 1.0990
+        df.iloc[-1, df.columns.get_loc("Low")] = 1.0984
+        df.iloc[-1, df.columns.get_loc("Close")] = 1.0985
         zones = [{"price_level": 1.1000, "zone_type": "psychological", "strength": 0.8, "session": "london"}]
         skill = LiquidityAwarenessSkill()
         intent = skill._assess_market_intent(df, zones, "london")
         assert intent["current_phase"] == "liquidity_sweep"
         assert intent["next_likely_move"] == "down"
+        assert intent["confidence"] == 0.85
 
     def test_compression_detection(self):
         prices = [1.1000 + (0.0002 * (i % 3)) for i in range(20)]

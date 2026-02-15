@@ -125,7 +125,9 @@ class Orchestrator:
 
         if context.metadata.get("emergency_mode"):
             if self.alerts:
-                self.alerts.suppress(300)
+                session = context.metadata.get("session_regime", "unknown")
+                suppression_duration = 480 if session == "overlap" else 300
+                self.alerts.suppress(suppression_duration)
             if self.registry.get("crisis_analysis"):
                 await self.run_pipeline([("crisis_analysis", "full")], context)
             return context

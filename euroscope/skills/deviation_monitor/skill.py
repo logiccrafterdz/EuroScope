@@ -97,7 +97,7 @@ class DeviationMonitorSkill(BaseSkill):
         df = candles.tail(20) if hasattr(candles, "tail") else candles
         session = self._detect_trading_session(datetime.utcnow())
         thresholds = self._session_thresholds(session)
-        triggers = self._check_deviation_triggers(df, thresholds)
+        triggers = self._check_deviation_triggers(df, thresholds, session=session)
         if not triggers:
             return None
         primary = triggers[0]
@@ -133,10 +133,22 @@ class DeviationMonitorSkill(BaseSkill):
             return {"volume": 4.5, "velocity": 0.0025, "volatility": 3.5}
         return {"volume": 3.0, "velocity": 0.0015, "volatility": 2.5}
 
-    def _check_deviation_triggers(self, df, thresholds: dict) -> list[dict]:
+    def _check_deviation_triggers(self, df, thresholds: dict, session: str | None = None) -> list[dict]:
+        if self._context:
+            session = self._context.metadata.get("session_regime", session or "asian")
+        else:
+            session = session or "asian"
+        base_velocity = 0.0015
+        velocity_threshold = {
+            "asian": base_velocity,
+            "london": base_velocity * 1.4,
+            "overlap": base_velocity * 1.8,
+            "newyork": base_velocity * 1.6,
+            "weekend": base_velocity * 0.8,
+        }.get(session, base_velocity)
         volume_trigger = self._volume_spike(df, thresholds["volume"])
         volatility_trigger = self._volatility_spike(df, thresholds["volatility"])
-        velocity_trigger = self._price_velocity(df, thresholds["velocity"])
+        velocity_trigger = self._price_velocity(df, velocity_threshold)
         return [t for t in (volume_trigger, volatility_trigger, velocity_trigger) if t]
 
     def _volume_spike(self, df, threshold: float) -> Optional[dict]:

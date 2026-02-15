@@ -178,35 +178,76 @@ class LiquidityAwarenessSkill(BaseSkill):
         last = df.iloc[-1]
         prev = df.iloc[-2] if len(df) > 1 else last
         last_close = float(last["Close"])
+        last_open = float(last["Open"]) if "Open" in last else last_close
         last_high = float(last["High"])
         last_low = float(last["Low"])
         prev_close = float(prev["Close"])
+        prev_high = float(prev["High"])
+        prev_low = float(prev["Low"])
         avg_volume = float(df["Volume"].tail(20).mean()) if "Volume" in df.columns else 0.0
         last_volume = float(last.get("Volume", 0.0)) if "Volume" in df.columns else 0.0
         last_time = df.index[-1]
 
-        for zone in zones:
-            level = zone["price_level"]
-            if last_high >= level + 0.0015 and last_close <= level:
-                confidence = 0.6
-                if session_regime in ("london", "newyork") and last_time.minute < 30:
-                    confidence = min(0.9, confidence + 0.15)
-                return {
-                    "current_phase": "liquidity_sweep",
-                    "next_likely_move": "down",
-                    "confidence": round(confidence, 2),
-                    "reasoning": "Sweep above liquidity zone with reversal close",
-                }
-            if last_low <= level - 0.0015 and last_close >= level:
-                confidence = 0.6
-                if session_regime in ("london", "newyork") and last_time.minute < 30:
-                    confidence = min(0.9, confidence + 0.15)
-                return {
-                    "current_phase": "liquidity_sweep",
-                    "next_likely_move": "up",
-                    "confidence": round(confidence, 2),
-                    "reasoning": "Sweep below liquidity zone with reversal close",
-                }
+        if zones:
+            nearest_zone = min(zones, key=lambda z: abs(z["price_level"] - last_close))
+            level = nearest_zone["price_level"]
+            candle_body = abs(last_close - last_open)
+            candle_body = candle_body if candle_body > 0 else 1e-6
+            upper_wick = last_high - max(last_open, last_close)
+            lower_wick = min(last_open, last_close) - last_low
+            prior_range = max(prev_high - prev_low, 0.0)
+            time_in_zone = 0.0
+            if isinstance(last_time, datetime) and isinstance(prev.name, datetime):
+                time_in_zone = (last_time - prev.name).total_seconds()
+
+            if last_high > level and last_close <= level:
+                wick_extends = last_high - level
+                wick_body_ratio = upper_wick / candle_body
+                reversal_close = (prev_high - last_close) / prior_range if prior_range > 0 else 0.0
+                sweep_conditions = [
+                    wick_extends > 0.0018,
+                    abs(wick_body_ratio) > 3.0,
+                    reversal_close > 0.7,
+                    time_in_zone < 90,
+                ]
+                if all(sweep_conditions):
+                    return {
+                        "current_phase": "liquidity_sweep",
+                        "next_likely_move": "down",
+                        "confidence": 0.85,
+                        "reasoning": "Confirmed sweep above liquidity zone with strong rejection",
+                    }
+                if sum(sweep_conditions) >= 2:
+                    return {
+                        "current_phase": "possible_sweep",
+                        "next_likely_move": "down",
+                        "confidence": 0.55,
+                        "reasoning": "Partial sweep conditions above liquidity zone",
+                    }
+            if last_low < level and last_close >= level:
+                wick_extends = level - last_low
+                wick_body_ratio = lower_wick / candle_body
+                reversal_close = (last_close - prev_low) / prior_range if prior_range > 0 else 0.0
+                sweep_conditions = [
+                    wick_extends > 0.0018,
+                    abs(wick_body_ratio) > 3.0,
+                    reversal_close > 0.7,
+                    time_in_zone < 90,
+                ]
+                if all(sweep_conditions):
+                    return {
+                        "current_phase": "liquidity_sweep",
+                        "next_likely_move": "up",
+                        "confidence": 0.85,
+                        "reasoning": "Confirmed sweep below liquidity zone with strong rejection",
+                    }
+                if sum(sweep_conditions) >= 2:
+                    return {
+                        "current_phase": "possible_sweep",
+                        "next_likely_move": "up",
+                        "confidence": 0.55,
+                        "reasoning": "Partial sweep conditions below liquidity zone",
+                    }
 
         recent = df.tail(15)
         range_pips = (recent["High"].max() - recent["Low"].min()) * 10000

@@ -82,7 +82,11 @@ class EuroScopeBot:
         self.alerts.register_handler(AlertChannel.TELEGRAM, self._on_alert_triggered)
         
         # Sub-systems
-        self.price_provider = PriceProvider()
+        from ..data.multi_provider import MultiSourceProvider
+        self.price_provider = MultiSourceProvider(
+            alphavantage_key=config.data.alphavantage_key,
+            tiingo_key=config.data.tiingo_key
+        )
         self.macro_provider = FundamentalDataProvider(config.data.fred_api_key)
         self.news_engine = NewsEngine(config.data.brave_api_key, self.storage) # Key ignored in DDG version
         self.calendar = EconomicCalendar()
@@ -212,60 +216,29 @@ class EuroScopeBot:
         return (prefs.get("preferred_timeframe") or "H1").upper()
 
     def _preferred_language(self, chat_id: int, text: str = "") -> str:
-        prefs = self.user_settings.get_prefs(chat_id)
-        lang = prefs.get("language")
-        if lang in ("ar", "en"):
-            return lang
-        return "ar" if self._looks_arabic(text) else "en"
+        return "en"
 
-    def _looks_arabic(self, text: str) -> bool:
-        return bool(re.search(r"[\u0600-\u06FF]", text or ""))
+
 
     def _is_market_status_question(self, text: str) -> bool:
         t = (text or "").lower()
-        arabic = [
-            "السوق", "مغلق", "مفتوح", "جلسة", "جلسات", "تداول", "متى يفتح", "متى يغلق"
-        ]
         english = [
             "market", "open", "closed", "session", "trading hours", "weekend"
         ]
-        if any(k in t for k in english):
-            return True
-        return any(k in (text or "") for k in arabic)
+        return any(k in t for k in english)
 
     async def _get_market_status(self) -> dict:
         result = await self.orchestrator.run_skill("market_data", "check_market_status")
         return result.data if result.success else {}
 
     def _translate_market_reason(self, reason: str) -> str:
-        if not reason:
-            return ""
-        if "Friday" in reason:
-            return "السوق مغلق لعطلة نهاية الأسبوع (الجمعة 5:00 مساءً بتوقيت نيويورك)."
-        if "Saturday" in reason:
-            return "السوق مغلق (السبت)."
-        if "Sunday" in reason:
-            return "السوق يفتح قريبًا (الأحد 5:00 مساءً بتوقيت نيويورك)."
-        if "Trading sessions are active" in reason:
-            return "السوق مفتوح وجلسات التداول نشطة."
-        return reason
+        return reason or ""
 
     def _format_market_status_reply(self, data: dict, lang: str) -> str:
         is_open = data.get("is_open")
-        status = "مفتوح" if is_open else "مغلق"
         time_et = data.get("current_time_et", "N/A")
         reason = data.get("reason", "")
-        if lang == "ar":
-            reason = self._translate_market_reason(reason)
-            return (
-                "🕒 *حالة السوق الحالية لزوج EUR/USD:*\n\n"
-                f"السوق *{status}* حاليًا.\n\n"
-                f"⏱️ الوقت الحالي (ET): `{time_et}`\n"
-                f"📝 السبب: {reason}\n\n"
-                "🧭 جلسات التداول (GMT):\n"
-                "• لندن: 07:00 - 16:00\n"
-                "• نيويورك: 12:00 - 21:00\n"
-            )
+        
         return (
             "🕒 *EUR/USD Market Status:*\n\n"
             f"The market is *{'OPEN' if is_open else 'CLOSED'}* right now.\n\n"

@@ -68,6 +68,8 @@ class UncertaintyAssessmentSkill(BaseSkill):
         confidence_adjustment = self._calculate_confidence_adjustment(
             combined_uncertainty,
             context.analysis.get("macro_data", {}),
+            adx=adx or 0.0,
+            session=context.metadata.get("session_regime", "unknown"),
         )
         high_uncertainty = combined_uncertainty > 0.65
         uncertainty_reasoning = self._generate_uncertainty_reasoning(
@@ -332,7 +334,12 @@ class UncertaintyAssessmentSkill(BaseSkill):
         return min(1.0, base + bonus)
 
     @staticmethod
-    def _calculate_confidence_adjustment(composite_uncertainty: float, macro_data: dict) -> float:
+    def _calculate_confidence_adjustment(
+        composite_uncertainty: float,
+        macro_data: dict,
+        adx: float,
+        session: str,
+    ) -> float:
         if composite_uncertainty <= 0.4:
             confidence_adjustment = 1.0
         elif composite_uncertainty <= 0.55:
@@ -343,8 +350,15 @@ class UncertaintyAssessmentSkill(BaseSkill):
             confidence_adjustment = 0.0
 
         macro_confidence = UncertaintyAssessmentSkill._macro_confidence(macro_data)
-        if macro_confidence is not None and macro_confidence > 0.8 and composite_uncertainty <= 0.75:
-            confidence_adjustment = max(0.3, round(confidence_adjustment * 1.5, 3))
+        macro_override_allowed = (
+            macro_confidence is not None
+            and macro_confidence > 0.8
+            and adx >= 25
+            and composite_uncertainty <= 0.65
+            and session in ("london", "overlap", "newyork")
+        )
+        if macro_override_allowed:
+            confidence_adjustment = max(0.4, round(confidence_adjustment * 1.3, 3))
         return round(confidence_adjustment, 3)
 
     @staticmethod

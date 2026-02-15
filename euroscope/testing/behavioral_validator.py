@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 import importlib.util
+import os
 import pandas as pd
 
 from euroscope.automation.alerts import SmartAlerts
@@ -16,6 +17,7 @@ from euroscope.automation.events import (
 )
 from euroscope.brain.orchestrator import Orchestrator
 from euroscope.data.storage import Storage
+from euroscope.data.tiingo import TiingoProvider
 from euroscope.skills.base import SkillContext
 from euroscope.skills.deviation_monitor import skill as deviation_module
 from euroscope.skills.deviation_monitor.skill import DeviationMonitorSkill
@@ -166,9 +168,30 @@ class BehavioralValidator:
             df = pd.DataFrame()
 
         if df.empty:
+            # Fallback to Tiingo if API key available
+            tiingo_key = os.getenv("EUROSCOPE_TIINGO_KEY")
+            if tiingo_key:
+                try:
+                    import asyncio
+                    provider = TiingoProvider(tiingo_key)
+                    # We run this synchronously since load_yfinance_data is not async
+                    df = asyncio.run(provider.get_candles(
+                        timeframe="H1" if interval == "1h" else "M15",
+                        start_date=start,
+                        end_date=end,
+                        count=1000
+                    ))
+                    if df is not None:
+                        df = self._normalize_df(df)
+                    else:
+                        df = pd.DataFrame()
+                except Exception:
+                    df = pd.DataFrame()
+
+        if df.empty:
             df = self._generate_synthetic_data(start, end, interval, cache_key)
         else:
-            # Only cache if we actually got data from yfinance
+            # Only cache if we actually got data from provider
             df.to_csv(cache_path)
             
         return df
