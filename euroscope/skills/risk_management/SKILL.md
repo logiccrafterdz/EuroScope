@@ -1,12 +1,12 @@
 ---
 name: risk_management
-description: Position sizing, stop loss, take profit, and drawdown control
+description: Position sizing, stop loss, take profit, and drawdown control with adaptive safety thresholds
 ---
 
 # 🛡️ Risk Management Skill
 
 ## What It Does
-Calculates optimal position sizes, stop-loss/take-profit levels, and performs trade risk assessments.
+Calculates optimal position sizes, stop-loss/take-profit levels, and performs trade risk assessments with session and liquidity context.
 
 ## Actions
 - `assess_trade` — Full risk assessment for a proposed trade

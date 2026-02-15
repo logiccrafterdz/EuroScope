@@ -2,6 +2,8 @@
 Tests for risk manager: position sizing, stop loss, drawdown control.
 """
 
+from datetime import datetime
+
 import pytest
 
 from euroscope.trading.risk_manager import RiskManager, RiskConfig, TradeRisk
@@ -211,3 +213,80 @@ async def test_risk_command_formatting_no_crash():
     bot = EuroScopeBot.__new__(EuroScopeBot)
     formatted = EuroScopeBot._format_risk(bot, result.data)
     assert "Risk Assessment" in formatted
+
+
+class TestAdaptiveRiskManagement:
+    @pytest.mark.asyncio
+    async def test_stop_beyond_liquidity_zone(self):
+        skill = RiskManagementSkill()
+        ctx = SkillContext()
+        ctx.metadata["session_regime"] = "london"
+        ctx.metadata["liquidity_zones"] = [{"price_level": 1.0900}]
+        result = await skill.execute(
+            ctx, "assess_trade", direction="BUY", entry_price=1.0950, atr=0.0010
+        )
+        assert result.success
+        assert result.data["stop_loss"] <= 1.0900 - 0.0010
+
+    @pytest.mark.asyncio
+    async def test_reject_stop_inside_noise_band(self):
+        skill = RiskManagementSkill()
+        ctx = SkillContext()
+        ctx.metadata["session_regime"] = "asian"
+        result = await skill.execute(
+            ctx, "assess_trade", direction="BUY", entry_price=1.0950, atr=0.0020
+        )
+        assert result.success
+        assert ctx.metadata["risk_assessment"]["rejection_reason"] == "stop_inside_noise_band"
+
+    def test_session_based_sizing(self):
+        skill = RiskManagementSkill()
+        sizing_asian = skill._calculate_dynamic_size(
+            base_position_size=1.0,
+            session_regime="asian",
+            intent_confidence=0.9,
+            base_risk_pct=1.0,
+            recent_drawdown=0.0,
+        )
+        sizing_overlap = skill._calculate_dynamic_size(
+            base_position_size=1.0,
+            session_regime="overlap",
+            intent_confidence=0.9,
+            base_risk_pct=1.0,
+            recent_drawdown=0.0,
+        )
+        assert sizing_asian["adjusted_risk_pct"] == 0.6
+        assert sizing_overlap["adjusted_risk_pct"] == 1.2
+
+    @pytest.mark.asyncio
+    async def test_reject_high_drawdown(self):
+        skill = RiskManagementSkill()
+        skill.manager._daily_pnl = -600.0
+        skill.manager._daily_pnl_date = datetime.utcnow().strftime("%Y-%m-%d")
+        ctx = SkillContext()
+        ctx.metadata["session_regime"] = "london"
+        ctx.metadata["market_intent"] = {"confidence": 0.9}
+        result = await skill.execute(
+            ctx, "assess_trade", direction="BUY", entry_price=1.0950, atr=0.0010
+        )
+        assert result.success
+        assert ctx.metadata["risk_assessment"]["rejection_reason"] == "excessive_drawdown"
+
+    def test_missing_context_defaults(self):
+        skill = RiskManagementSkill()
+        adaptive = skill._calculate_adaptive_stop(
+            direction="BUY",
+            entry_price=1.1000,
+            atr=0.0010,
+            liquidity_zones=[],
+            session_regime="unknown",
+        )
+        sizing = skill._calculate_dynamic_size(
+            base_position_size=1.0,
+            session_regime="unknown",
+            intent_confidence=None,
+            base_risk_pct=1.0,
+            recent_drawdown=0.0,
+        )
+        assert adaptive["buffer_pips"] == 15.0
+        assert sizing["session_multiplier"] == 0.8
