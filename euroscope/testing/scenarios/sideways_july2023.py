@@ -3,10 +3,10 @@ from datetime import datetime
 from euroscope.testing.behavioral_validator import BehavioralScenario, ExpectedBehavior
 
 
-def build_scenario(validator):
+async def build_scenario(validator):
     start = datetime(2023, 7, 10, 0, 0)
     end = datetime(2023, 7, 20, 23, 59)
-    data = validator.load_yfinance_data(
+    data = await validator.load_yfinance_data(
         symbol="EURUSD=X",
         start=start,
         end=end,

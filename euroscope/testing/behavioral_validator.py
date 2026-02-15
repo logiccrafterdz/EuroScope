@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
 import importlib.util
 import os
+import numpy as np
 import pandas as pd
 
 from euroscope.automation.alerts import SmartAlerts
@@ -76,7 +77,7 @@ class InMemoryPriceProvider:
     def set_index(self, idx: int):
         self._index = idx
 
-    async def get_candles(self, timeframe: str = "H1", count: int = 100):
+    async def get_candles(self, timeframe: str = "H1", count: int = 250):
         end = self._index + 1
         start = max(0, end - count)
         return self.df.iloc[start:end].copy()
@@ -130,7 +131,7 @@ class BehavioralValidator:
         self.profit_pips = profit_pips
         self.loss_pips = loss_pips
 
-    def load_yfinance_data(
+    async def load_yfinance_data(
         self,
         symbol: str,
         start: datetime,
@@ -151,42 +152,41 @@ class BehavioralValidator:
             if not df.empty:
                 return self._normalize_df(df)
             else:
-                # Remove empty/invalid cache file
                 cache_path.unlink()
 
+        padded_start = start - timedelta(days=5)
+        tiingo_key = os.getenv("EUROSCOPE_TIINGO_KEY")
+        if tiingo_key:
+            try:
+                from euroscope.data.tiingo import TiingoProvider
+                provider = TiingoProvider(tiingo_key)
+                tf_map = {"1h": "H1", "1m": "M1", "15m": "M15"}
+                df = await provider.get_candles(
+                    timeframe=tf_map.get(interval, "H1"),
+                    start_date=padded_start,
+                    end_date=end,
+                    count=20000 
+                )
+                if df is not None and not df.empty:
+                    return self._normalize_df(df)
+            except Exception:
+                pass
+
+        # Fallback to yfinance
         try:
             df = yf.download(
                 symbol,
-                start=start,
+                start=padded_start,
                 end=end,
                 interval=interval,
                 progress=False,
                 auto_adjust=False,
             )
             df = self._normalize_df(df)
+            if not df.empty:
+                return df
         except Exception:
-            df = pd.DataFrame()
-
-        if df.empty:
-            # Fallback to Tiingo if API key available
-            tiingo_key = os.getenv("EUROSCOPE_TIINGO_KEY")
-            if tiingo_key:
-                try:
-                    import asyncio
-                    provider = TiingoProvider(tiingo_key)
-                    # We run this synchronously since load_yfinance_data is not async
-                    df = asyncio.run(provider.get_candles(
-                        timeframe="H1" if interval == "1h" else "M15",
-                        start_date=start,
-                        end_date=end,
-                        count=1000
-                    ))
-                    if df is not None:
-                        df = self._normalize_df(df)
-                    else:
-                        df = pd.DataFrame()
-                except Exception:
-                    df = pd.DataFrame()
+            pass
 
         if df.empty:
             df = self._generate_synthetic_data(start, end, interval, cache_key)
@@ -197,9 +197,11 @@ class BehavioralValidator:
         return df
 
     async def run_scenario(self, scenario: BehavioralScenario) -> ScenarioResult:
-        df = self._normalize_df(scenario.data)
-        df = df[(df.index >= scenario.start_time) & (df.index <= scenario.end_time)]
-        if df.empty:
+        full_df = self._normalize_df(scenario.data)
+        # Separate window for iteration vs data for lookback
+        scenario_df = full_df[(full_df.index >= scenario.start_time) & (full_df.index <= scenario.end_time)]
+        
+        if scenario_df.empty:
             metrics = {
                 "signal_rejection_rate": 0.0,
                 "false_positive_rate": 0.0,
@@ -227,7 +229,7 @@ class BehavioralValidator:
                 snapshots=[],
                 error="No data available for scenario window",
             )
-        provider = InMemoryPriceProvider(df, scenario.interval)
+        provider = InMemoryPriceProvider(full_df, scenario.interval)
 
         orchestrator = Orchestrator()
         market_skill = orchestrator.registry.get("market_data")
@@ -259,8 +261,18 @@ class BehavioralValidator:
         snapshots = []
         signal_records = []
 
-        for idx, (timestamp, row) in enumerate(df.iterrows()):
-            provider.set_index(idx)
+        for timestamp, row in scenario_df.iterrows():
+            loc = full_df.index.get_loc(timestamp)
+            if isinstance(loc, (slice, pd.Series, np.ndarray)):
+                if isinstance(loc, slice):
+                    abs_idx = loc.start
+                else:
+                    # Boolean array or integer array
+                    abs_idx = np.where(loc)[0][0]
+            else:
+                abs_idx = loc
+                
+            provider.set_index(abs_idx)
             if session_skill:
                 session_skill._cache_timestamp = 0.0
             with FrozenTime(timestamp):
@@ -298,7 +310,7 @@ class BehavioralValidator:
                 )
 
                 if direction in ("BUY", "SELL"):
-                    future = df.iloc[idx + 1 : idx + 1 + self.lookahead_bars]
+                    future = full_df.iloc[abs_idx + 1 : abs_idx + 1 + self.lookahead_bars]
                     profitable = self._is_profitable(direction, float(row["Close"]), future)
                     signal_records.append(
                         {
@@ -311,7 +323,7 @@ class BehavioralValidator:
                         }
                     )
 
-        self._inject_forced_risk_checks(scenario, snapshots, risk_skill, context, df)
+        self._inject_forced_risk_checks(scenario, snapshots, risk_skill, context, scenario_df)
 
         metrics = self._compute_metrics(
             scenario=scenario,
@@ -328,7 +340,7 @@ class BehavioralValidator:
             results.append(await self.run_scenario(scenario))
         return results
 
-    def load_default_scenarios(self) -> list[BehavioralScenario]:
+    async def load_default_scenarios(self) -> list[BehavioralScenario]:
         from euroscope.testing import scenarios as scenario_module
 
         builders = [
@@ -338,7 +350,10 @@ class BehavioralValidator:
             scenario_module.session_transition_april2024,
             scenario_module.macro_override_sept2023,
         ]
-        return [builder(self) for builder in builders]
+        results = []
+        for builder in builders:
+            results.append(await builder(self))
+        return results
 
     def render_report(
         self,
@@ -687,4 +702,6 @@ class BehavioralValidator:
                 df[col] = 0.0
         if getattr(df.index, "tz", None) is not None:
             df.index = df.index.tz_localize(None)
+        # Ensure unique index for lookback stability
+        df = df[~df.index.duplicated(keep="first")]
         return df

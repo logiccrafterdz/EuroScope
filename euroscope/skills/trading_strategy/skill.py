@@ -49,7 +49,8 @@ class TradingStrategySkill(BaseSkill):
         }
 
         if ind["adx"] is None or ind["rsi"] is None:
-            return SkillResult(success=False, error="Insufficient indicator data")
+            missing = "ADX" if ind["adx"] is None else "RSI"
+            return SkillResult(success=False, error=f"Insufficient indicator data: {missing} is missing")
 
         levels = {
             "current_price": levels_data.get("current_price", 0),

@@ -1,8 +1,19 @@
 import argparse
 import asyncio
+import os
+import sys
 from pathlib import Path
+from dotenv import load_dotenv
+
+# Force local euroscope path and load environment
+ROOT = Path(__file__).parent.parent.parent.resolve()
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+load_dotenv(ROOT / ".env")
+
 
 from euroscope.testing.behavioral_validator import BehavioralValidator
+
 
 
 def _parse_args():
@@ -13,7 +24,7 @@ def _parse_args():
 
 async def _run(output_path: str):
     validator = BehavioralValidator()
-    scenarios = validator.load_default_scenarios()
+    scenarios = await validator.load_default_scenarios()
     results = await validator.run_suite(scenarios)
     report = validator.render_report(results)
     path = Path(output_path)

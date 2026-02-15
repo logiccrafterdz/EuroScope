@@ -19,6 +19,7 @@ BASE_URL = "https://api.tiingo.com/tiingo/fx"
 
 # Map our timeframes to Tiingo intervals
 TIINGO_INTERVALS = {
+    "M1": "1min",
     "M15": "15min",
     "H1": "1hour",
     "H4": "4hour",
@@ -104,9 +105,9 @@ class TiingoProvider:
             }
             
             if start_date:
-                params["startDate"] = start_date.strftime("%Y-%m-%d")
+                params["startDate"] = start_date.isoformat()
             if end_date:
-                params["endDate"] = end_date.strftime("%Y-%m-%d")
+                params["endDate"] = end_date.isoformat()
 
             async with httpx.AsyncClient(timeout=30) as client:
                 resp = await client.get(f"{BASE_URL}/prices", params=params, headers=headers)
@@ -127,7 +128,7 @@ class TiingoProvider:
                     "High": float(item.get("high", 0)),
                     "Low": float(item.get("low", 0)),
                     "Close": float(item.get("close", 0)),
-                    "Volume": 0.0  # Tiingo FX volume is often not provided or limited
+                    "Volume": float(item.get("volume", 0))
                 })
 
             df = pd.DataFrame(records)
@@ -143,8 +144,9 @@ class TiingoProvider:
 
             if not start_date and not end_date:
                 self._cache[cache_key] = (df, datetime.utcnow())
+                return df.tail(count).copy()
             
-            return df.tail(count).copy()
+            return df.copy()
 
         except Exception as e:
             logger.error(f"Tiingo candle error for {tf}: {e}")
