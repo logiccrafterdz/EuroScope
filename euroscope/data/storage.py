@@ -170,6 +170,14 @@ class Storage:
                     resolved_at TEXT,
                     causal_chain TEXT
                 );
+
+                CREATE TABLE IF NOT EXISTS user_threads (
+                    chat_id INTEGER NOT NULL,
+                    topic_key TEXT NOT NULL,
+                    thread_id INTEGER NOT NULL,
+                    created_at TEXT NOT NULL,
+                    PRIMARY KEY (chat_id, topic_key)
+                );
             """)
             self._ensure_user_preferences_columns()
             self._ensure_pattern_stats_columns()
@@ -737,6 +745,34 @@ class Storage:
         rows = self._conn.execute(query, params).fetchall()
         results = [dict(r) for r in rows]
         return [r for r in results if r.get("similarity", 0) >= min_similarity]
+
+    # ─── User Threads (Private Topics) ───────────────────────
+
+    def save_user_thread(self, chat_id: int, topic_key: str, thread_id: int):
+        """Save or update a thread ID for a user's topic."""
+        now = datetime.utcnow().isoformat()
+        with self._conn:
+            self._conn.execute(
+                """INSERT OR REPLACE INTO user_threads (chat_id, topic_key, thread_id, created_at)
+                   VALUES (?, ?, ?, ?)""",
+                (chat_id, topic_key, thread_id, now)
+            )
+
+    def get_user_thread(self, chat_id: int, topic_key: str) -> Optional[int]:
+        """Get the thread ID for a specific user topic."""
+        row = self._conn.execute(
+            "SELECT thread_id FROM user_threads WHERE chat_id=? AND topic_key=?",
+            (chat_id, topic_key)
+        ).fetchone()
+        return row[0] if row else None
+
+    def get_all_user_threads(self, chat_id: int) -> dict[str, int]:
+        """Get all thread IDs for a specific user."""
+        rows = self._conn.execute(
+            "SELECT topic_key, thread_id FROM user_threads WHERE chat_id=?",
+            (chat_id,)
+        ).fetchall()
+        return {row[0]: row[1] for row in rows}
 
     def __del__(self):
         """Close connection on deletion."""

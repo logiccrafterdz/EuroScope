@@ -44,7 +44,12 @@ class Forecaster:
         )
 
         # Build data strings for the AI
-        price_str = "\n".join(f"  {k}: {v}" for k, v in price_info.items()) if price_info else "N/A"
+        if isinstance(price_info, dict) and price_info:
+            price_str = "\n".join(f"  {k}: {v}" for k, v in price_info.items())
+        elif hasattr(price_info, 'empty') and not price_info.empty:
+            price_str = price_info.head(20).to_string()
+        else:
+            price_str = "N/A"
         
         # Use existing formatting helpers or results from skills
         ta_timeframe = ta_results.get("timeframe") or price_info.get("timeframe") or "H1"

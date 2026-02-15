@@ -104,12 +104,14 @@ class NotificationManager:
         )
 
         try:
+            thread_id = self.storage.get_user_thread(chat_id, "reports")
             await self._bot.send_message(
                 chat_id=chat_id,
                 text=msg,
                 parse_mode="Markdown",
+                message_thread_id=thread_id
             )
-            logger.info(f"Sent smart morning briefing to {chat_id}")
+            logger.info(f"Sent smart morning briefing to {chat_id} (Thread: {thread_id})")
         except Exception as e:
             logger.error(f"Failed to send daily report to {chat_id}: {e}")
 
@@ -144,8 +146,15 @@ class NotificationManager:
         )
 
         try:
+            # Signals go to the Radar topic (or a dedicated signals topic if we added one)
+            # In our current TOPICS, radar is for sweeps and sensitive alerts. 
+            # Let's use radar for signals too for now, or the main chat if preferred.
+            # Approved plan says: "Radar for sweeps and sensitivealerts". 
+            # Let's route signals to Radar.
+            thread_id = self.storage.get_user_thread(chat_id, "radar")
             await self._bot.send_message(
-                chat_id=chat_id, text=msg, parse_mode="Markdown"
+                chat_id=chat_id, text=msg, parse_mode="Markdown",
+                message_thread_id=thread_id
             )
         except Exception as e:
             logger.error(f"Failed to send new signal alert to {chat_id}: {e}")
@@ -180,8 +189,10 @@ class NotificationManager:
         )
 
         try:
+            thread_id = self.storage.get_user_thread(chat_id, "radar")
             await self._bot.send_message(
-                chat_id=chat_id, text=msg, parse_mode="Markdown"
+                chat_id=chat_id, text=msg, parse_mode="Markdown",
+                message_thread_id=thread_id
             )
         except Exception as e:
             logger.error(f"Failed to send signal alert to {chat_id}: {e}")
@@ -209,6 +220,7 @@ class NotificationManager:
                 chat_id = alert.get("chat_id")
                 if chat_id:
                     try:
+                        thread_id = self.storage.get_user_thread(chat_id, "radar")
                         await self._bot.send_message(
                             chat_id=chat_id,
                             text=(
@@ -218,6 +230,7 @@ class NotificationManager:
                                 f"Current: `{current_price}`"
                             ),
                             parse_mode="Markdown",
+                            message_thread_id=thread_id
                         )
                     except Exception as e:
                         logger.error(f"Failed to send price alert to {chat_id}: {e}")
@@ -257,10 +270,12 @@ class NotificationManager:
                 msg += f"\n🔗 [Read more]({article['url']})"
 
             try:
+                thread_id = self.storage.get_user_thread(chat_id, "news")
                 await self._bot.send_message(
                     chat_id=chat_id, text=msg,
                     parse_mode="Markdown",
                     disable_web_page_preview=True,
+                    message_thread_id=thread_id
                 )
             except Exception as e:
                 logger.error(f"Failed to send news alert to {chat_id}: {e}")
