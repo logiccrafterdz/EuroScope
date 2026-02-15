@@ -7,6 +7,7 @@ dynamic tool calling and skills chaining.
 
 import logging
 import time
+from datetime import datetime
 from typing import Optional
 
 from ..skills.base import SkillContext, SkillResult
@@ -117,7 +118,15 @@ class Orchestrator:
         if context is None:
             context = self.global_context
 
-        now = time.time()
+        # 1. Detect session context first (needed by all safety checks)
+        await self.registry.get("session_context").execute(context, "detect")
+
+        now_val = context.metadata.get("now")
+        if isinstance(now_val, datetime):
+            now = now_val.timestamp()
+        else:
+            now = now_val or datetime.utcnow().timestamp()
+
         emergency_until = context.metadata.get("emergency_until", 0)
         if emergency_until and now >= emergency_until:
             context.metadata["emergency_mode"] = False
@@ -127,7 +136,8 @@ class Orchestrator:
             if self.alerts:
                 session = context.metadata.get("session_regime", "unknown")
                 suppression_duration = 480 if session == "overlap" else 300
-                self.alerts.suppress(suppression_duration)
+                self.alerts.suppress(suppression_duration, base_time=now)
+                context.metadata["alerts_suppressed_until"] = now + suppression_duration
             if self.registry.get("crisis_analysis"):
                 await self.run_pipeline([("crisis_analysis", "full")], context)
             return context
@@ -135,11 +145,12 @@ class Orchestrator:
         params = {"market_data": market_params} if market_params else {}
         ctx = await self.run_pipeline(
             [
-                ("session_context", "detect"),
                 ("market_data", "get_candles"),
                 ("liquidity_awareness", "analyze"),
+                ("fundamental_analysis", "get_macro"),
                 ("technical_analysis", "full"),
                 ("uncertainty_assessment", "assess"),
+                ("risk_management", "assess_trade"),
                 ("trading_strategy", "detect_signal"),
             ],
             context,

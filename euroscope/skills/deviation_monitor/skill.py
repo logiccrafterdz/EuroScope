@@ -59,7 +59,13 @@ class DeviationMonitorSkill(BaseSkill):
         if context is None:
             return
 
-        now = time.time()
+        now_val = context.metadata.get("now")
+        if isinstance(now_val, datetime):
+            now_dt = now_val
+            now = now_val.timestamp()
+        else:
+            now_dt = datetime.fromtimestamp(now_val) if now_val else datetime.utcnow()
+            now = now_val or time.time()
         last = context.metadata.get("deviation_monitor_last_activation", 0)
         if last and now - last < 600:
             return
@@ -78,8 +84,8 @@ class DeviationMonitorSkill(BaseSkill):
         result = self._detect_deviation(candles)
         if not result:
             return
-        session = result.get("session") or self._detect_trading_session(datetime.utcnow())
-        emergency_seconds = 86400 if session == "weekend" else 300
+        session = result.get("session") or self._detect_trading_session(now_dt)
+        emergency_seconds = 480 if session == "overlap" else 86400 if session == "weekend" else 300
         context.metadata["emergency_mode"] = True
         context.metadata["emergency_until"] = now + emergency_seconds
         context.metadata["deviation_monitor_last_activation"] = now
@@ -95,7 +101,12 @@ class DeviationMonitorSkill(BaseSkill):
 
     def _detect_deviation(self, candles) -> Optional[dict]:
         df = candles.tail(20) if hasattr(candles, "tail") else candles
-        session = self._detect_trading_session(datetime.utcnow())
+        now_val = self._context.metadata.get("now") if self._context else None
+        if isinstance(now_val, datetime):
+            now_dt = now_val
+        else:
+            now_dt = datetime.fromtimestamp(now_val) if now_val else datetime.utcnow()
+        session = self._detect_trading_session(now_dt)
         thresholds = self._session_thresholds(session)
         triggers = self._check_deviation_triggers(df, thresholds, session=session)
         if not triggers:
@@ -138,14 +149,13 @@ class DeviationMonitorSkill(BaseSkill):
             session = self._context.metadata.get("session_regime", session or "asian")
         else:
             session = session or "asian"
-        base_velocity = 0.0015
         velocity_threshold = {
-            "asian": base_velocity,
-            "london": base_velocity * 1.4,
-            "overlap": base_velocity * 1.8,
-            "newyork": base_velocity * 1.6,
-            "weekend": base_velocity * 0.8,
-        }.get(session, base_velocity)
+            "asian": 0.0015,
+            "london": 0.0021,
+            "overlap": 0.0027,   # Critical for Lagarde speech (0.28% move)
+            "newyork": 0.0024,
+            "weekend": 0.0012,
+        }.get(session, 0.0015)
         volume_trigger = self._volume_spike(df, thresholds["volume"])
         volatility_trigger = self._volatility_spike(df, thresholds["volatility"])
         velocity_trigger = self._price_velocity(df, velocity_threshold)

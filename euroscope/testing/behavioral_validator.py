@@ -677,13 +677,40 @@ class BehavioralValidator:
         
         if "sideways" in cache_key:
             # Add significant chop for sideways scenarios
-            # Use deterministic but complex noise
             noise = (rng % 17).astype(float) * 0.0001 * ((rng % 3).astype(float) - 1)
             close += noise
+        
+        if "lagarde" in cache_key:
+            # Simulate a sharp 45-pip shock at 12:45
+            event_time = start.replace(hour=12, minute=45)
+            if event_time in close.index:
+                close.loc[event_time] += 0.0050 # 50 pips spike
+                # Keep it elevated
+                mask_post = index > event_time
+                close[mask_post] += 0.0045
+            
+        if "sweep" in cache_key:
+            # 1. Establish a high at 07:15
+            pre_high_time = start.replace(hour=7, minute=15)
+            if pre_high_time in close.index:
+                close.loc[pre_high_time] += 0.0030
             
         open_prices = close.shift(1).fillna(close)
-        high = close + 0.0003
-        low = close - 0.0003
+        high = close.copy() + 0.0003
+        low = close.copy() - 0.0003
+        
+        if "sweep" in cache_key:
+            # 2. Sweep the 07:15 high at 08:30 (Sharp 10-pip wick)
+            sweep_time = start.replace(hour=8, minute=30)
+            if sweep_time in close.index:
+                # Create a 10-pip wick extension above the 07:15 high
+                high.loc[sweep_time] = close.loc[sweep_time] + 0.0045
+                # 3. Rapid reversal in next candle
+                rev_time = sweep_time + pd.Timedelta(minutes=1)
+                if rev_time in close.index:
+                    close.loc[rev_time] -= 0.0025
+                    high.loc[rev_time] = close.loc[rev_time] + 0.0003
+                    low.loc[rev_time] = close.loc[rev_time] - 0.0003
         volume = pd.Series(10000.0, index=index)
         df = pd.DataFrame(
             {

@@ -98,6 +98,12 @@ class FundamentalAnalysisSkill(BaseSkill):
                 "cpi": self._macro.get_us_cpi()
             }
             context.analysis["macro_data"] = data
+            
+            # Key integration: propagate macro confidence to intent
+            diff = data.get("differential", {})
+            if isinstance(diff, dict) and "confidence" in diff:
+                context.metadata["market_intent_confidence"] = diff["confidence"]
+                
             return SkillResult(success=True, data=data, metadata={"formatted": context_str})
         except Exception as e:
             return SkillResult(success=False, error=str(e))

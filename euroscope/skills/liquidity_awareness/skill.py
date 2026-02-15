@@ -205,48 +205,51 @@ class LiquidityAwarenessSkill(BaseSkill):
                 wick_body_ratio = upper_wick / candle_body
                 reversal_close = (prev_high - last_close) / prior_range if prior_range > 0 else 0.0
                 sweep_conditions = [
-                    wick_extends > 0.0018,
+                    wick_extends > 0.0003,
                     abs(wick_body_ratio) > 3.0,
                     reversal_close > 0.7,
                     time_in_zone < 90,
                 ]
-                if all(sweep_conditions):
+                confirmed_sweeps = sum(1 for c in sweep_conditions if c)
+                if confirmed_sweeps >= 3:
                     return {
                         "current_phase": "liquidity_sweep",
                         "next_likely_move": "down",
                         "confidence": 0.85,
-                        "reasoning": "Confirmed sweep above liquidity zone with strong rejection",
+                        "reasoning": f"Confirmed sweep ({confirmed_sweeps}/4) above liquidity zone with strong rejection",
                     }
-                if sum(sweep_conditions) >= 2:
+                if confirmed_sweeps == 2:
                     return {
                         "current_phase": "possible_sweep",
                         "next_likely_move": "down",
                         "confidence": 0.55,
-                        "reasoning": "Partial sweep conditions above liquidity zone",
+                        "reasoning": "Partial sweep conditions (2/4) above liquidity zone",
                     }
+
             if last_low < level and last_close >= level:
                 wick_extends = level - last_low
                 wick_body_ratio = lower_wick / candle_body
                 reversal_close = (last_close - prev_low) / prior_range if prior_range > 0 else 0.0
                 sweep_conditions = [
-                    wick_extends > 0.0018,
+                    wick_extends > 0.0003,
                     abs(wick_body_ratio) > 3.0,
                     reversal_close > 0.7,
                     time_in_zone < 90,
                 ]
-                if all(sweep_conditions):
+                confirmed_sweeps = sum(1 for c in sweep_conditions if c)
+                if confirmed_sweeps >= 3:
                     return {
                         "current_phase": "liquidity_sweep",
                         "next_likely_move": "up",
                         "confidence": 0.85,
-                        "reasoning": "Confirmed sweep below liquidity zone with strong rejection",
+                        "reasoning": f"Confirmed sweep ({confirmed_sweeps}/4) below liquidity zone with strong rejection",
                     }
-                if sum(sweep_conditions) >= 2:
+                if confirmed_sweeps == 2:
                     return {
                         "current_phase": "possible_sweep",
                         "next_likely_move": "up",
                         "confidence": 0.55,
-                        "reasoning": "Partial sweep conditions below liquidity zone",
+                        "reasoning": "Partial sweep conditions (2/4) below liquidity zone",
                     }
 
         recent = df.tail(15)

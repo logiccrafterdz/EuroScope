@@ -132,9 +132,8 @@ class SmartAlerts:
         Returns:
             List of triggered Alert objects
         """
-        import time
         triggered = []
-        now = time.time()
+        now = datetime.utcnow().timestamp()
 
         for rule in self._rules.values():
             if not rule.enabled:
@@ -172,11 +171,12 @@ class SmartAlerts:
 
         return triggered
 
-    def suppress(self, duration_seconds: int = 300, essential_priorities: set = None):
+    def suppress(self, duration_seconds: int = 300, base_time: float = None, essential_priorities: set = None):
         import time
         if essential_priorities is not None:
             self._essential_priorities = set(essential_priorities)
-        self._suppress_until = max(self._suppress_until, time.time() + duration_seconds)
+        start_time = base_time if base_time is not None else datetime.utcnow().timestamp()
+        self._suppress_until = max(self._suppress_until, start_time + duration_seconds)
 
     def disable_rule(self, name: str):
         if name in self._rules:
