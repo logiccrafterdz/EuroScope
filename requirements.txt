@@ -16,10 +16,6 @@ pandas>=2.2.0
 numpy>=1.26.0
 numba>=0.59.0
 
-# Charts
-mplfinance>=0.12.10b0
-matplotlib>=3.8.0
-
 # Database
 aiosqlite>=0.20.0
 

@@ -9,7 +9,13 @@ from pathlib import Path
 from typing import Optional
 
 import pandas as pd
-import mplfinance as mpf
+
+try:
+    import mplfinance as mpf
+    HAS_CHARTS = True
+except ImportError:
+    HAS_CHARTS = False
+    mpf = None
 
 logger = logging.getLogger("euroscope.utils.charts")
 
@@ -31,6 +37,10 @@ def generate_chart(df: pd.DataFrame, timeframe: str = "H1",
     Returns:
         Path to the saved chart image, or None on failure.
     """
+    if not HAS_CHARTS:
+        logger.warning("Chart generation failed: matplotlib/mplfinance not installed.")
+        return None
+
     if df is None or df.empty:
         return None
 
