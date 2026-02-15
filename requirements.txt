@@ -12,9 +12,9 @@ openai>=1.50.0
 
 # Data & Analysis
 yfinance>=0.2.36
-pandas>=2.2.0
+pandas>=2.2.0,<3.0.0
 pandas-ta>=0.3.14b
-numpy>=1.26.0
+numpy>=1.26.0,<2.0.0
 
 # Charts
 mplfinance>=0.12.10b0
