@@ -135,6 +135,7 @@ class Orchestrator:
             [
                 ("session_context", "detect"),
                 ("market_data", "get_candles"),
+                ("liquidity_awareness", "analyze"),
                 ("technical_analysis", "full"),
                 ("uncertainty_assessment", "assess"),
                 ("trading_strategy", "detect_signal"),

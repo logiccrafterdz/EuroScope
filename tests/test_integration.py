@@ -160,6 +160,69 @@ class TestDataFlowPipeline:
         assert "session_regime" in ctx.metadata
 
     @pytest.mark.asyncio
+    async def test_report_pipeline_includes_liquidity_awareness(self):
+        from euroscope.skills.liquidity_awareness import LiquidityAwarenessSkill
+
+        o = Orchestrator()
+
+        async def set_session(ctx, action, **_params):
+            ctx.metadata["session_regime"] = "london"
+            return SkillResult(success=True, data={})
+
+        async def set_candles(ctx, action, **_params):
+            times = pd.date_range("2026-01-06 06:00", periods=30, freq="H")
+            df = pd.DataFrame(
+                {
+                    "Open": [1.1000] * 30,
+                    "High": [1.1005] * 30,
+                    "Low": [1.0995] * 30,
+                    "Close": [1.1000] * 30,
+                    "Volume": [100.0] * 30,
+                },
+                index=times,
+            )
+            ctx.market_data["candles"] = df
+            return SkillResult(success=True, data={})
+
+        session = MagicMock()
+        session.name = "session_context"
+        session.safe_execute = AsyncMock(side_effect=set_session)
+
+        market = MagicMock()
+        market.name = "market_data"
+        market.safe_execute = AsyncMock(side_effect=set_candles)
+
+        liquidity = LiquidityAwarenessSkill()
+
+        async def noop(ctx, action, **_params):
+            return SkillResult(success=True, data={})
+
+        technical = MagicMock()
+        technical.name = "technical_analysis"
+        technical.safe_execute = AsyncMock(side_effect=noop)
+
+        uncertainty = MagicMock()
+        uncertainty.name = "uncertainty_assessment"
+        uncertainty.safe_execute = AsyncMock(side_effect=noop)
+
+        strategy = MagicMock()
+        strategy.name = "trading_strategy"
+        strategy.safe_execute = AsyncMock(side_effect=noop)
+
+        o.registry._skills = {
+            "session_context": session,
+            "market_data": market,
+            "liquidity_awareness": liquidity,
+            "technical_analysis": technical,
+            "uncertainty_assessment": uncertainty,
+            "trading_strategy": strategy,
+        }
+
+        ctx = await o.run_full_analysis_pipeline()
+        assert "liquidity_zones" in ctx.metadata
+        assert ctx.metadata.get("liquidity_aware") is True
+
+    @pytest.mark.asyncio
     async def test_full_executor_flow(self):
         """Full signal → open → close → history flow."""
         from euroscope.skills.signal_executor import SignalExecutorSkill
