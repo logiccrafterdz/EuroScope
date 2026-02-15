@@ -133,6 +133,7 @@ class Orchestrator:
         params = {"market_data": market_params} if market_params else {}
         ctx = await self.run_pipeline(
             [
+                ("session_context", "detect"),
                 ("market_data", "get_candles"),
                 ("technical_analysis", "full"),
                 ("uncertainty_assessment", "assess"),

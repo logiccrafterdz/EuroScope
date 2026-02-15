@@ -123,6 +123,43 @@ class TestDataFlowPipeline:
         assert len(ctx.history) >= 1
 
     @pytest.mark.asyncio
+    async def test_report_pipeline_includes_session_context(self):
+        from euroscope.skills.session_context import SessionContextSkill
+
+        o = Orchestrator()
+        session_skill = SessionContextSkill()
+
+        async def noop(ctx, action, **_params):
+            return SkillResult(success=True, data={})
+
+        market = MagicMock()
+        market.name = "market_data"
+        market.safe_execute = AsyncMock(side_effect=noop)
+
+        technical = MagicMock()
+        technical.name = "technical_analysis"
+        technical.safe_execute = AsyncMock(side_effect=noop)
+
+        uncertainty = MagicMock()
+        uncertainty.name = "uncertainty_assessment"
+        uncertainty.safe_execute = AsyncMock(side_effect=noop)
+
+        strategy = MagicMock()
+        strategy.name = "trading_strategy"
+        strategy.safe_execute = AsyncMock(side_effect=noop)
+
+        o.registry._skills = {
+            "session_context": session_skill,
+            "market_data": market,
+            "technical_analysis": technical,
+            "uncertainty_assessment": uncertainty,
+            "trading_strategy": strategy,
+        }
+
+        ctx = await o.run_full_analysis_pipeline()
+        assert "session_regime" in ctx.metadata
+
+    @pytest.mark.asyncio
     async def test_full_executor_flow(self):
         """Full signal → open → close → history flow."""
         from euroscope.skills.signal_executor import SignalExecutorSkill
