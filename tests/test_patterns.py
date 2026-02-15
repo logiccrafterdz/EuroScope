@@ -6,6 +6,9 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from euroscope.skills.base import SkillContext
+from euroscope.skills.technical_analysis import TechnicalAnalysisSkill
+
 from euroscope.analysis.patterns import PatternDetector, find_swing_points
 from euroscope.data.storage import Storage
 from euroscope.learning.pattern_tracker import PatternTracker
@@ -143,3 +146,65 @@ class TestPatternTrackerCausal:
         }
         multiplier = tracker.match_causal_pattern(context)
         assert multiplier >= 1.0
+
+
+class TestPatternContextAdjustments:
+    def test_asian_reversal_penalty(self, sample_ohlcv):
+        skill = TechnicalAnalysisSkill()
+        ctx = SkillContext()
+        pattern = {"pattern": "Double Top", "type": "bearish", "confidence": 80, "level": 1.08}
+        adjusted = skill._adjust_pattern_confidence(
+            pattern, "asian", {}, [], ctx, sample_ohlcv
+        )
+        assert adjusted["confidence"] == 0.6
+        assert "session_penalty: asian" in adjusted["context_notes"]
+
+    def test_weekend_penalty_clamps(self, sample_ohlcv):
+        skill = TechnicalAnalysisSkill()
+        ctx = SkillContext()
+        pattern = {"pattern": "Triangle", "type": "neutral", "confidence": 0.1}
+        adjusted = skill._adjust_pattern_confidence(
+            pattern, "weekend", {}, [], ctx, sample_ohlcv
+        )
+        assert adjusted["confidence"] == 0.0
+        assert adjusted["confidence_breakdown"]["final_confidence"] == 0.0
+
+    def test_liquidity_conflict_penalty(self, sample_ohlcv):
+        skill = TechnicalAnalysisSkill()
+        ctx = SkillContext()
+        market_intent = {"next_likely_move": "up"}
+        pattern = {"pattern": "Head & Shoulders", "type": "bearish", "confidence": 0.7, "head": 1.085}
+        adjusted = skill._adjust_pattern_confidence(
+            pattern, "london", market_intent, [], ctx, sample_ohlcv
+        )
+        assert adjusted["confidence"] == 0.45
+        assert "liquidity_conflict: reversal_vs_up" in adjusted["context_notes"]
+
+    def test_strong_break_bonus(self, sample_ohlcv):
+        skill = TechnicalAnalysisSkill()
+        ctx = SkillContext()
+        zones = [{"price_level": 1.05, "strength": 0.8}]
+        df = sample_ohlcv.copy()
+        df.loc[df.index[-1], "Close"] = 1.07
+        pattern = {"pattern": "Ascending Channel", "type": "bullish", "confidence": 0.6}
+        adjusted = skill._adjust_pattern_confidence(
+            pattern, "london", {}, zones, ctx, df
+        )
+        assert adjusted["confidence"] == 0.75
+        assert "liquidity_bonus: strong_break" in adjusted["context_notes"]
+
+    @pytest.mark.asyncio
+    async def test_full_pipeline_pattern_enrichment(self, sample_ohlcv):
+        skill = TechnicalAnalysisSkill()
+        ctx = SkillContext()
+        ctx.market_data["candles"] = sample_ohlcv
+        ctx.market_data["timeframe"] = "H1"
+        ctx.metadata["session_regime"] = "asian"
+        ctx.metadata["market_intent"] = {"next_likely_move": "down", "current_phase": "liquidity_sweep"}
+        ctx.metadata["liquidity_zones"] = [{"price_level": float(sample_ohlcv["Close"].iloc[-1]), "zone_type": "session_low"}]
+        result = await skill.execute(ctx, "full")
+        assert result.success
+        assert ctx.metadata.get("pattern_context_applied") is True
+        assert isinstance(ctx.metadata.get("patterns"), list)
+        if ctx.metadata["patterns"]:
+            assert "context_notes" in ctx.metadata["patterns"][0]

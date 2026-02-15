@@ -2,6 +2,8 @@
 Technical Analysis Skill — Wraps TechnicalAnalyzer, PatternDetector, LevelAnalyzer.
 """
 
+from datetime import datetime
+
 from ...analysis.technical import TechnicalAnalyzer
 from ...analysis.patterns import PatternDetector
 from ...analysis.levels import LevelAnalyzer
@@ -93,20 +95,23 @@ class TechnicalAnalysisSkill(BaseSkill):
 
     async def _detect_patterns(self, context: SkillContext, df) -> SkillResult:
         patterns = self.patterns.detect_all(df)
-        context.analysis["patterns"] = patterns
+        adjusted = self._apply_pattern_context(patterns, context, df)
+        context.analysis["patterns"] = adjusted
+        context.metadata["patterns"] = adjusted
+        context.metadata["pattern_context_applied"] = True
         
         # Record patterns if tracker available
         multipliers = {}
         if self._tracker:
             tf = context.market_data.get("timeframe", "H1")
             price = float(df['Close'].iloc[-1])
-            for p in patterns:
+            for p in adjusted:
                 name, signal = self._normalize_pattern(p)
                 self._tracker.record_detection(name, tf, signal, price)
                 multipliers[name] = self._tracker.get_confidence_multiplier(name, tf)
 
-        formatted = self._format_patterns(patterns)
-        return SkillResult(success=True, data=patterns, metadata={
+        formatted = self._format_patterns(adjusted)
+        return SkillResult(success=True, data=adjusted, metadata={
             "formatted": formatted,
             "pattern_multipliers": multipliers
         })
@@ -140,6 +145,7 @@ class TechnicalAnalysisSkill(BaseSkill):
     async def _full(self, context: SkillContext, df) -> SkillResult:
         ta = self.technical.analyze(df)
         patterns = self.patterns.detect_all(df)
+        adjusted = self._apply_pattern_context(patterns, context, df)
         levels = self.levels.find_support_resistance(df)
 
         # Record patterns if tracker available
@@ -147,13 +153,15 @@ class TechnicalAnalysisSkill(BaseSkill):
         if self._tracker:
             tf = context.market_data.get("timeframe", "H1")
             price = float(df['Close'].iloc[-1])
-            for p in patterns:
+            for p in adjusted:
                 name, signal = self._normalize_pattern(p)
                 self._tracker.record_detection(name, tf, signal, price)
                 multipliers[name] = self._tracker.get_confidence_multiplier(name, tf)
 
-        data = {"indicators": ta, "patterns": patterns, "levels": levels}
+        data = {"indicators": ta, "patterns": adjusted, "levels": levels}
         context.analysis.update(data)
+        context.metadata["patterns"] = adjusted
+        context.metadata["pattern_context_applied"] = True
         if multipliers:
             context.metadata["pattern_multipliers"] = multipliers
         
@@ -172,3 +180,209 @@ class TechnicalAnalysisSkill(BaseSkill):
         if signal == "bearish":
             return name, "BEARISH"
         return name, "NEUTRAL"
+
+    def _apply_pattern_context(self, patterns: list, context: SkillContext, df) -> list:
+        session_regime = context.metadata.get("session_regime", "unknown")
+        market_intent = context.metadata.get("market_intent", {}) or {}
+        liquidity_zones = context.metadata.get("liquidity_zones", []) or []
+        return [
+            self._adjust_pattern_confidence(p, session_regime, market_intent, liquidity_zones, context, df)
+            for p in patterns
+        ]
+
+    def _adjust_pattern_confidence(self, pattern: dict, session_regime: str,
+                                   market_intent: dict, liquidity_zones: list,
+                                   context: SkillContext, df) -> dict:
+        base_raw = pattern.get("confidence", 0.5)
+        try:
+            base_raw = float(base_raw)
+        except (TypeError, ValueError):
+            base_raw = 0.5
+        base_confidence = base_raw / 100.0 if base_raw > 1 else base_raw
+        base_confidence = max(0.0, min(1.0, base_confidence))
+
+        notes = []
+        session_penalty = 0.0
+        liquidity_penalty = 0.0
+        liquidity_bonus = 0.0
+        pattern_bonus = 0.0
+        pattern_penalty = 0.0
+
+        name = (pattern.get("pattern") or pattern.get("name") or "").strip().lower()
+        pattern_type = (pattern.get("type") or pattern.get("signal") or "neutral").strip().lower()
+        reversal_names = {"head & shoulders", "head and shoulders", "double top", "double bottom"}
+        is_reversal = name in reversal_names
+
+        if session_regime in ("weekend", "holiday"):
+            session_penalty -= 0.30
+            notes.append(f"session_penalty: {session_regime}")
+        elif session_regime == "asian" and is_reversal:
+            session_penalty -= 0.20
+            notes.append("session_penalty: asian")
+
+        next_move = (market_intent.get("next_likely_move") or "").lower()
+        if is_reversal and next_move in ("up", "down"):
+            if pattern_type == "bearish" and next_move == "up":
+                liquidity_penalty -= 0.25
+                notes.append("liquidity_conflict: reversal_vs_up")
+            if pattern_type == "bullish" and next_move == "down":
+                liquidity_penalty -= 0.25
+                notes.append("liquidity_conflict: reversal_vs_down")
+
+        pattern_price = self._pattern_reference_price(pattern)
+        if market_intent.get("current_phase") == "liquidity_sweep" and pattern_price is not None:
+            if self._near_zone(pattern_price, liquidity_zones, 10, None):
+                liquidity_penalty -= 0.20
+                notes.append("liquidity_penalty: near_sweep_zone")
+
+        last_close = None
+        if df is not None and hasattr(df, "iloc") and len(df) > 0:
+            try:
+                last_close = float(df["Close"].iloc[-1])
+            except Exception:
+                last_close = None
+        if last_close is not None:
+            if self._breaks_strong_zone(last_close, liquidity_zones, pattern_type):
+                liquidity_bonus += 0.15
+                notes.append("liquidity_bonus: strong_break")
+
+        if name in {"head & shoulders", "head and shoulders"}:
+            bias = (context.analysis.get("indicators", {}) or {}).get("overall_bias")
+            bias = (bias or "").lower()
+            if pattern_type == "bearish" and bias == "bullish":
+                pattern_penalty -= 0.20
+                notes.append("pattern_penalty: against_trend")
+            if pattern_type == "bullish" and bias == "bearish":
+                pattern_penalty -= 0.20
+                notes.append("pattern_penalty: against_trend")
+            if self._high_impact_news_within(context, 60):
+                pattern_penalty -= 0.25
+                notes.append("pattern_penalty: high_impact_news")
+            if self._in_range_midpoint(pattern_price, df):
+                pattern_penalty -= 0.15
+                notes.append("pattern_penalty: mid_range")
+
+        if name in {"double top", "double bottom"}:
+            if name == "double top" and self._near_zone(pattern_price, liquidity_zones, 10, "session_high"):
+                pattern_bonus += 0.10
+                notes.append("pattern_bonus: session_high")
+            if name == "double bottom" and self._near_zone(pattern_price, liquidity_zones, 10, "session_low"):
+                pattern_bonus += 0.10
+                notes.append("pattern_bonus: session_low")
+            if self._volume_spike(df):
+                pattern_bonus += 0.15
+                notes.append("pattern_bonus: volume_spike")
+
+        final_confidence = base_confidence + session_penalty + liquidity_penalty + liquidity_bonus + pattern_bonus + pattern_penalty
+        final_confidence = max(0.0, min(1.0, final_confidence))
+
+        updated = dict(pattern)
+        updated["confidence"] = round(final_confidence, 2)
+        updated["context_notes"] = notes
+        updated["confidence_breakdown"] = {
+            "base_confidence": round(base_confidence, 2),
+            "session_penalty": round(session_penalty, 2),
+            "liquidity_penalty": round(liquidity_penalty, 2),
+            "liquidity_bonus": round(liquidity_bonus, 2),
+            "pattern_penalty": round(pattern_penalty, 2),
+            "pattern_bonus": round(pattern_bonus, 2),
+            "final_confidence": round(final_confidence, 2),
+        }
+        return updated
+
+    @staticmethod
+    def _pattern_reference_price(pattern: dict) -> float | None:
+        for key in ("level", "neckline", "head", "shoulders", "upper", "lower"):
+            if key in pattern:
+                try:
+                    return float(pattern[key])
+                except (TypeError, ValueError):
+                    return None
+        return None
+
+    @staticmethod
+    def _near_zone(price: float, zones: list, pips: int, zone_type: str | None) -> bool:
+        if price is None:
+            return False
+        threshold = pips / 10000.0
+        for z in zones:
+            if zone_type and z.get("zone_type") != zone_type:
+                continue
+            try:
+                level = float(z.get("price_level"))
+            except (TypeError, ValueError):
+                continue
+            if abs(price - level) <= threshold:
+                return True
+        return False
+
+    @staticmethod
+    def _volume_spike(df) -> bool:
+        if df is None or not hasattr(df, "tail") or len(df) < 5:
+            return False
+        if "Volume" not in df.columns:
+            return False
+        recent = df.tail(20)
+        avg = float(recent["Volume"].mean())
+        last = float(recent["Volume"].iloc[-1])
+        return avg > 0 and last > 2 * avg
+
+    @staticmethod
+    def _breaks_strong_zone(last_close: float, zones: list, pattern_type: str) -> bool:
+        for z in zones:
+            try:
+                level = float(z.get("price_level"))
+                strength = float(z.get("strength", 0.0))
+            except (TypeError, ValueError):
+                continue
+            if strength < 0.7:
+                continue
+            if pattern_type == "bullish" and last_close > level + 0.0015:
+                return True
+            if pattern_type == "bearish" and last_close < level - 0.0015:
+                return True
+        return False
+
+    @staticmethod
+    def _high_impact_news_within(context: SkillContext, minutes: int) -> bool:
+        events = context.analysis.get("calendar", []) or []
+        if not events:
+            return False
+        now = datetime.utcnow()
+        for e in events:
+            impact = (e.get("impact") if isinstance(e, dict) else getattr(e, "impact", "")) or ""
+            if str(impact).lower() != "high":
+                continue
+            time_val = e.get("time") if isinstance(e, dict) else getattr(e, "time", None)
+            if not time_val:
+                continue
+            event_time = TechnicalAnalysisSkill._parse_event_time(time_val, now)
+            if event_time and 0 <= (event_time - now).total_seconds() <= minutes * 60:
+                return True
+        return False
+
+    @staticmethod
+    def _parse_event_time(time_val, now: datetime) -> datetime | None:
+        if isinstance(time_val, datetime):
+            return time_val
+        try:
+            return datetime.fromisoformat(str(time_val))
+        except ValueError:
+            pass
+        try:
+            parsed = datetime.strptime(str(time_val), "%H:%M")
+            return now.replace(hour=parsed.hour, minute=parsed.minute, second=0, microsecond=0)
+        except ValueError:
+            return None
+
+    @staticmethod
+    def _in_range_midpoint(pattern_price: float | None, df) -> bool:
+        if pattern_price is None or df is None or not hasattr(df, "tail") or len(df) < 20:
+            return False
+        recent = df.tail(50)
+        high = float(recent["High"].max())
+        low = float(recent["Low"].min())
+        if high <= low:
+            return False
+        position = (pattern_price - low) / (high - low)
+        return 0.4 <= position <= 0.6

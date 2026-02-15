@@ -1,12 +1,12 @@
 ---
 name: technical_analysis
-description: Computes indicators, detects patterns, and finds key price levels
+description: Computes indicators, detects patterns with context-aware confidence, and finds key price levels
 ---
 
 # 📈 Technical Analysis Skill
 
 ## What It Does
-Runs a complete technical analysis on EUR/USD candle data — indicators, chart patterns, and support/resistance levels.
+Runs a complete technical analysis on EUR/USD candle data — indicators, chart patterns with context-aware confidence, and support/resistance levels.
 
 ## Actions
 - `analyze` — Full indicator suite (RSI, MACD, EMA, BB, ATR, ADX, Stochastic)
