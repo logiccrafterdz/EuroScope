@@ -1,12 +1,12 @@
 ---
 name: uncertainty_assessment
-description: Quantifies cognitive uncertainty for trading signals
+description: Quantifies cognitive uncertainty from technical, causal, and behavioral context
 ---
 
 # 🧭 Uncertainty Assessment Skill
 
 ## What It Does
-Computes a combined uncertainty score from technical signals and behavioral similarity to past analyses.
+Computes a composite uncertainty score from technical divergence, causal mismatch, and behavioral context (session + liquidity intent).
 
 ## Actions
 - `assess` — Calculate uncertainty score, confidence adjustment, and high-uncertainty flag

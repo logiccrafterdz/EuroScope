@@ -42,8 +42,7 @@ class UncertaintyAssessmentSkill(BaseSkill):
         regime = self._infer_regime(adx, atr_pips)
         technical_uncertainty = self._technical_uncertainty(adx, rsi, macd_hist, patterns)
         behavioral_uncertainty, behavioral_meta = self._behavioral_uncertainty(candles, timeframe)
-
-        behavioral_uncertainty, behavioral_meta = self._apply_causal_adjustment(
+        causal_uncertainty, behavioral_meta = self._calculate_causal_uncertainty(
             context=context,
             patterns=patterns,
             timeframe=timeframe,
@@ -51,44 +50,71 @@ class UncertaintyAssessmentSkill(BaseSkill):
             atr_pips=atr_pips,
             rsi=rsi,
             macd_hist=macd_hist,
-            behavioral_uncertainty=behavioral_uncertainty,
             behavioral_meta=behavioral_meta,
+        )
+        behavioral_uncertainty, behavioral_reasons = self._calculate_behavioral_uncertainty(
+            context=context,
+            patterns=patterns,
         )
 
         combined_uncertainty = round(
-            min(1.0, (technical_uncertainty * 0.7) + (behavioral_uncertainty * 0.3)),
+            self._compose_uncertainty_layers(
+                technical_uncertainty,
+                causal_uncertainty,
+                behavioral_uncertainty,
+            ),
             3,
         )
-        confidence_adjustment = round(max(0.4, 1 - combined_uncertainty), 3)
+        confidence_adjustment = self._calculate_confidence_adjustment(
+            combined_uncertainty,
+            context.analysis.get("macro_data", {}),
+        )
         high_uncertainty = combined_uncertainty > 0.65
+        uncertainty_reasoning = self._generate_uncertainty_reasoning(
+            combined_uncertainty,
+            technical_uncertainty,
+            causal_uncertainty,
+            behavioral_uncertainty,
+            behavioral_reasons,
+            context.metadata.get("session_regime", "unknown"),
+            context.metadata.get("market_intent", {}),
+        )
 
         data = {
             "market_regime": regime,
             "technical_uncertainty": technical_uncertainty,
+            "causal_uncertainty": causal_uncertainty,
             "behavioral_uncertainty": behavioral_uncertainty,
             "uncertainty_breakdown": {
                 "technical": technical_uncertainty,
+                "causal": causal_uncertainty,
                 "behavioral": behavioral_uncertainty,
             },
             "uncertainty_score": combined_uncertainty,
+            "composite_uncertainty": combined_uncertainty,
             "confidence_adjustment": confidence_adjustment,
             "high_uncertainty": high_uncertainty,
             "blocking_reason": None,
             "behavioral_meta": behavioral_meta,
+            "uncertainty_reasoning": uncertainty_reasoning,
         }
 
         context.metadata.update({
             "market_regime": regime,
             "technical_uncertainty": technical_uncertainty,
+            "causal_uncertainty": causal_uncertainty,
             "behavioral_uncertainty": behavioral_uncertainty,
             "uncertainty_breakdown": {
                 "technical": technical_uncertainty,
+                "causal": causal_uncertainty,
                 "behavioral": behavioral_uncertainty,
             },
             "uncertainty_score": combined_uncertainty,
+            "composite_uncertainty": combined_uncertainty,
             "confidence_adjustment": confidence_adjustment,
             "high_uncertainty": high_uncertainty,
             "blocking_reason": None,
+            "uncertainty_reasoning": uncertainty_reasoning,
         })
         context.analysis["uncertainty"] = data
 
@@ -206,7 +232,7 @@ class UncertaintyAssessmentSkill(BaseSkill):
             {"success_rate": round(success_rate, 2), "known_outcomes": known, "matches": matches},
         )
 
-    def _apply_causal_adjustment(
+    def _calculate_causal_uncertainty(
         self,
         context: SkillContext,
         patterns: list,
@@ -215,11 +241,10 @@ class UncertaintyAssessmentSkill(BaseSkill):
         atr_pips: Optional[float],
         rsi: Optional[float],
         macd_hist: Optional[float],
-        behavioral_uncertainty: float,
         behavioral_meta: dict,
     ) -> tuple[float, dict]:
         if not self._pattern_tracker:
-            return behavioral_uncertainty, behavioral_meta
+            return 0.0, behavioral_meta
         trigger = self._pattern_tracker.classify_trigger(context)
         price_reaction = self._infer_price_reaction(adx, atr_pips)
         indicator_response = self._infer_indicator_response(rsi, macd_hist, adx)
@@ -235,10 +260,224 @@ class UncertaintyAssessmentSkill(BaseSkill):
         causal_similarity = self._pattern_tracker.get_last_causal_similarity()
         behavioral_meta["causal_multiplier"] = causal_multiplier
         behavioral_meta["causal_similarity"] = causal_similarity
+        causal_uncertainty = 0.0
         if causal_similarity is not None and causal_similarity < 0.4:
             behavioral_meta["causal_mismatch"] = True
-            behavioral_uncertainty = round(min(1.0, behavioral_uncertainty + 0.25), 3)
-        return behavioral_uncertainty, behavioral_meta
+            causal_uncertainty = 0.25
+        return causal_uncertainty, behavioral_meta
+
+    def _calculate_behavioral_uncertainty(self, context: SkillContext, patterns: list) -> tuple[float, list]:
+        session_regime = context.metadata.get("session_regime")
+        market_intent = context.metadata.get("market_intent", {}) or {}
+        liquidity_zones = context.metadata.get("liquidity_zones", []) or []
+        calendar = context.analysis.get("calendar", []) or []
+
+        has_session = session_regime not in (None, "", "unknown")
+        has_intent = bool(market_intent)
+        has_liquidity = bool(liquidity_zones)
+        has_calendar = bool(calendar)
+
+        if not any([has_session, has_intent, has_liquidity, has_calendar]):
+            return 0.0, []
+
+        score = 0.0
+        reasons = []
+
+        if session_regime in ("weekend", "holiday"):
+            score += 0.4
+            reasons.append("weekend/holiday")
+
+        intent_phase = str(market_intent.get("current_phase", "")).lower()
+        intent_move = str(market_intent.get("next_likely_move", "")).lower()
+        intent_conf = self._safe_float(market_intent.get("confidence"))
+
+        if session_regime == "asian" and self._is_reversal_context(patterns, market_intent):
+            score += 0.2
+            reasons.append("asian reversal")
+
+        if session_regime == "overlap" and intent_move == "range":
+            score += 0.15
+            reasons.append("overlap range")
+
+        if intent_conf is not None and intent_conf < 0.5:
+            score += 0.25
+            reasons.append("low intent confidence")
+
+        if intent_phase == "compression":
+            score += 0.1
+            reasons.append("compression phase")
+
+        if self._direction_conflict(patterns, intent_move):
+            score += 0.2
+            reasons.append("intent conflict")
+
+        if self._near_liquidity_zone(context, liquidity_zones):
+            score += 0.15
+            reasons.append("near liquidity zone")
+
+        if self._high_impact_event_near(calendar):
+            score += 0.3
+            reasons.append("macro event near")
+
+        return round(min(1.0, score), 3), reasons
+
+    @staticmethod
+    def _compose_uncertainty_layers(
+        technical_uncertainty: float,
+        causal_uncertainty: float,
+        behavioral_uncertainty: float,
+    ) -> float:
+        base = max(technical_uncertainty, causal_uncertainty, behavioral_uncertainty)
+        bonus = 0.3 * ((technical_uncertainty + causal_uncertainty + behavioral_uncertainty) - base)
+        return min(1.0, base + bonus)
+
+    @staticmethod
+    def _calculate_confidence_adjustment(composite_uncertainty: float, macro_data: dict) -> float:
+        if composite_uncertainty <= 0.4:
+            confidence_adjustment = 1.0
+        elif composite_uncertainty <= 0.55:
+            confidence_adjustment = 0.8
+        elif composite_uncertainty <= 0.7:
+            confidence_adjustment = 0.5
+        else:
+            confidence_adjustment = 0.0
+
+        macro_confidence = UncertaintyAssessmentSkill._macro_confidence(macro_data)
+        if macro_confidence is not None and macro_confidence > 0.8 and composite_uncertainty <= 0.75:
+            confidence_adjustment = max(0.3, round(confidence_adjustment * 1.5, 3))
+        return round(confidence_adjustment, 3)
+
+    @staticmethod
+    def _macro_confidence(macro_data: dict) -> Optional[float]:
+        if not macro_data:
+            return None
+        for key in ("differential", "spread", "cpi", "macro"):
+            payload = macro_data.get(key, {}) if isinstance(macro_data, dict) else {}
+            if isinstance(payload, dict):
+                val = payload.get("confidence") or payload.get("strength")
+                try:
+                    if val is not None:
+                        return float(val)
+                except (TypeError, ValueError):
+                    continue
+        return None
+
+    def _generate_uncertainty_reasoning(
+        self,
+        composite_uncertainty: float,
+        technical_uncertainty: float,
+        causal_uncertainty: float,
+        behavioral_uncertainty: float,
+        behavioral_reasons: list,
+        session_regime: str,
+        market_intent: dict,
+    ) -> str:
+        if composite_uncertainty >= 0.6:
+            label = "High"
+        elif composite_uncertainty >= 0.45:
+            label = "Moderate"
+        else:
+            label = "Low"
+
+        parts = []
+        if behavioral_reasons:
+            parts.append(", ".join(behavioral_reasons[:2]))
+        if causal_uncertainty >= 0.25:
+            parts.append("causal mismatch")
+        if technical_uncertainty >= 0.35:
+            parts.append("technical divergence")
+        if not parts:
+            parts.append("aligned context")
+
+        intent_conf = self._safe_float(market_intent.get("confidence"))
+        if intent_conf is not None and intent_conf < 0.5 and "low intent confidence" not in parts:
+            parts.append(f"intent {intent_conf:.2f}")
+
+        reason = " + ".join(parts)
+        if session_regime and session_regime not in ("unknown", ""):
+            reason = f"{session_regime} {reason}"
+        return f"{label} uncertainty ({composite_uncertainty:.2f}): {reason}"[:100]
+
+    @staticmethod
+    def _is_reversal_context(patterns: list, market_intent: dict) -> bool:
+        phase = str(market_intent.get("current_phase", "")).lower()
+        if phase in ("reversal", "liquidity_sweep"):
+            return True
+        for p in patterns:
+            name = str(p.get("pattern") or "").lower()
+            if any(token in name for token in ("double_top", "double_bottom", "head_and_shoulders", "triple_top", "triple_bottom")):
+                return True
+        return False
+
+    @staticmethod
+    def _direction_conflict(patterns: list, intent_move: str) -> bool:
+        if not intent_move or intent_move == "range":
+            return False
+        direction = ""
+        for p in patterns:
+            bias = (p.get("signal") or p.get("type") or p.get("bias") or "").lower()
+            if bias in ("bullish", "bearish"):
+                direction = bias
+                break
+        if not direction:
+            return False
+        if direction == "bullish" and intent_move in ("down", "bearish"):
+            return True
+        if direction == "bearish" and intent_move in ("up", "bullish"):
+            return True
+        return False
+
+    @staticmethod
+    def _near_liquidity_zone(context: SkillContext, liquidity_zones: list) -> bool:
+        if not liquidity_zones:
+            return False
+        if context.metadata.get("liquidity_break_confirmed"):
+            return False
+        if context.metadata.get("liquidity_breakout"):
+            return False
+        if context.metadata.get("breakout_confirmed"):
+            return False
+        price = context.analysis.get("levels", {}).get("current_price")
+        if price is None:
+            price = context.market_data.get("price", {}).get("price")
+        if price is None:
+            return False
+        for zone in liquidity_zones:
+            if not isinstance(zone, dict) or "price_level" not in zone:
+                continue
+            if abs(zone["price_level"] - price) <= 0.001:
+                return True
+        return False
+
+    @staticmethod
+    def _high_impact_event_near(calendar: list) -> bool:
+        for event in calendar:
+            if not isinstance(event, dict):
+                continue
+            impact = str(event.get("impact", "")).lower()
+            if impact not in ("high",):
+                continue
+            minutes = UncertaintyAssessmentSkill._extract_minutes_to_event(event)
+            if minutes is not None and minutes <= 30:
+                return True
+        return False
+
+    @staticmethod
+    def _extract_minutes_to_event(event: dict) -> Optional[float]:
+        for key in ("minutes_to_event", "time_to_event", "minutes"):
+            if key in event:
+                return UncertaintyAssessmentSkill._safe_float(event.get(key))
+        time_val = event.get("time")
+        if isinstance(time_val, (int, float)):
+            return float(time_val)
+        if isinstance(time_val, str):
+            digits = "".join(ch for ch in time_val if ch.isdigit())
+            if digits:
+                try:
+                    return float(digits)
+                except ValueError:
+                    return None
+        return None
 
     @staticmethod
     def _extract_success(meta: dict) -> Optional[bool]:
