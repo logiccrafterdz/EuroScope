@@ -26,6 +26,22 @@ class Storage:
         self._conn = sqlite3.connect(self.db_path, check_same_thread=False)
         self._init_db()
 
+    def _query_rows(self, sql: str, params: tuple = ()) -> list[dict]:
+        """Execute a SELECT query and return results as a list of dicts.
+        Uses a dedicated cursor to avoid mutating connection-level row_factory."""
+        cursor = self._conn.cursor()
+        cursor.row_factory = sqlite3.Row
+        rows = cursor.execute(sql, params).fetchall()
+        return [dict(r) for r in rows]
+
+    def _query_one(self, sql: str, params: tuple = ()) -> Optional[dict]:
+        """Execute a SELECT query and return one result as dict or None."""
+        cursor = self._conn.cursor()
+        cursor.row_factory = sqlite3.Row
+        row = cursor.execute(sql, params).fetchone()
+        return dict(row) if row else None
+
+
     def _init_db(self):
         """Create tables if they don't exist."""
         with self._conn:
@@ -238,17 +254,18 @@ class Storage:
             )
 
     def get_accuracy_stats(self, days: int = 30) -> dict:
-        rows = self._conn.execute(
+        curr_time = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+        rows = self._query_rows(
             """SELECT direction, accuracy_score FROM predictions
                 WHERE resolved_at IS NOT NULL
                 AND timestamp > datetime('now', ?)""",
             (f"-{days} days",)
-        ).fetchall()
+        )
 
         if not rows:
             return {"total": 0, "accuracy": 0.0, "message": "No resolved predictions yet"}
 
-        correct = sum(1 for _, score in rows if score and score >= 0.5)
+        correct = sum(1 for r in rows if r["accuracy_score"] and r["accuracy_score"] >= 0.5)
         return {
             "total": len(rows),
             "correct": correct,
@@ -260,7 +277,9 @@ class Storage:
     def _accuracy_by_direction(rows) -> dict:
         from collections import defaultdict
         stats = defaultdict(lambda: {"total": 0, "correct": 0})
-        for direction, score in rows:
+        for r in rows:
+            direction = r["direction"]
+            score = r["accuracy_score"]
             stats[direction]["total"] += 1
             if score and score >= 0.5:
                 stats[direction]["correct"] += 1
@@ -270,11 +289,9 @@ class Storage:
         }
 
     def get_unresolved_predictions(self) -> list[dict]:
-        self._conn.row_factory = sqlite3.Row
-        rows = self._conn.execute(
+        return self._query_rows(
             "SELECT * FROM predictions WHERE resolved_at IS NULL ORDER BY timestamp DESC"
-        ).fetchall()
-        return [dict(r) for r in rows]
+        )
 
     # --- Alerts ---
 
@@ -287,20 +304,14 @@ class Storage:
             return cursor.lastrowid
 
     def get_active_alerts(self) -> list[dict]:
-        self._conn.row_factory = sqlite3.Row
-        rows = self._conn.execute(
-            "SELECT * FROM alerts WHERE triggered = 0"
-        ).fetchall()
-        return [dict(r) for r in rows]
+        return self._query_rows("SELECT * FROM alerts WHERE triggered = 0")
 
     def get_user_alerts(self, chat_id: int) -> list[dict]:
         """Get all active alerts for a specific user."""
-        self._conn.row_factory = sqlite3.Row
-        rows = self._conn.execute(
+        return self._query_rows(
             "SELECT * FROM alerts WHERE chat_id = ? AND triggered = 0",
             (chat_id,)
-        ).fetchall()
-        return [dict(r) for r in rows]
+        )
 
     def trigger_alert(self, alert_id: int):
         with self._conn:
@@ -339,18 +350,16 @@ class Storage:
             )
 
     def get_recent_notes(self, category: str = None, limit: int = 20) -> list[dict]:
-        self._conn.row_factory = sqlite3.Row
         if category:
-            rows = self._conn.execute(
+            return self._query_rows(
                 "SELECT * FROM market_notes WHERE category=? ORDER BY timestamp DESC LIMIT ?",
                 (category, limit)
-            ).fetchall()
+            )
         else:
-            rows = self._conn.execute(
+            return self._query_rows(
                 "SELECT * FROM market_notes ORDER BY timestamp DESC LIMIT ?",
                 (limit,)
-            ).fetchall()
-        return [dict(r) for r in rows]
+            )
 
     # --- Trading Signals ---
 
@@ -381,18 +390,16 @@ class Storage:
 
     def get_signals(self, status: str = None, limit: int = 20) -> list[dict]:
         """Get trading signals, optionally filtered by status."""
-        self._conn.row_factory = sqlite3.Row
         if status:
-            rows = self._conn.execute(
+            return self._query_rows(
                 "SELECT * FROM trading_signals WHERE status=? ORDER BY created_at DESC LIMIT ?",
                 (status, limit)
-            ).fetchall()
+            )
         else:
-            rows = self._conn.execute(
+            return self._query_rows(
                 "SELECT * FROM trading_signals ORDER BY created_at DESC LIMIT ?",
                 (limit,)
-            ).fetchall()
-        return [dict(r) for r in rows]
+            )
 
     # --- News Events ---
 
@@ -415,14 +422,12 @@ class Storage:
 
     def get_recent_news(self, limit: int = 20, min_impact: float = 0.0) -> list[dict]:
         """Get recent news events, optionally filtered by minimum impact."""
-        self._conn.row_factory = sqlite3.Row
-        rows = self._conn.execute(
+        return self._query_rows(
             """SELECT * FROM news_events
                 WHERE impact_score >= ?
                 ORDER BY fetched_at DESC LIMIT ?""",
             (min_impact, limit)
-        ).fetchall()
-        return [dict(r) for r in rows]
+        )
 
     # --- Performance Metrics ---
 
@@ -452,12 +457,10 @@ class Storage:
 
     def get_latest_metrics(self, period: str = "daily") -> Optional[dict]:
         """Get the most recent performance metrics for a period."""
-        self._conn.row_factory = sqlite3.Row
-        row = self._conn.execute(
+        return self._query_one(
             "SELECT * FROM performance_metrics WHERE period=? ORDER BY calculated_at DESC LIMIT 1",
             (period,)
-        ).fetchone()
-        return dict(row) if row else None
+        )
 
     # --- User Preferences ---
 
@@ -511,11 +514,9 @@ class Storage:
 
     def get_user_preferences(self, chat_id: int) -> Optional[dict]:
         """Get preferences for a specific user."""
-        self._conn.row_factory = sqlite3.Row
-        row = self._conn.execute(
+        return self._query_one(
             "SELECT * FROM user_preferences WHERE chat_id=?", (chat_id,)
-        ).fetchone()
-        return dict(row) if row else None
+        )
 
     # ── Trade Journal ─────────────────────────────────────────
 
@@ -575,9 +576,7 @@ class Storage:
         query += " ORDER BY timestamp DESC LIMIT ?"
         params.append(limit)
 
-        self._conn.row_factory = sqlite3.Row
-        rows = self._conn.execute(query, params).fetchall()
-        trades = [dict(r) for r in rows]
+        trades = self._query_rows(query, tuple(params))
         for t in trades:
             t["causal_chain"] = self._parse_json_payload(t.get("causal_chain"))
         return trades
@@ -597,22 +596,18 @@ class Storage:
             params.append(status)
         query += " ORDER BY timestamp DESC"
 
-        self._conn.row_factory = sqlite3.Row
-        rows = self._conn.execute(query, params).fetchall()
-        trades = [dict(r) for r in rows]
+        trades = self._query_rows(query, tuple(params))
         for t in trades:
             t["causal_chain"] = self._parse_json_payload(t.get("causal_chain"))
         return trades
 
     def get_trade_with_causal(self, trade_id: int) -> Optional[dict]:
-        self._conn.row_factory = sqlite3.Row
-        row = self._conn.execute(
+        trade = self._query_one(
             "SELECT * FROM trade_journal WHERE id=?",
             (trade_id,),
-        ).fetchone()
-        if not row:
+        )
+        if not trade:
             return None
-        trade = dict(row)
         trade["causal_chain"] = self._parse_json_payload(trade.get("causal_chain"))
         return trade
 
@@ -624,14 +619,12 @@ class Storage:
             query += " AND strategy=?"
             params.append(strategy)
 
-        self._conn.row_factory = sqlite3.Row
-        rows = self._conn.execute(query, params).fetchall()
+        trades = self._query_rows(query, tuple(params))
 
-        if not rows:
+        if not trades:
             return {"total": 0, "wins": 0, "losses": 0, "win_rate": 0.0,
                     "total_pnl": 0.0, "avg_pnl": 0.0}
 
-        trades = [dict(r) for r in rows]
         wins = [t for t in trades if t["is_win"]]
         total_pnl = sum(t["pnl_pips"] for t in trades)
 
@@ -710,15 +703,14 @@ class Storage:
 
     def get_pattern_success_rates(self) -> dict:
         """Get success rates grouped by pattern_name + timeframe."""
-        self._conn.row_factory = sqlite3.Row
-        rows = self._conn.execute(
+        rows = self._query_rows(
             """SELECT pattern_name, timeframe,
                 COUNT(*) as total,
                 SUM(CASE WHEN is_success=1 THEN 1 ELSE 0 END) as successes
                 FROM pattern_stats
                 WHERE is_success IS NOT NULL
                 GROUP BY pattern_name, timeframe"""
-        ).fetchall()
+        )
 
         result = {}
         for r in rows:
@@ -736,14 +728,12 @@ class Storage:
 
     def get_unresolved_patterns(self, limit: int = 50) -> list[dict]:
         """Get pattern detections that haven't been resolved yet."""
-        self._conn.row_factory = sqlite3.Row
-        rows = self._conn.execute(
+        return self._query_rows(
             """SELECT * FROM pattern_stats
                 WHERE is_success IS NULL
                 ORDER BY detected_at DESC LIMIT ?""",
             (limit,)
-        ).fetchall()
-        return [dict(r) for r in rows]
+        )
 
     def get_similar_patterns(
         self,
@@ -766,8 +756,7 @@ class Storage:
             params.append(timeframe)
         query += " ORDER BY detected_at DESC LIMIT ?"
         params.append(limit)
-        rows = self._conn.execute(query, params).fetchall()
-        results = [dict(r) for r in rows]
+        results = self._query_rows(query, tuple(params))
         return [r for r in results if r.get("similarity", 0) >= min_similarity]
 
     # ─── User Threads (Private Topics) ───────────────────────

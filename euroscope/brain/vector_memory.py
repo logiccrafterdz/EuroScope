@@ -252,13 +252,9 @@ class VectorMemory:
         for name, coll in self._collections.items():
             try:
                 before_count = coll.count()
+                # ChromaDB doesn't support $ne: None, so just filter by $lt
                 results = coll.get(
-                    where={
-                        "$and": [
-                            {"timestamp": {"$lt": cutoff_iso}},
-                            {"timestamp": {"$ne": None}},
-                        ]
-                    },
+                    where={"timestamp": {"$lt": cutoff_iso}},
                     include=["metadatas"],
                 )
                 ids = results.get("ids", []) or []
@@ -279,3 +275,4 @@ class VectorMemory:
             logger.warning(f"Large cleanup detected ({total_deleted} docs)")
 
         return total_deleted
+

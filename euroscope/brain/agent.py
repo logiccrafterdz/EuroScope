@@ -36,7 +36,6 @@ class Agent:
         self.conversation_history: list[dict] = []
         self.max_history = 20
         self.tool_timeout = 10
-        self._tool_cache: dict[str, dict[str, Any]] = {}
 
     async def chat(self, user_message: str, system_override: str = None) -> str:
         """Send a message to the LLM and get a response."""
@@ -282,18 +281,14 @@ class Agent:
                 args = call.get("arguments") or {}
                 if name == "proactive_alert_decision":
                     continue
-                cached = self._get_cached_tool_result(name, args)
-                if cached is not None:
-                    result = cached
-                else:
-                    try:
-                        result = await asyncio.wait_for(
-                            self._execute_tool(name, args),
-                            timeout=self.tool_timeout,
-                        )
-                    except Exception as e:
-                        result = {"success": False, "error": str(e)}
-                    self._set_tool_cache(name, args, result)
+                
+                try:
+                    result = await asyncio.wait_for(
+                        self._execute_tool(name, args),
+                        timeout=self.tool_timeout,
+                    )
+                except Exception as e:
+                    result = {"success": False, "error": str(e)}
 
                 tools_used.append(name)
                 observation = self._format_tool_observation(name, result)
@@ -501,32 +496,6 @@ class Agent:
         if incomplete:
             confidence *= 0.7
         return round(confidence, 2)
-
-    def _cache_key(self, tool_name: str, args: dict) -> str:
-        try:
-            encoded = json.dumps(args, sort_keys=True)
-        except Exception:
-            encoded = str(args)
-        return f"{tool_name}:{encoded}"
-
-    def _get_cached_tool_result(self, tool_name: str, args: dict) -> Optional[dict]:
-        ttl = 30 if tool_name == "get_price" else None
-        if ttl is None:
-            return None
-        key = self._cache_key(tool_name, args)
-        entry = self._tool_cache.get(key)
-        if not entry:
-            return None
-        if time.time() - entry["ts"] > ttl:
-            return None
-        return entry["result"]
-
-    def _set_tool_cache(self, tool_name: str, args: dict, result: dict) -> None:
-        ttl = 30 if tool_name == "get_price" else None
-        if ttl is None:
-            return
-        key = self._cache_key(tool_name, args)
-        self._tool_cache[key] = {"ts": time.time(), "result": result}
 
     async def _execute_tool(self, tool_name: str, arguments: dict) -> dict:
         from .orchestrator import Orchestrator

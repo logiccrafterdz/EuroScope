@@ -187,7 +187,6 @@ class CronScheduler:
             if self._is_quiet_time():
                 return
             try:
-                from ..brain.agent import Agent
                 from ..analytics.health_monitor import HealthMonitor
                 from ..data.storage import Storage
 
@@ -200,7 +199,11 @@ class CronScheduler:
                     logger.warning("Proactive analysis skipped due to health score")
                     return
 
-                agent = Agent(config=self.config.llm)
+                # Reuse the bot's agent (has router, orchestrator, vector_memory)
+                agent = getattr(self.bot, "agent", None)
+                if agent is None:
+                    logger.warning("Proactive analysis skipped: no agent available on bot")
+                    return
                 decision = await agent.run_proactive_analysis()
                 if not decision.get("should_alert"):
                     logger.debug("Proactive analysis: No alert warranted")
@@ -388,6 +391,10 @@ class CronScheduler:
                     "error": str(e)[:200],
                     "timestamp": datetime.utcnow().isoformat(),
                 })
+
+        # Cap history to prevent unbounded growth
+        if len(self._history) > 50:
+            self._history = self._history[-50:]
 
     @property
     def tasks(self) -> dict[str, ScheduledTask]:

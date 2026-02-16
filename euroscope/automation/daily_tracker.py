@@ -98,22 +98,32 @@ class DailyTracker:
     def _append_to_csv(self, summary: dict) -> None:
         self._log_path.parent.mkdir(parents=True, exist_ok=True)
         file_exists = self._log_path.exists()
+        fieldnames = [
+            "date",
+            "signals_generated",
+            "signals_executed",
+            "signals_rejected",
+            "avg_confidence",
+            "max_uncertainty",
+            "emergency_mode_activations",
+            "top_rejection_reason",
+        ]
         with self._log_path.open("a", newline="", encoding="utf-8") as handle:
-            writer = csv.DictWriter(handle, fieldnames=[
-                "date",
-                "signals_generated",
-                "signals_executed",
-                "signals_rejected",
-                "avg_confidence",
-            ])
+            writer = csv.DictWriter(handle, fieldnames=fieldnames)
             if not file_exists:
                 writer.writeheader()
+            # Find the most common rejection reason
+            reasons = summary.get("rejection_reasons", {})
+            top_reason = max(reasons, key=reasons.get) if reasons else ""
             writer.writerow({
                 "date": summary.get("date"),
                 "signals_generated": summary.get("signals_generated", 0),
                 "signals_executed": summary.get("signals_executed", 0),
                 "signals_rejected": summary.get("signals_rejected", 0),
                 "avg_confidence": summary.get("avg_confidence", 0.0),
+                "max_uncertainty": summary.get("max_uncertainty", 0.0),
+                "emergency_mode_activations": summary.get("emergency_mode_activations", 0),
+                "top_rejection_reason": top_reason,
             })
 
     def _parse_indicators(self, raw: Any) -> dict:
