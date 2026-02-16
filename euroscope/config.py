@@ -58,6 +58,7 @@ class Config:
     proactive_quiet_hours: tuple[int, int] | None = None
     proactive_disable_weekends: bool = True
     proactive_holiday_dates: list[str] = field(default_factory=list)
+    paper_trading_only: bool = True
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -115,6 +116,7 @@ class Config:
             proactive_quiet_hours=quiet_hours,
             proactive_disable_weekends=os.getenv("EUROSCOPE_PROACTIVE_DISABLE_WEEKENDS", "1") != "0",
             proactive_holiday_dates=holiday_dates,
+            paper_trading_only=os.getenv("EUROSCOPE_PAPER_TRADING_ONLY", "1") != "0",
         )
 
     def validate(self) -> list[str]:

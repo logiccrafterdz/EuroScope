@@ -22,6 +22,7 @@ class PaperTrade:
     status: str = "open"  # open, closed
     exit_price: float = 0.0
     pnl_pips: float = 0.0
+    execution_mode: str = "paper"
 
 
 class SignalExecutorSkill(BaseSkill):
@@ -41,12 +42,21 @@ class SignalExecutorSkill(BaseSkill):
         self._bus = None
         self._emergency_halt = False
         self._emergency_halt_until = 0.0
+        self._paper_trading_only = True
 
     def set_storage(self, storage):
         self._storage = storage
 
     def set_event_bus(self, event_bus):
         self._bus = event_bus
+
+    def set_config(self, config):
+        value = getattr(config, "paper_trading_only", None)
+        if value is None:
+            value = getattr(config, "EUROSCOPE_PAPER_TRADING_ONLY", None)
+        if value is None:
+            value = True
+        self._paper_trading_only = bool(value)
 
     async def execute(self, context: SkillContext, action: str, **params) -> SkillResult:
         if action == "open_trade":
@@ -85,6 +95,26 @@ class SignalExecutorSkill(BaseSkill):
         )
         self._open.append(trade)
         context.open_positions.append(trade.__dict__)
+        if self._storage:
+            timeframe = context.market_data.get("timeframe", "H1")
+            regime = context.metadata.get("regime", "")
+            confidence = signal.get("confidence", 0.0)
+            indicators = self._build_indicators(context)
+            patterns = self._build_patterns(context)
+            self._storage.save_trade_journal(
+                direction=signal.get("direction", "BUY"),
+                entry_price=trade.entry_price,
+                stop_loss=trade.stop_loss,
+                take_profit=trade.take_profit,
+                strategy=trade.strategy,
+                timeframe=timeframe,
+                regime=regime,
+                confidence=confidence,
+                indicators=indicators,
+                patterns=patterns,
+                reasoning="paper trade opened",
+                status="open",
+            )
         return SkillResult(success=True, data=trade.__dict__,
                           metadata={"trade_id": trade.trade_id})
 
@@ -96,6 +126,10 @@ class SignalExecutorSkill(BaseSkill):
             self._emergency_halt = False
         if context.metadata.get("emergency_mode") is True:
             return "EMERGENCY: market regime shift"
+        if self._paper_trading_only:
+            mode = context.metadata.get("execution_mode")
+            if mode and str(mode).lower() not in {"paper", "sim", "simulation"}:
+                return "PAPER_ONLY: live execution disabled"
         if context.metadata.get("uncertainty_score", 0) > 0.65:
             return "UNCERTAINTY: confidence too low"
         if context.metadata.get("confidence_adjustment", 1.0) < 0.5:
@@ -116,8 +150,8 @@ class SignalExecutorSkill(BaseSkill):
         timeframe = context.market_data.get("timeframe", "H1")
         regime = context.metadata.get("regime", "")
         confidence = signal.get("confidence", 0.0)
-        indicators = context.analysis.get("indicators", {})
-        patterns = context.analysis.get("patterns", [])
+        indicators = self._build_indicators(context)
+        patterns = self._build_patterns(context)
         if self._storage:
             self._storage.save_trade_journal(
                 direction=signal.get("direction", "BUY"),
@@ -129,8 +163,9 @@ class SignalExecutorSkill(BaseSkill):
                 regime=regime,
                 confidence=confidence,
                 indicators=indicators,
-                patterns=patterns if isinstance(patterns, list) else [],
-                reasoning=reason,
+                patterns=patterns,
+                reasoning=f"paper rejection: {reason}",
+                status="rejected",
             )
         if self._bus:
             await self._bus.emit(Event("trade.aborted", "signal_executor", {
@@ -139,6 +174,25 @@ class SignalExecutorSkill(BaseSkill):
                 "strategy": strategy,
                 "timeframe": timeframe,
             }))
+
+    @staticmethod
+    def _build_patterns(context: SkillContext) -> list:
+        patterns = context.analysis.get("patterns", [])
+        if isinstance(patterns, list):
+            return patterns
+        return []
+
+    @staticmethod
+    def _build_indicators(context: SkillContext) -> dict:
+        indicators = context.analysis.get("indicators", {})
+        if not isinstance(indicators, dict):
+            indicators = {}
+        indicators = dict(indicators)
+        if "uncertainty_score" in context.metadata:
+            indicators["uncertainty_score"] = context.metadata.get("uncertainty_score")
+        if "uncertainty_reasoning" in context.metadata:
+            indicators["uncertainty_reasoning"] = context.metadata.get("uncertainty_reasoning")
+        return indicators
 
     async def _close_trade(self, context: SkillContext, **params) -> SkillResult:
         trade_id = params.get("trade_id", "")

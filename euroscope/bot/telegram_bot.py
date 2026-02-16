@@ -8,6 +8,7 @@ and integrated notification system.
 import asyncio
 import logging
 import re
+from datetime import datetime
 from typing import Optional
 
 from telegram import (
@@ -51,6 +52,7 @@ from ..skills.registry import SkillsRegistry
 from ..skills.base import SkillContext
 from ..workspace import WorkspaceManager
 from ..automation import HeartbeatService, EventBus, SmartAlerts, AlertChannel, setup_default_alerts, CronScheduler, TaskFrequency, SignalExecutorSubscriber, AlertSuppressionSubscriber, TelegramEmergencySubscriber
+from ..automation.daily_tracker import DailyTracker
 
 logger = logging.getLogger("euroscope.bot")
 
@@ -69,6 +71,7 @@ class EuroScopeBot:
     def __init__(self, config: Config):
         self.config = config
         self.storage = Storage()
+        self.daily_tracker = DailyTracker(storage=self.storage)
         
         # New Skills-Based Architecture
         self.orchestrator = Orchestrator()  # discovers skills internally
@@ -145,7 +148,8 @@ class EuroScopeBot:
             event_bus=self.bus,
             heartbeat=self.heartbeat,
             market_data_skill=market_data_skill,
-            global_context=self.orchestrator.global_context
+            global_context=self.orchestrator.global_context,
+            config=self.config
         )
 
         signal_executor_skill = self.registry.get("signal_executor")
@@ -413,6 +417,7 @@ class EuroScopeBot:
             "├ /alert [above/below] [price] — Set price level alert\n"
             "├ /performance — Trading stats\n"
             "├ /report — Full daily report\n"
+            "├ /daily_summary — Daily trading activity recap\n"
             "├ /accuracy — Prediction track record\n"
             "├ /settings — Bot preferences & alerts\n"
             "├ /menu — Interactive menu\n"
@@ -836,6 +841,43 @@ class EuroScopeBot:
         formatted = result.metadata.get("formatted", str(result.data))
         await self._reply(update, safe_markdown(formatted), parse_mode="Markdown")
 
+    async def cmd_daily_summary(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        if not await self._check_auth(update):
+            return
+
+        summary = self.daily_tracker.get_summary()
+        date_label = self._format_summary_date(summary.get("date"))
+        generated = summary.get("signals_generated", 0)
+        executed = summary.get("signals_executed", 0)
+        rejected = summary.get("signals_rejected", 0)
+        executed_pct = int(round((executed / generated) * 100)) if generated else 0
+        avg_confidence_pct = self._format_percent(summary.get("avg_confidence", 0.0))
+        max_uncertainty_pct = self._format_percent(summary.get("max_uncertainty", 0.0))
+
+        rejection_parts = []
+        for key, count in summary.get("rejection_reasons", {}).items():
+            label = {"emergency_mode": "emergency"}.get(key, key)
+            rejection_parts.append(f"{label}: {count}")
+        rejection_detail = ", ".join(rejection_parts) if rejection_parts else "none"
+
+        max_uncertainty_time = self._format_summary_time(summary.get("max_uncertainty_time", ""))
+        max_uncertainty_reason = summary.get("max_uncertainty_reason", "")
+        if max_uncertainty_time and max_uncertainty_reason:
+            max_uncertainty_line = f"⚠️ Max uncertainty: {max_uncertainty_pct} ({max_uncertainty_time} — {max_uncertainty_reason})"
+        elif max_uncertainty_time:
+            max_uncertainty_line = f"⚠️ Max uncertainty: {max_uncertainty_pct} ({max_uncertainty_time})"
+        else:
+            max_uncertainty_line = f"⚠️ Max uncertainty: {max_uncertainty_pct}"
+
+        message = (
+            f"📊 <b>Today's Activity ({date_label})</b>\n"
+            f"✅ Signals executed: {executed}/{generated} ({executed_pct}%)\n"
+            f"🛑 Rejected: {rejected} ({rejection_detail})\n"
+            f"💡 Avg confidence: {avg_confidence_pct}\n"
+            f"{max_uncertainty_line}"
+        )
+        await self._reply(update, message, parse_mode="HTML")
+
     async def cmd_backtest(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /backtest — run historical simulation."""
         if not await self._check_auth(update):
@@ -920,6 +962,38 @@ class EuroScopeBot:
         lines.append(f"TP: `{data.get('take_profit', 0):.5f}`")
         lines.append(f"Risk: `{data.get('risk_pips', 0):.1f}` pips")
         return "\n".join(lines)
+
+    @staticmethod
+    def _format_summary_date(date_value: str) -> str:
+        if not date_value:
+            return "N/A"
+        try:
+            return datetime.strptime(date_value, "%Y-%m-%d").strftime("%b %d")
+        except ValueError:
+            return date_value
+
+    @staticmethod
+    def _format_percent(value: float) -> str:
+        try:
+            numeric = float(value)
+        except (TypeError, ValueError):
+            return "0%"
+        if numeric <= 1.0:
+            numeric *= 100
+        return f"{numeric:.0f}%"
+
+    @staticmethod
+    def _format_summary_time(timestamp: str) -> str:
+        if not timestamp:
+            return ""
+        text = str(timestamp)
+        if text.endswith("Z"):
+            text = text[:-1]
+        try:
+            parsed = datetime.fromisoformat(text)
+        except ValueError:
+            return ""
+        return parsed.strftime("%H:%M UTC")
 
     async def cmd_trades(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /trades — show open paper trades."""
@@ -1216,6 +1290,7 @@ class EuroScopeBot:
             "trades": self.cmd_trades,
             "performance": self.cmd_performance,
             "settings": self.cmd_settings,
+            "daily_summary": self.cmd_daily_summary,
             "ask": self.cmd_ask,
             "health": self.cmd_health,
         }
@@ -1256,6 +1331,7 @@ class EuroScopeBot:
             BotCommand("health", "System status"),
             BotCommand("alert", "Set price level alert"),
             BotCommand("settings", "Bot preferences & alerts"),
+            BotCommand("daily_summary", "Daily trading activity recap"),
             BotCommand("help", "List all commands"),
         ]
         await application.bot.set_my_commands(cmds)
@@ -1268,6 +1344,12 @@ class EuroScopeBot:
         self.cron.schedule("resolve_patterns", TaskFrequency.HOURLY, self._task_resolve_patterns)
         self.cron.schedule("daily_tuning", TaskFrequency.DAILY, self._task_daily_tuning, delay=3600)
         self.cron.schedule("weekly_reflection", TaskFrequency.WEEKLY, self._task_weekly_reflection, delay=7200)
+        self.cron.schedule(
+            "daily_trading_journal",
+            TaskFrequency.DAILY,
+            self.daily_tracker.run,
+            delay=self.cron._seconds_until(23, 55),
+        )
 
         logger.info("⚡ Background services & Commands registered.")
 

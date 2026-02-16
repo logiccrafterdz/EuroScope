@@ -8,7 +8,7 @@ news events, performance metrics, user preferences, and cached data.
 import json
 import logging
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Optional
 
@@ -524,7 +524,8 @@ class Storage:
                            strategy: str = "", timeframe: str = "H1",
                            regime: str = "", confidence: float = 0.0,
                            indicators: dict = None, patterns: list = None,
-                           reasoning: str = "", causal_chain: Any = None) -> int:
+                           reasoning: str = "", causal_chain: Any = None,
+                           status: str = "open") -> int:
         """Save a new trade journal entry."""
         now = datetime.utcnow().isoformat()
         if isinstance(causal_chain, (dict, list)):
@@ -537,13 +538,14 @@ class Storage:
                    (timestamp, direction, entry_price, stop_loss, take_profit,
                     strategy, timeframe, regime, confidence,
                     indicators_snapshot, patterns_snapshot, causal_chain, reasoning, status)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open')""",
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (now, direction, entry_price, stop_loss, take_profit,
                  strategy, timeframe, regime, confidence,
                  json.dumps(indicators or {}),
                  json.dumps(patterns or []),
                  causal_payload,
-                 reasoning)
+                 reasoning,
+                 status)
             )
             return cursor.lastrowid
 
@@ -572,6 +574,28 @@ class Storage:
             params.append(status)
         query += " ORDER BY timestamp DESC LIMIT ?"
         params.append(limit)
+
+        self._conn.row_factory = sqlite3.Row
+        rows = self._conn.execute(query, params).fetchall()
+        trades = [dict(r) for r in rows]
+        for t in trades:
+            t["causal_chain"] = self._parse_json_payload(t.get("causal_chain"))
+        return trades
+
+    def get_trade_journal_for_date(self, date: str, status: str = None) -> list[dict]:
+        try:
+            day = datetime.fromisoformat(date)
+        except ValueError:
+            day = datetime.strptime(date, "%Y-%m-%d")
+        start = day.replace(hour=0, minute=0, second=0, microsecond=0)
+        end = start + timedelta(days=1)
+
+        query = "SELECT * FROM trade_journal WHERE timestamp >= ? AND timestamp < ?"
+        params: list[Any] = [start.isoformat(), end.isoformat()]
+        if status:
+            query += " AND status=?"
+            params.append(status)
+        query += " ORDER BY timestamp DESC"
 
         self._conn.row_factory = sqlite3.Row
         rows = self._conn.execute(query, params).fetchall()
