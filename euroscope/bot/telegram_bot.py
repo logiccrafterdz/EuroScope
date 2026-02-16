@@ -669,12 +669,26 @@ class EuroScopeBot:
         if not await self._check_auth(update):
             return
 
-        chat_id = update.effective_chat.id
-        tf = context.args[0].upper() if context.args else "H1"
+        chat = update.effective_chat
+        if not chat:
+            return
+        chat_id = chat.id
+        tf = context.args[0].upper() if context.args else self._preferred_timeframe(chat_id)
         await self._reply(update, f"⏳ Generating {tf} signals...", topic_key="radar")
 
         # Run analysis first to populate context
         ctx = SkillContext()
+
+        data_result = await self.orchestrator.run_skill(
+            "market_data",
+            "get_candles",
+            context=ctx,
+            timeframe=tf,
+            count=200,
+        )
+        if not data_result.success:
+            await self._reply(update, f"❌ {data_result.error}", topic_key="radar")
+            return
         
         # 1. Technical Analysis (Full)
         res_ta = await self.orchestrator.run_skill("technical_analysis", "full", context=ctx, timeframe=tf)
@@ -688,7 +702,11 @@ class EuroScopeBot:
             await self._reply(update, f"❌ Result generation failed: {result.error}", topic_key="radar")
             return
 
-        formatted = result.metadata.get("formatted", str(result.data))
+        formatted = result.metadata.get("formatted") if result.metadata else None
+        if not formatted:
+            formatted = str(result.data)
+        if not isinstance(formatted, str):
+            formatted = str(formatted)
         formatted = self._format_for_user(chat_id, formatted)
         keyboard = InlineKeyboardMarkup([
             [

@@ -255,3 +255,64 @@ class TestMainMenu:
         assert "Signals executed: 2/5" in text
         assert "Rejected: 3" in text
         assert kwargs.get("parse_mode") == "HTML"
+
+    @pytest.mark.asyncio
+    async def test_signals_command(self):
+        from euroscope.bot.telegram_bot import EuroScopeBot
+        from euroscope.skills.base import SkillResult
+
+        config = MagicMock()
+        config.telegram.token = "fake:test"
+        config.telegram.allowed_users = []
+        config.data.brave_api_key = ""
+        config.llm = MagicMock()
+        config.data.alphavantage_key = ""
+        config.data.tiingo_key = ""
+        config.data.fred_api_key = ""
+        config.llm.api_key = ""
+        config.llm.api_base = ""
+        config.llm.model = ""
+        config.llm.fallback_api_key = ""
+        config.rate_limit_requests = 5
+        config.rate_limit_window_minutes = 1
+        config.admin_chat_ids = []
+        config.vector_memory_ttl_days = 30
+
+        update = MagicMock()
+        update.effective_user.id = 123
+        update.effective_chat.id = 123
+        update.message.reply_text = AsyncMock()
+
+        with patch("euroscope.bot.telegram_bot.PriceProvider"), \
+             patch("euroscope.bot.telegram_bot.NewsEngine"), \
+             patch("euroscope.bot.telegram_bot.EconomicCalendar"), \
+             patch("euroscope.bot.telegram_bot.Agent"), \
+             patch("euroscope.bot.telegram_bot.Memory"), \
+             patch("euroscope.bot.telegram_bot.Forecaster"), \
+             patch("euroscope.bot.telegram_bot.Orchestrator"), \
+             patch("euroscope.bot.telegram_bot.RiskManager"), \
+             patch("euroscope.bot.telegram_bot.StrategyEngine"), \
+             patch("euroscope.bot.telegram_bot.SignalExecutor"), \
+             patch("euroscope.bot.telegram_bot.Storage"):
+            bot = EuroScopeBot(config)
+
+        async def run_skill(skill_name, action, **_):
+            if skill_name == "market_data":
+                return SkillResult(success=True, data={})
+            if skill_name == "technical_analysis":
+                return SkillResult(success=True, data={"indicators": {}, "patterns": [], "levels": {}})
+            if skill_name == "trading_strategy":
+                return SkillResult(success=True, data={"direction": "WAIT"}, metadata={"formatted": "ok"})
+            return SkillResult(success=False, error="unknown")
+
+        bot._check_auth = AsyncMock(return_value=True)
+        bot.orchestrator.run_skill = AsyncMock(side_effect=run_skill)
+        context = MagicMock()
+        context.args = []
+
+        await bot.cmd_signals(update, context)
+
+        assert update.message.reply_text.await_count >= 2
+        args, kwargs = update.message.reply_text.call_args
+        assert "ok" in args[0]
+        assert kwargs.get("parse_mode") == "Markdown"
