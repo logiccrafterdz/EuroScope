@@ -6,6 +6,7 @@ Chain: DeepSeek → OpenAI → Groq (configurable)
 """
 
 import asyncio
+import json
 import logging
 import time
 from dataclasses import dataclass
@@ -105,6 +106,60 @@ class LLMRouter:
         self._call_count += 1
         return await self._call_with_fallback(messages, temperature)
 
+    async def chat_with_functions(
+        self,
+        messages: list[dict],
+        functions: list[dict] = None,
+        function_call: str = "auto",
+        temperature: float = None,
+    ) -> dict:
+        if not self.providers:
+            return {"content": "⚠️ No LLM providers configured. Set API keys in .env", "function_calls": []}
+
+        self._call_count += 1
+        if not functions:
+            from .function_schema import get_all_function_schemas
+
+            functions = get_all_function_schemas()
+
+        response = await self._call_with_fallback_payload(
+            messages=messages,
+            functions=functions,
+            function_call=function_call,
+            temperature=temperature,
+        )
+
+        message = response.get("choices", [{}])[0].get("message", {}) if isinstance(response, dict) else {}
+        content = message.get("content")
+        function_calls = []
+
+        function_call_response = message.get("function_call")
+        if function_call_response:
+            args = function_call_response.get("arguments", "{}")
+            try:
+                parsed_args = json.loads(args) if isinstance(args, str) else args
+            except Exception:
+                parsed_args = {}
+            function_calls.append({
+                "name": function_call_response.get("name"),
+                "arguments": parsed_args,
+            })
+
+        tool_calls = message.get("tool_calls") or []
+        for tool_call in tool_calls:
+            func = tool_call.get("function", {})
+            args = func.get("arguments", "{}")
+            try:
+                parsed_args = json.loads(args) if isinstance(args, str) else args
+            except Exception:
+                parsed_args = {}
+            function_calls.append({
+                "name": func.get("name"),
+                "arguments": parsed_args,
+            })
+
+        return {"content": content, "function_calls": function_calls}
+
     async def _call_with_fallback(self, messages: list[dict], temperature: float = None) -> str:
         if (
             not self._warned_identical_keys
@@ -199,3 +254,110 @@ class LLMRouter:
             )
 
         return reply
+
+    async def _call_with_fallback_payload(
+        self,
+        messages: list[dict],
+        functions: list[dict],
+        function_call: str,
+        temperature: float = None,
+    ) -> dict:
+        if (
+            not self._warned_identical_keys
+            and len(self.providers) >= 2
+            and self.providers[0].api_key
+            and self.providers[0].api_key == self.providers[1].api_key
+        ):
+            logger.warning("Fallback key identical to primary key — true redundancy disabled")
+            self._warned_identical_keys = True
+
+        last_error = None
+
+        for provider in self.providers:
+            for attempt in range(self.max_retries + 1):
+                try:
+                    result = await self._call_provider_payload(
+                        provider=provider,
+                        messages=messages,
+                        functions=functions,
+                        function_call=function_call,
+                        temperature=temperature,
+                    )
+                    self._last_provider = provider.name
+                    return result
+
+                except httpx.HTTPStatusError as e:
+                    last_error = e
+                    status = e.response.status_code
+
+                    if status in (401, 403):
+                        logger.warning(f"{provider.name}: Auth failed ({status}), skipping")
+                        break
+
+                    if status == 429:
+                        wait = min(2 ** attempt * 2, 30)
+                        logger.warning(f"{provider.name}: Rate limited, waiting {wait}s")
+                        await asyncio.sleep(wait)
+                        continue
+
+                    if status >= 500:
+                        wait = 2 ** attempt
+                        logger.warning(f"{provider.name}: Server error ({status}), retry in {wait}s")
+                        await asyncio.sleep(wait)
+                        continue
+
+                    logger.error(f"{provider.name}: HTTP {status}")
+                    break
+
+                except Exception as e:
+                    last_error = e
+                    wait = 2 ** attempt
+                    logger.warning(f"{provider.name}: Error ({e}), retry in {wait}s")
+                    if attempt < self.max_retries:
+                        await asyncio.sleep(wait)
+
+        self._failure_count += 1
+        error_msg = str(last_error)[:200] if last_error else "Unknown error"
+        logger.error(f"All LLM providers failed: {error_msg}")
+        return {"choices": [{"message": {"content": f"❌ AI unavailable — all providers failed: {error_msg}"}}]}
+
+    async def _call_provider_payload(
+        self,
+        provider: LLMProvider,
+        messages: list[dict],
+        functions: list[dict],
+        function_call: str,
+        temperature: float = None,
+    ) -> dict:
+        temp = temperature if temperature is not None else provider.temperature
+        payload = {
+            "model": provider.model,
+            "messages": messages,
+            "max_tokens": provider.max_tokens,
+            "temperature": temp,
+        }
+        if functions:
+            payload["functions"] = functions
+            payload["function_call"] = function_call
+
+        async with httpx.AsyncClient(timeout=60) as client:
+            response = await client.post(
+                f"{provider.api_base}/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {provider.api_key}",
+                    "Content-Type": "application/json",
+                },
+                json=payload,
+            )
+            response.raise_for_status()
+            data = response.json()
+
+        usage = data.get("usage", {})
+        if usage:
+            logger.debug(
+                f"{provider.name}: {usage.get('total_tokens', '?')} tokens "
+                f"(prompt: {usage.get('prompt_tokens', '?')}, "
+                f"completion: {usage.get('completion_tokens', '?')})"
+            )
+
+        return data

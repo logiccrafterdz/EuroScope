@@ -38,6 +38,7 @@ class TestMainMenu:
         config.rate_limit_requests = 5
         config.rate_limit_window_minutes = 1
         config.admin_chat_ids = []
+        config.vector_memory_ttl_days = 30
 
         with patch("euroscope.bot.telegram_bot.PriceProvider"), \
              patch("euroscope.bot.telegram_bot.NewsEngine"), \
@@ -78,6 +79,7 @@ class TestMainMenu:
         config.rate_limit_requests = 5
         config.rate_limit_window_minutes = 1
         config.admin_chat_ids = []
+        config.vector_memory_ttl_days = 30
 
         with patch("euroscope.bot.telegram_bot.PriceProvider"), \
              patch("euroscope.bot.telegram_bot.NewsEngine"), \
@@ -116,6 +118,7 @@ class TestMainMenu:
         config.rate_limit_requests = 5
         config.rate_limit_window_minutes = 1
         config.admin_chat_ids = []
+        config.vector_memory_ttl_days = 30
 
         with patch("euroscope.bot.telegram_bot.PriceProvider"), \
              patch("euroscope.bot.telegram_bot.NewsEngine"), \
@@ -159,6 +162,7 @@ class TestMainMenu:
         config.rate_limit_requests = 5
         config.rate_limit_window_minutes = 1
         config.admin_chat_ids = []
+        config.vector_memory_ttl_days = 30
 
         with patch("euroscope.bot.telegram_bot.PriceProvider"), \
              patch("euroscope.bot.telegram_bot.NewsEngine"), \
@@ -185,6 +189,6 @@ class TestMainMenu:
             "start", "help", "menu", "price", "analysis", "chart",
             "patterns", "levels", "signals", "news", "calendar",
             "forecast", "report", "accuracy", "strategy", "risk",
-            "trades", "performance", "settings", "ask",
+            "trades", "performance", "settings", "ask", "smart_analysis",
         }
         assert expected.issubset(registered_commands)

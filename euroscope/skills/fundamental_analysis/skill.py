@@ -42,6 +42,8 @@ class FundamentalAnalysisSkill(BaseSkill):
             return await self._get_news(context)
         elif action == "get_calendar":
             return await self._get_calendar(context)
+        elif action == "get_sentiment":
+            return await self._get_sentiment(context)
         elif action == "get_macro":
             return await self._get_macro(context)
         elif action == "full":

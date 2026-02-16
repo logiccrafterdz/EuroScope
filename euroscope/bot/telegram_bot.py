@@ -80,7 +80,7 @@ class EuroScopeBot:
         self.alerts = SmartAlerts()
         setup_default_alerts(self.alerts)
         self.heartbeat = HeartbeatService(interval=300, event_bus=self.bus)
-        self.cron = CronScheduler()
+        self.cron = CronScheduler(config=config)
 
         # Phase 5 integrations
         self.user_settings = UserSettings(self.storage)
@@ -112,7 +112,12 @@ class EuroScopeBot:
             fallback_key=config.llm.fallback_api_key,
         )
         self.vector_memory = VectorMemory()
-        self.agent = Agent(config.llm, router=self.router, vector_memory=self.vector_memory)
+        self.agent = Agent(
+            config.llm,
+            router=self.router,
+            vector_memory=self.vector_memory,
+            orchestrator=self.orchestrator,
+        )
         self.memory = Memory(self.storage)
         
         # Learning Module
@@ -120,6 +125,7 @@ class EuroScopeBot:
         self.adaptive_tuner = AdaptiveTuner(self.storage)
         
         self.forecaster = Forecaster(self.agent, self.memory, self.orchestrator, pattern_tracker=self.pattern_tracker)
+        self.agent.forecaster = self.forecaster
 
         self.orchestrator.set_alerts(self.alerts)
         market_data_skill = self.registry.get("market_data")
@@ -494,6 +500,19 @@ class EuroScopeBot:
             [InlineKeyboardButton("🔙 Menu", callback_data="menu:main")],
         ])
         await self._reply(update, safe_markdown(formatted), topic_key="reports", reply_markup=keyboard, parse_mode="Markdown")
+
+    async def cmd_smart_analysis(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Smart analysis using LLM tool calling."""
+        if not await self._check_rate_limit(update):
+            return
+
+        user_message = "What's your comprehensive analysis of EUR/USD right now?"
+        response = await self.agent.chat_with_tools(user_message)
+
+        await update.message.reply_text(
+            f"🧠 <b>Smart Analysis</b>\n\n{response}",
+            parse_mode="HTML"
+        )
 
     async def cmd_chart(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /chart command."""
@@ -1108,6 +1127,7 @@ class EuroScopeBot:
             "menu": self.cmd_menu,
             "price": self.cmd_price,
             "analysis": self.cmd_analysis,
+            "smart_analysis": self.cmd_smart_analysis,
             "chart": self.cmd_chart,
             "patterns": self.cmd_patterns,
             "levels": self.cmd_levels,
@@ -1151,6 +1171,7 @@ class EuroScopeBot:
             BotCommand("menu", "Show interactive menu"),
             BotCommand("price", "EUR/USD real-time price"),
             BotCommand("analysis", "Technical analysis (H1/H4)"),
+            BotCommand("smart_analysis", "Tool-based comprehensive analysis"),
             BotCommand("chart", "Generate candle chart"),
             BotCommand("signals", "Trading signals"),
             BotCommand("forecast", "AI-powered forecast"),
