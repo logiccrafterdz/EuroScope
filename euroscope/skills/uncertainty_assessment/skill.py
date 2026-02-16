@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import math
+import logging
 from typing import Optional
 
 from ..base import BaseSkill, SkillCategory, SkillContext, SkillResult
+
+logger = logging.getLogger("euroscope.skills.uncertainty_assessment")
 
 
 class UncertaintyAssessmentSkill(BaseSkill):
@@ -352,6 +355,9 @@ class UncertaintyAssessmentSkill(BaseSkill):
             confidence_adjustment = 0.0
 
         macro_confidence = UncertaintyAssessmentSkill._macro_confidence(macro_data)
+        if adx < 25:
+            logger.debug("Macro override BLOCKED: ADX < 25 (sideways market)")
+            return round(confidence_adjustment, 3)
         
         # Macro override ONLY allowed when market shows clear directional conviction
         macro_override_allowed = (

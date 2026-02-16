@@ -201,57 +201,75 @@ class LiquidityAwarenessSkill(BaseSkill):
                 time_in_zone = (last_time - prev.name).total_seconds()
 
             if last_high > level and last_close <= level:
-                wick_extends = last_high - level
-                wick_body_ratio = upper_wick / candle_body
-                reversal_close = (prev_high - last_close) / prior_range if prior_range > 0 else 0.0
+                wick_extension = last_high - level
+                wick_to_body_ratio = upper_wick / candle_body
+                reversal_close_pct = (prev_high - last_close) / prior_range if prior_range > 0 else 0.0
+                wick_extension_pipettes = wick_extension * 100000
                 sweep_conditions = [
-                    wick_extends > 0.0003,
-                    abs(wick_body_ratio) > 3.0,
-                    reversal_close > 0.7,
+                    wick_extension_pipettes > 18,
+                    wick_to_body_ratio > 3.0,
+                    reversal_close_pct > 0.70,
                     time_in_zone < 90,
                 ]
-                confirmed_sweeps = sum(1 for c in sweep_conditions if c)
-                if confirmed_sweeps >= 3:
+                confirmed = sum(1 for c in sweep_conditions if c)
+                if confirmed >= 3:
                     return {
                         "current_phase": "liquidity_sweep",
                         "next_likely_move": "down",
                         "confidence": 0.85,
-                        "reasoning": f"Confirmed sweep ({confirmed_sweeps}/4) above liquidity zone with strong rejection",
+                        "reasoning": f"Confirmed sweep ({confirmed}/4) above liquidity zone with strong rejection",
                     }
-                if confirmed_sweeps == 2:
+                if confirmed == 2:
                     return {
                         "current_phase": "possible_sweep",
                         "next_likely_move": "down",
                         "confidence": 0.55,
                         "reasoning": "Partial sweep conditions (2/4) above liquidity zone",
                     }
+                return self._fallback_to_structure_intent(df, zones, session_regime, last, prev, avg_volume, last_volume)
 
             if last_low < level and last_close >= level:
-                wick_extends = level - last_low
-                wick_body_ratio = lower_wick / candle_body
-                reversal_close = (last_close - prev_low) / prior_range if prior_range > 0 else 0.0
+                wick_extension = level - last_low
+                wick_to_body_ratio = lower_wick / candle_body
+                reversal_close_pct = (last_close - prev_low) / prior_range if prior_range > 0 else 0.0
+                wick_extension_pipettes = wick_extension * 100000
                 sweep_conditions = [
-                    wick_extends > 0.0003,
-                    abs(wick_body_ratio) > 3.0,
-                    reversal_close > 0.7,
+                    wick_extension_pipettes > 18,
+                    wick_to_body_ratio > 3.0,
+                    reversal_close_pct > 0.70,
                     time_in_zone < 90,
                 ]
-                confirmed_sweeps = sum(1 for c in sweep_conditions if c)
-                if confirmed_sweeps >= 3:
+                confirmed = sum(1 for c in sweep_conditions if c)
+                if confirmed >= 3:
                     return {
                         "current_phase": "liquidity_sweep",
                         "next_likely_move": "up",
                         "confidence": 0.85,
-                        "reasoning": f"Confirmed sweep ({confirmed_sweeps}/4) below liquidity zone with strong rejection",
+                        "reasoning": f"Confirmed sweep ({confirmed}/4) below liquidity zone with strong rejection",
                     }
-                if confirmed_sweeps == 2:
+                if confirmed == 2:
                     return {
                         "current_phase": "possible_sweep",
                         "next_likely_move": "up",
                         "confidence": 0.55,
                         "reasoning": "Partial sweep conditions (2/4) below liquidity zone",
                     }
+                return self._fallback_to_structure_intent(df, zones, session_regime, last, prev, avg_volume, last_volume)
 
+        return self._fallback_to_structure_intent(df, zones, session_regime, last, prev, avg_volume, last_volume)
+
+    def _fallback_to_structure_intent(
+        self,
+        df: pd.DataFrame,
+        zones: list[dict],
+        session_regime: str,
+        last,
+        prev,
+        avg_volume: float,
+        last_volume: float,
+    ) -> dict:
+        last_close = float(last["Close"])
+        prev_close = float(prev["Close"])
         recent = df.tail(15)
         range_pips = (recent["High"].max() - recent["Low"].min()) * 10000
         touches = 0

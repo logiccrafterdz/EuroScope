@@ -7,7 +7,7 @@ dynamic tool calling and skills chaining.
 
 import logging
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional
 
 from ..skills.base import SkillContext, SkillResult
@@ -135,9 +135,11 @@ class Orchestrator:
         if context.metadata.get("emergency_mode"):
             if self.alerts:
                 session = context.metadata.get("session_regime", "unknown")
-                suppression_duration = 480 if session == "overlap" else 300
+                suppression_minutes = 8 if session == "overlap" else 5
+                suppression_duration = suppression_minutes * 60
                 self.alerts.suppress(suppression_duration, base_time=now)
-                context.metadata["alerts_suppressed_until"] = now + suppression_duration
+                suppression_until = datetime.utcfromtimestamp(now) + timedelta(minutes=suppression_minutes)
+                context.metadata["alerts_suppressed_until"] = suppression_until.isoformat()
             if self.registry.get("crisis_analysis"):
                 await self.run_pipeline([("crisis_analysis", "full")], context)
             return context

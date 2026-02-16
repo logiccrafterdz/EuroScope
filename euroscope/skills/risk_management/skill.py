@@ -66,6 +66,9 @@ class RiskManagementSkill(BaseSkill):
             liquidity_zones = context.metadata.get("liquidity_zones", [])
             market_intent = context.metadata.get("market_intent", {})
             intent_confidence = market_intent.get("confidence", context.metadata.get("market_intent_confidence"))
+            macro_adjustment = context.metadata.get("confidence_adjustment")
+            if (intent_confidence is None or intent_confidence < 0.4) and macro_adjustment is not None and macro_adjustment >= 0.6:
+                intent_confidence = max(intent_confidence or 0.0, 0.6)
             adaptive_stop = self._calculate_adaptive_stop(
                 direction=direction,
                 entry_price=result.entry_price,

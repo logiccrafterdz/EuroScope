@@ -152,14 +152,21 @@ class DeviationMonitorSkill(BaseSkill):
             session = self._context.metadata.get("session_regime", session or "asian")
         else:
             session = session or "asian"
+        base_velocity = 0.15
         velocity_threshold = {
-            "asian": 0.0015,
-            "london": 0.0021,
-            "overlap": 0.0027,   # Critical for Lagarde speech (0.28% move)
-            "newyork": 0.0024,
-            "weekend": 0.0012,
-        }.get(session, 0.0015)
-        volume_trigger = self._volume_spike(df, thresholds["volume"])
+            "asian": base_velocity,
+            "london": base_velocity * 1.4,
+            "overlap": base_velocity * 1.8,
+            "newyork": base_velocity * 1.6,
+            "weekend": base_velocity * 0.8,
+        }.get(session, base_velocity)
+        volume_threshold = {
+            "overlap": 5.0,
+            "london": 4.5,
+            "newyork": 4.0,
+            "asian": 3.0,
+        }.get(session, 3.0)
+        volume_trigger = self._volume_spike(df, volume_threshold)
         volatility_trigger = self._volatility_spike(df, thresholds["volatility"])
         velocity_trigger = self._price_velocity(df, velocity_threshold)
         return [t for t in (volume_trigger, volatility_trigger, velocity_trigger) if t]
@@ -214,11 +221,13 @@ class DeviationMonitorSkill(BaseSkill):
         close = pd.to_numeric(df["Close"], errors="coerce")
         current = close.iloc[-1]
         past = close.iloc[-3]
-        if pd.isna(current) or pd.isna(past) or current == 0:
+        prev = close.iloc[-2]
+        if pd.isna(current) or pd.isna(past) or pd.isna(prev) or current == 0:
             return None
-        change = abs(current - past)
-        if change > current * threshold:
-            return {"type": "price_velocity", "magnitude": round(float(change / current), 4)}
+        change = max(abs(current - past), abs(current - prev))
+        change_pct = (change / current) * 100
+        if change_pct > threshold:
+            return {"type": "price_velocity", "magnitude": round(float(change_pct), 4)}
         return None
 
     async def _emit_event(self, result: dict):

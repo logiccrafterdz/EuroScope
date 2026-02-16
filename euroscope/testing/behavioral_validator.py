@@ -460,13 +460,13 @@ class BehavioralValidator:
             [s["metadata"].get("confidence_adjustment", 0.0) for s in snapshots] or [0.0]
         )
         position_size_multiplier = None
-        for s in snapshots:
-            risk = s.get("risk", {})
-            if risk:
-                adjusted_pct = s["metadata"].get("risk_assessment", {}).get("adjusted_position_size_pct")
-                if adjusted_pct is not None:
-                    position_size_multiplier = adjusted_pct
-                    break
+        adjusted_values = [
+            s.get("metadata", {}).get("risk_assessment", {}).get("adjusted_position_size_pct")
+            for s in snapshots
+        ]
+        adjusted_values = [v for v in adjusted_values if isinstance(v, (int, float))]
+        if adjusted_values:
+            position_size_multiplier = max(adjusted_values)
 
         return {
             "signal_rejection_rate": rejection_rate,
@@ -682,7 +682,7 @@ class BehavioralValidator:
         
         if "lagarde" in cache_key:
             # Simulate a sharp 45-pip shock at 12:45
-            event_time = start.replace(hour=12, minute=45)
+            event_time = end.replace(hour=12, minute=45)
             if event_time in close.index:
                 close.loc[event_time] += 0.0050 # 50 pips spike
                 # Keep it elevated
@@ -691,7 +691,7 @@ class BehavioralValidator:
             
         if "sweep" in cache_key:
             # 1. Establish a high at 07:15
-            pre_high_time = start.replace(hour=7, minute=15)
+            pre_high_time = end.replace(hour=7, minute=15)
             if pre_high_time in close.index:
                 close.loc[pre_high_time] += 0.0030
             
@@ -701,7 +701,7 @@ class BehavioralValidator:
         
         if "sweep" in cache_key:
             # 2. Sweep the 07:15 high at 08:30 (Sharp 10-pip wick)
-            sweep_time = start.replace(hour=8, minute=30)
+            sweep_time = end.replace(hour=8, minute=30)
             if sweep_time in close.index:
                 # Create a 10-pip wick extension above the 07:15 high
                 high.loc[sweep_time] = close.loc[sweep_time] + 0.0045
