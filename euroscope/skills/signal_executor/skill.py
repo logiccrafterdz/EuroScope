@@ -159,7 +159,32 @@ class SignalExecutorSkill(BaseSkill):
         return SkillResult(success=False, error=f"Trade {trade_id} not found")
 
     async def _list_trades(self) -> SkillResult:
-        return SkillResult(success=True, data=[t.__dict__ for t in self._open])
+        trades = [t.__dict__ for t in self._open]
+        formatted = self._format_trades(trades, "📋 *Open Trades*")
+        return SkillResult(success=True, data=trades, metadata={"formatted": formatted})
 
     async def _trade_history(self) -> SkillResult:
-        return SkillResult(success=True, data=[t.__dict__ for t in self._closed])
+        trades = [t.__dict__ for t in self._closed]
+        formatted = self._format_trades(trades, "📘 *Trade History*")
+        return SkillResult(success=True, data=trades, metadata={"formatted": formatted})
+
+    def _format_trades(self, trades: list[dict], title: str) -> str:
+        if not trades:
+            return "📋 No open trades."
+        lines = [f"{title} ({len(trades)})\n"]
+        for t in trades:
+            direction = str(t.get("direction", "")).upper()
+            icon = "📈" if direction == "BUY" else "📉"
+            trade_id = t.get("trade_id", "")
+            entry = self._format_price(t.get("entry_price"))
+            stop = self._format_price(t.get("stop_loss"))
+            target = self._format_price(t.get("take_profit"))
+            lines.append(f"{icon} {trade_id} {direction} @ `{entry}` SL=`{stop}` TP=`{target}`")
+        return "\n".join(lines)
+
+    @staticmethod
+    def _format_price(value) -> str:
+        try:
+            return f"{float(value):.5f}"
+        except (TypeError, ValueError):
+            return str(value)

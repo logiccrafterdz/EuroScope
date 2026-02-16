@@ -58,7 +58,7 @@ class PerformanceAnalyticsSkill(BaseSkill):
             return SkillResult(success=False, error="Performance analytics engine not initialized")
         try:
             snap = self._analytics.calculate(period=params.get("period", "all"))
-            formatted = self._analytics.format_performance_report(snap)
+            formatted = self._analytics.format_full_report(snap)
             return SkillResult(success=True, data=snap.__dict__, metadata={"formatted": formatted})
         except Exception as e:
             return SkillResult(success=False, error=str(e))
@@ -83,7 +83,7 @@ class PerformanceAnalyticsSkill(BaseSkill):
         trades = params.get("trades", [])
         try:
             snap = self._analytics.compute_from_trades(trades)
-            text = self._analytics.format_performance_report(snap)
+            text = self._analytics.format_full_report(snap)
             return SkillResult(success=True, data=text)
         except Exception as e:
             return SkillResult(success=False, error=str(e))

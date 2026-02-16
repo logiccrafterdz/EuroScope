@@ -429,7 +429,24 @@ class EuroScopeBot:
         chat_id = update.effective_chat.id
         tf = context.args[0].upper() if context.args else self._preferred_timeframe(chat_id)
         await self._reply(update, f"⏳ Running {tf} technical analysis...", topic_key="reports")
-        result = await self.orchestrator.run_skill("technical_analysis", "analyze", timeframe=tf)
+        ctx = SkillContext()
+        data_result = await self.orchestrator.run_skill(
+            "market_data",
+            "get_candles",
+            context=ctx,
+            timeframe=tf,
+            count=200,
+        )
+        if not data_result.success:
+            await self._reply(update, f"❌ {data_result.error}", topic_key="reports")
+            return
+
+        result = await self.orchestrator.run_skill(
+            "technical_analysis",
+            "analyze",
+            context=ctx,
+            timeframe=tf,
+        )
         if not result.success:
             await self._reply(update, f"❌ {result.error}", topic_key="reports")
             return
@@ -496,7 +513,25 @@ class EuroScopeBot:
 
         chat_id = update.effective_chat.id
         await self._reply(update, "⏳ Calculating key levels...", topic_key="reports")
-        result = await self.orchestrator.run_skill("technical_analysis", "find_levels")
+        tf = context.args[0].upper() if context.args else self._preferred_timeframe(chat_id)
+        ctx = SkillContext()
+        data_result = await self.orchestrator.run_skill(
+            "market_data",
+            "get_candles",
+            context=ctx,
+            timeframe=tf,
+            count=200,
+        )
+        if not data_result.success:
+            await self._reply(update, f"❌ {data_result.error}", topic_key="reports")
+            return
+
+        result = await self.orchestrator.run_skill(
+            "technical_analysis",
+            "find_levels",
+            context=ctx,
+            timeframe=tf,
+        )
         if not result.success:
             await self._reply(update, f"❌ {result.error}", topic_key="reports")
             return

@@ -112,6 +112,21 @@ class EconomicCalendar:
         """Get all tracked economic events."""
         return self.events
 
+    def get_upcoming_events(self) -> list[dict]:
+        return [
+            {
+                "time": "TBD",
+                "currency": e.currency,
+                "impact": e.impact.capitalize(),
+                "event": e.name,
+                "actual": "",
+                "forecast": "",
+                "description": e.description,
+                "typical_effect": e.typical_effect,
+            }
+            for e in self.events
+        ]
+
     def get_high_impact_events(self) -> list[EconomicEvent]:
         """Get only high-impact events."""
         return [e for e in self.events if e.impact == "high"]
