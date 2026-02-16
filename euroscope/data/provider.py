@@ -5,6 +5,7 @@ Fetches real-time and historical OHLCV data for EUR/USD
 using yfinance with local caching.
 """
 
+import asyncio
 import logging
 from datetime import datetime, timedelta
 from typing import Optional
@@ -130,9 +131,38 @@ class PriceProvider:
             logger.error(f"Error fetching {tf} candles: {e}")
             return None
 
-    def get_multi_timeframe(self) -> dict[str, Optional[pd.DataFrame]]:
-        """Get candles for all timeframes at once."""
-        return {tf: self.get_candles(tf) for tf in TIMEFRAMES}
+    async def get_multi_timeframe(self) -> dict[str, Optional[pd.DataFrame]]:
+        tasks: dict[str, object] = {}
+        for tf in TIMEFRAMES:
+            try:
+                tasks[tf] = self.get_candles(tf)
+            except Exception as e:
+                logger.warning(f"Failed to create task for {tf}: {e}")
+                tasks[tf] = None
+
+        valid_tasks = {k: v for k, v in tasks.items() if v is not None}
+        if not valid_tasks:
+            logger.error("No valid timeframe tasks created")
+            return {}
+
+        try:
+            results = await asyncio.wait_for(
+                asyncio.gather(*valid_tasks.values(), return_exceptions=True),
+                timeout=30.0,
+            )
+        except asyncio.TimeoutError:
+            logger.error("Multi-timeframe fetch timed out after 30s")
+            return {}
+
+        output: dict[str, Optional[pd.DataFrame]] = {}
+        for tf, result in zip(valid_tasks.keys(), results):
+            if isinstance(result, Exception):
+                logger.warning(f"Failed to fetch {tf}: {result}")
+                output[tf] = None
+            else:
+                output[tf] = result
+
+        return output
 
     def clear_cache(self):
         """Clear the price data cache."""

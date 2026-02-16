@@ -5,6 +5,7 @@ Aggregates price data from multiple sources with automatic failover.
 Primary: yfinance | Fallback: Alpha Vantage
 """
 
+import asyncio
 import logging
 from typing import Optional
 
@@ -100,10 +101,39 @@ class MultiSourceProvider:
 
         return None
 
-    def get_multi_timeframe(self) -> dict[str, Optional[pd.DataFrame]]:
-        """Get candles for all standard timeframes."""
+    async def get_multi_timeframe(self) -> dict[str, Optional[pd.DataFrame]]:
         timeframes = ["M15", "H1", "H4", "D1", "W1"]
-        return {tf: self.get_candles(tf) for tf in timeframes}
+        tasks: dict[str, object] = {}
+        for tf in timeframes:
+            try:
+                tasks[tf] = self.get_candles(tf)
+            except Exception as e:
+                logger.warning(f"Failed to create task for {tf}: {e}")
+                tasks[tf] = None
+
+        valid_tasks = {k: v for k, v in tasks.items() if v is not None}
+        if not valid_tasks:
+            logger.error("No valid timeframe tasks created")
+            return {}
+
+        try:
+            results = await asyncio.wait_for(
+                asyncio.gather(*valid_tasks.values(), return_exceptions=True),
+                timeout=30.0,
+            )
+        except asyncio.TimeoutError:
+            logger.error("Multi-timeframe fetch timed out after 30s")
+            return {}
+
+        output: dict[str, Optional[pd.DataFrame]] = {}
+        for tf, result in zip(valid_tasks.keys(), results):
+            if isinstance(result, Exception):
+                logger.warning(f"Failed to fetch {tf}: {result}")
+                output[tf] = None
+            else:
+                output[tf] = result
+
+        return output
 
     @staticmethod
     def _validate_data(df: pd.DataFrame) -> Optional[pd.DataFrame]:

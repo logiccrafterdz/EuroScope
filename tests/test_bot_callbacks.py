@@ -27,7 +27,17 @@ class TestMainMenu:
         config.telegram.token = "fake"
         config.telegram.allowed_users = []
         config.data.brave_api_key = ""
+        config.data.alphavantage_key = ""
+        config.data.tiingo_key = ""
+        config.data.fred_api_key = ""
         config.llm = MagicMock()
+        config.llm.api_key = ""
+        config.llm.api_base = ""
+        config.llm.model = ""
+        config.llm.fallback_api_key = ""
+        config.rate_limit_requests = 5
+        config.rate_limit_window_minutes = 1
+        config.admin_chat_ids = []
 
         with patch("euroscope.bot.telegram_bot.PriceProvider"), \
              patch("euroscope.bot.telegram_bot.NewsEngine"), \
@@ -58,6 +68,16 @@ class TestMainMenu:
         config.telegram.allowed_users = []
         config.data.brave_api_key = ""
         config.llm = MagicMock()
+        config.data.alphavantage_key = ""
+        config.data.tiingo_key = ""
+        config.data.fred_api_key = ""
+        config.llm.api_key = ""
+        config.llm.api_base = ""
+        config.llm.model = ""
+        config.llm.fallback_api_key = ""
+        config.rate_limit_requests = 5
+        config.rate_limit_window_minutes = 1
+        config.admin_chat_ids = []
 
         with patch("euroscope.bot.telegram_bot.PriceProvider"), \
              patch("euroscope.bot.telegram_bot.NewsEngine"), \
@@ -86,6 +106,16 @@ class TestMainMenu:
         config.telegram.allowed_users = []
         config.data.brave_api_key = ""
         config.llm = MagicMock()
+        config.data.alphavantage_key = ""
+        config.data.tiingo_key = ""
+        config.data.fred_api_key = ""
+        config.llm.api_key = ""
+        config.llm.api_base = ""
+        config.llm.model = ""
+        config.llm.fallback_api_key = ""
+        config.rate_limit_requests = 5
+        config.rate_limit_window_minutes = 1
+        config.admin_chat_ids = []
 
         with patch("euroscope.bot.telegram_bot.PriceProvider"), \
              patch("euroscope.bot.telegram_bot.NewsEngine"), \
@@ -119,6 +149,16 @@ class TestMainMenu:
         config.telegram.allowed_users = []
         config.data.brave_api_key = ""
         config.llm = MagicMock()
+        config.data.alphavantage_key = ""
+        config.data.tiingo_key = ""
+        config.data.fred_api_key = ""
+        config.llm.api_key = ""
+        config.llm.api_base = ""
+        config.llm.model = ""
+        config.llm.fallback_api_key = ""
+        config.rate_limit_requests = 5
+        config.rate_limit_window_minutes = 1
+        config.admin_chat_ids = []
 
         with patch("euroscope.bot.telegram_bot.PriceProvider"), \
              patch("euroscope.bot.telegram_bot.NewsEngine"), \

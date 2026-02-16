@@ -48,6 +48,9 @@ class Config:
     data: DataConfig = field(default_factory=DataConfig)
     log_level: str = "INFO"
     data_dir: str = "data"
+    rate_limit_requests: int = 5
+    rate_limit_window_minutes: int = 1
+    admin_chat_ids: list[str] = field(default_factory=list)
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -57,6 +60,8 @@ class Config:
         allowed_users = []
         if allowed_raw:
             allowed_users = [int(uid.strip()) for uid in allowed_raw.split(",") if uid.strip()]
+        admin_raw = os.getenv("EUROSCOPE_ADMIN_CHAT_IDS", "")
+        admin_chat_ids = [cid.strip() for cid in admin_raw.split(",") if cid.strip()]
         primary_key = os.getenv("EUROSCOPE_LLM_API_KEY", "")
         fallback_key = os.getenv("EUROSCOPE_LLM_FALLBACK_API_KEY", primary_key)
 
@@ -81,6 +86,9 @@ class Config:
                 fred_api_key=os.getenv("EUROSCOPE_FRED_API_KEY", ""),
             ),
             log_level=os.getenv("EUROSCOPE_LOG_LEVEL", "INFO"),
+            rate_limit_requests=int(os.getenv("EUROSCOPE_RATE_LIMIT_REQUESTS", "5")),
+            rate_limit_window_minutes=int(os.getenv("EUROSCOPE_RATE_LIMIT_WINDOW_MINUTES", "1")),
+            admin_chat_ids=admin_chat_ids,
         )
 
     def validate(self) -> list[str]:

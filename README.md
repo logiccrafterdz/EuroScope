@@ -57,10 +57,13 @@ Edit `.env` with your API keys:
 - `EUROSCOPE_LLM_FALLBACK_API_KEY` — Backup LLM API key for true failover redundancy (optional)
   Recommended: Use different provider (primary=DeepSeek, fallback=OpenAI)
 - `EUROSCOPE_TELEGRAM_TOKEN` — From [@BotFather](https://t.me/BotFather)
+- `EUROSCOPE_ADMIN_CHAT_IDS` — Admins bypass limits (comma-separated chat IDs)
 - `EUROSCOPE_BRAVE_API_KEY` — News sentiment (optional)
 - `EUROSCOPE_ALPHAVANTAGE_KEY` — AlphaVantage data (optional)
 - `EUROSCOPE_FRED_API_KEY` — FRED macro data (optional)
 - `EUROSCOPE_TIINGO_KEY` — Tiingo API (Recommended for Behavioral Validation)
+- `EUROSCOPE_RATE_LIMIT_REQUESTS` — Max commands per window (default: 5)
+- `EUROSCOPE_RATE_LIMIT_WINDOW_MINUTES` — Rate limit window minutes (default: 1)
 
 ### 3. Run
 ```bash

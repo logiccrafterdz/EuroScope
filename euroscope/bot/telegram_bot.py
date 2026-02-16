@@ -43,6 +43,7 @@ from ..trading.strategy_engine import StrategyEngine
 from ..trading.signal_executor import SignalExecutor
 from ..utils.charts import generate_chart
 from ..utils.formatting import truncate, safe_markdown
+from .rate_limiter import RateLimiter
 from .user_settings import UserSettings
 from .notification_manager import NotificationManager
 
@@ -85,6 +86,10 @@ class EuroScopeBot:
         self.user_settings = UserSettings(self.storage)
         self.notifications = NotificationManager(self.storage)
         self.notifications.set_orchestrator(self.orchestrator)
+        self.rate_limiter = RateLimiter(
+            max_requests=config.rate_limit_requests,
+            window_minutes=config.rate_limit_window_minutes,
+        )
         
         # Setup alert handler to send to Telegram
         self.alerts.register_handler(AlertChannel.TELEGRAM, self._on_alert_triggered)
@@ -171,7 +176,33 @@ class EuroScopeBot:
         if not self._is_authorized(update.effective_user.id):
             await update.message.reply_text("🔒 Unauthorized. Contact the bot admin.")
             return False
+        if not await self._check_rate_limit(update):
+            return False
         return True
+
+    async def _check_rate_limit(self, update: Update) -> bool:
+        chat = update.effective_chat
+        if not chat:
+            return True
+        chat_id = chat.id
+        if str(chat_id) in self.config.admin_chat_ids:
+            return True
+        try:
+            allowed, remaining = await self.rate_limiter.is_allowed(chat_id)
+            if not allowed:
+                message = (
+                    "⚠️ <b>Rate limit exceeded</b>\n"
+                    f"Please wait {self.config.rate_limit_window_minutes} minute(s) before sending another command.\n"
+                    f"Limit: {self.config.rate_limit_requests} commands per minute."
+                )
+                if update.effective_message:
+                    await update.effective_message.reply_text(message, parse_mode="HTML")
+                logger.warning(f"Blocked {chat_id} for rate limit violation")
+                return False
+            return True
+        except Exception:
+            logger.error("Rate limiter failed — allowing request for availability")
+            return True
 
     # ─── Main Menu ───────────────────────────────────────────
 
@@ -1008,6 +1039,8 @@ class EuroScopeBot:
     async def _bot_send_and_handle(self, bot, chat_id: int, cmd_name: str,
                                    handler, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Execute a command handler triggered by a callback button."""
+        if not await self._check_rate_limit(update):
+            return
         # Map command to topic
         topic_map = {
             "report": "reports",
