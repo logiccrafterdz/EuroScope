@@ -37,6 +37,30 @@ EuroScope is a skills-based multi-agent system that provides institutional-grade
 | `/health` | System health & runtime stats |
 | `/settings` | Personal alert preferences |
 
+## 🤖 Smart Analysis Commands
+
+### /comprehensive_analysis [query]
+Full ReAct loop analysis with multi-step reasoning. Shows:
+- Confidence score
+- Reasoning process
+- Tools used
+- Final actionable recommendation
+
+**Example:** `/comprehensive_analysis Should I trade EUR/USD now?`
+
+### /quick_analysis
+Faster analysis using simplified 2-step reasoning loop. Good for quick checks.
+
+**Example:** `/quick_analysis`
+
+### How It Works
+The bot uses a **ReAct (Reason-Act-Observe)** framework:
+1. **Reasons** about what information is needed
+2. **Acts** by calling relevant tools (price, technicals, news, etc.)
+3. **Observes** the results
+4. **Repeats** until enough information is gathered
+5. **Answers** with comprehensive, actionable analysis
+
 ## Quick Start
 
 ### 1. Clone & Install
@@ -64,6 +88,7 @@ Edit `.env` with your API keys:
 - `EUROSCOPE_TIINGO_KEY` — Tiingo API (Recommended for Behavioral Validation)
 - `EUROSCOPE_RATE_LIMIT_REQUESTS` — Max commands per window (default: 5)
 - `EUROSCOPE_RATE_LIMIT_WINDOW_MINUTES` — Rate limit window minutes (default: 1)
+- `EUROSCOPE_VECTOR_MEMORY_TTL_DAYS` — Vector Memory retention in days (default: 30)
 
 ### 3. Run
 ```bash
@@ -124,6 +149,21 @@ This validates the bot's logic against:
 3.  **Liquidity Sweep** (Detecting stop hunts)
 4.  **Session Transition** (Handling market open volatility)
 5.  **Macro Override** (Fundamental data impact)
+
+## Vector Memory Maintenance
+EuroScope cleans up old vector memory documents to keep semantic search fast.
+
+Retention window:
+```env
+EUROSCOPE_VECTOR_MEMORY_TTL_DAYS=60
+```
+
+Manual cleanup:
+```python
+from euroscope.brain.vector_memory import VectorMemory
+memory = VectorMemory()
+await memory.cleanup_old_documents(ttl_days=30)
+```
 
 ## Tech Stack
 - **Python 3.12+**

@@ -112,6 +112,7 @@ class LLMRouter:
         functions: list[dict] = None,
         function_call: str = "auto",
         temperature: float = None,
+        max_tokens: int = None,
     ) -> dict:
         if not self.providers:
             return {"content": "⚠️ No LLM providers configured. Set API keys in .env", "function_calls": []}
@@ -127,6 +128,7 @@ class LLMRouter:
             functions=functions,
             function_call=function_call,
             temperature=temperature,
+            max_tokens=max_tokens,
         )
 
         message = response.get("choices", [{}])[0].get("message", {}) if isinstance(response, dict) else {}
@@ -261,6 +263,7 @@ class LLMRouter:
         functions: list[dict],
         function_call: str,
         temperature: float = None,
+        max_tokens: int = None,
     ) -> dict:
         if (
             not self._warned_identical_keys
@@ -282,6 +285,7 @@ class LLMRouter:
                         functions=functions,
                         function_call=function_call,
                         temperature=temperature,
+                        max_tokens=max_tokens,
                     )
                     self._last_provider = provider.name
                     return result
@@ -328,12 +332,13 @@ class LLMRouter:
         functions: list[dict],
         function_call: str,
         temperature: float = None,
+        max_tokens: int = None,
     ) -> dict:
         temp = temperature if temperature is not None else provider.temperature
         payload = {
             "model": provider.model,
             "messages": messages,
-            "max_tokens": provider.max_tokens,
+            "max_tokens": max_tokens if max_tokens is not None else provider.max_tokens,
             "temperature": temp,
         }
         if functions:

@@ -72,6 +72,7 @@ async def test_rate_limit_blocks_non_admin():
     config.rate_limit_requests = 2
     config.rate_limit_window_minutes = 1
     config.admin_chat_ids = []
+    config.vector_memory_ttl_days = 30
 
     update = MagicMock()
     update.effective_chat.id = 123
@@ -115,6 +116,7 @@ async def test_admin_bypass():
     config.rate_limit_requests = 1
     config.rate_limit_window_minutes = 1
     config.admin_chat_ids = ["123"]
+    config.vector_memory_ttl_days = 30
 
     update = MagicMock()
     update.effective_chat.id = 123

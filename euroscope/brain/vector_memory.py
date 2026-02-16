@@ -7,7 +7,7 @@ for semantic search and context retrieval.
 
 import logging
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional
 
 logger = logging.getLogger("euroscope.brain.vector_memory")
@@ -88,6 +88,7 @@ class VectorMemory:
         doc_id = f"analysis_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"
         meta = metadata or {}
         meta["stored_at"] = datetime.utcnow().isoformat()
+        meta.setdefault("timestamp", datetime.utcnow().isoformat())
         meta["type"] = "analysis"
 
         # ChromaDB metadata values must be str, int, float, or bool
@@ -154,6 +155,7 @@ class VectorMemory:
         doc_id = f"insight_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"
         meta = {
             "stored_at": datetime.utcnow().isoformat(),
+            "timestamp": datetime.utcnow().isoformat(),
             "type": "insight",
             "tags": ",".join(tags) if tags else "",
         }
@@ -179,6 +181,7 @@ class VectorMemory:
         meta = metadata or {}
         meta.update({
             "stored_at": datetime.utcnow().isoformat(),
+            "timestamp": datetime.utcnow().isoformat(),
             "type": "market_event",
             "impact": impact,
         })
@@ -237,3 +240,42 @@ class VectorMemory:
             except Exception:
                 stats[name] = 0
         return stats
+
+    async def cleanup_old_documents(self, ttl_days: int = 30) -> int:
+        if not self._available:
+            return 0
+
+        cutoff_date = datetime.utcnow() - timedelta(days=ttl_days)
+        cutoff_iso = cutoff_date.isoformat()
+        total_deleted = 0
+
+        for name, coll in self._collections.items():
+            try:
+                before_count = coll.count()
+                results = coll.get(
+                    where={
+                        "$and": [
+                            {"timestamp": {"$lt": cutoff_iso}},
+                            {"timestamp": {"$ne": None}},
+                        ]
+                    },
+                    include=["metadatas"],
+                )
+                ids = results.get("ids", []) or []
+                if ids:
+                    batch_size = 100
+                    for i in range(0, len(ids), batch_size):
+                        batch_ids = ids[i:i + batch_size]
+                        coll.delete(ids=batch_ids)
+                        total_deleted += len(batch_ids)
+
+                after_count = coll.count()
+                if before_count != after_count:
+                    logger.info(f"VectorMemory cleanup {name}: {before_count} -> {after_count}")
+            except Exception as e:
+                logger.error(f"VectorMemory cleanup failed for {name}: {e}")
+
+        if total_deleted > 1000:
+            logger.warning(f"Large cleanup detected ({total_deleted} docs)")
+
+        return total_deleted

@@ -190,5 +190,6 @@ class TestMainMenu:
             "patterns", "levels", "signals", "news", "calendar",
             "forecast", "report", "accuracy", "strategy", "risk",
             "trades", "performance", "settings", "ask", "smart_analysis",
+            "comprehensive_analysis", "quick_analysis",
         }
         assert expected.issubset(registered_commands)

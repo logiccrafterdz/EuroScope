@@ -51,6 +51,7 @@ class Config:
     rate_limit_requests: int = 5
     rate_limit_window_minutes: int = 1
     admin_chat_ids: list[str] = field(default_factory=list)
+    vector_memory_ttl_days: int = 30
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -89,6 +90,7 @@ class Config:
             rate_limit_requests=int(os.getenv("EUROSCOPE_RATE_LIMIT_REQUESTS", "5")),
             rate_limit_window_minutes=int(os.getenv("EUROSCOPE_RATE_LIMIT_WINDOW_MINUTES", "1")),
             admin_chat_ids=admin_chat_ids,
+            vector_memory_ttl_days=int(os.getenv("EUROSCOPE_VECTOR_MEMORY_TTL_DAYS", "30")),
         )
 
     def validate(self) -> list[str]:

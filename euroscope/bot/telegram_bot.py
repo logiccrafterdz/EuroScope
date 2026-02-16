@@ -398,6 +398,8 @@ class EuroScopeBot:
             "📋 *Available Commands:*\n\n"
             "├ /price — Current price & daily stats\n"
             "├ /analysis [tf] — Technical analysis\n"
+            "├ /comprehensive_analysis [query] — Full ReAct analysis\n"
+            "├ /quick_analysis — Fast ReAct summary\n"
             "├ /chart [tf] — Candlestick chart\n"
             "├ /patterns — Chart patterns\n"
             "├ /levels — Support/resistance & Fibonacci\n"
@@ -511,6 +513,73 @@ class EuroScopeBot:
 
         await update.message.reply_text(
             f"🧠 <b>Smart Analysis</b>\n\n{response}",
+            parse_mode="HTML"
+        )
+
+    async def cmd_comprehensive_analysis(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Full ReAct loop analysis with reasoning steps displayed."""
+        if not await self._check_rate_limit(update):
+            return
+
+        user_query = " ".join(context.args) if context.args else "What's your comprehensive analysis of EUR/USD right now?"
+        thinking_msg = await update.message.reply_text("🧠 Thinking...")
+
+        try:
+            result = await self.agent.chat_with_react_loop(user_query)
+
+            response_parts = []
+            confidence = result.get("confidence", 0.0)
+            if confidence >= 0.7:
+                confidence_emoji = "🟢"
+            elif confidence >= 0.5:
+                confidence_emoji = "🟡"
+            else:
+                confidence_emoji = "🔴"
+            response_parts.append(f"{confidence_emoji} <b>Confidence: {confidence * 100:.0f}%</b>")
+            response_parts.append("")
+
+            reasoning_steps = result.get("reasoning_steps") or []
+            if reasoning_steps:
+                response_parts.append("<b>🔍 Reasoning Process:</b>")
+                for i, step in enumerate(reasoning_steps[:3], 1):
+                    trimmed = step[:120]
+                    response_parts.append(f"  {i}. {trimmed}{'...' if len(step) > 120 else ''}")
+                if len(reasoning_steps) > 3:
+                    response_parts.append(f"  ... (+{len(reasoning_steps) - 3} more steps)")
+                response_parts.append("")
+
+            tools_used = result.get("tools_used") or []
+            if tools_used:
+                response_parts.append(f"<b>🛠️ Tools Used:</b> {', '.join(sorted(set(tools_used)))}")
+                response_parts.append("")
+
+            response_parts.append("<b>💡 Analysis:</b>")
+            response_parts.append(result.get("final_answer", ""))
+
+            warning = result.get("warning")
+            if warning:
+                response_parts.append("")
+                response_parts.append(f"⚠️ <i>{warning}</i>")
+
+            await thinking_msg.edit_text(
+                "\n".join(response_parts),
+                parse_mode="HTML"
+            )
+        except Exception as e:
+            await thinking_msg.edit_text(f"❌ Analysis failed: {str(e)}")
+
+    async def cmd_quick_analysis(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Quick analysis using simplified ReAct loop."""
+        if not await self._check_rate_limit(update):
+            return
+
+        result = await self.agent.chat_with_react_loop(
+            "Quick analysis of EUR/USD current state",
+            max_iterations=2,
+        )
+
+        await update.message.reply_text(
+            f"⚡ <b>Quick Analysis</b>\n\n{result.get('final_answer', '')}",
             parse_mode="HTML"
         )
 
@@ -1127,6 +1196,8 @@ class EuroScopeBot:
             "menu": self.cmd_menu,
             "price": self.cmd_price,
             "analysis": self.cmd_analysis,
+            "comprehensive_analysis": self.cmd_comprehensive_analysis,
+            "quick_analysis": self.cmd_quick_analysis,
             "smart_analysis": self.cmd_smart_analysis,
             "chart": self.cmd_chart,
             "patterns": self.cmd_patterns,
@@ -1171,6 +1242,8 @@ class EuroScopeBot:
             BotCommand("menu", "Show interactive menu"),
             BotCommand("price", "EUR/USD real-time price"),
             BotCommand("analysis", "Technical analysis (H1/H4)"),
+            BotCommand("comprehensive_analysis", "Full ReAct analysis with reasoning"),
+            BotCommand("quick_analysis", "Fast ReAct summary"),
             BotCommand("smart_analysis", "Tool-based comprehensive analysis"),
             BotCommand("chart", "Generate candle chart"),
             BotCommand("signals", "Trading signals"),

@@ -8,7 +8,8 @@ forecasting, and Q&A.
 import asyncio
 import json
 import logging
-from typing import Optional
+import time
+from typing import Optional, Any
 
 import httpx
 
@@ -34,6 +35,7 @@ class Agent:
         self.conversation_history: list[dict] = []
         self.max_history = 20
         self.tool_timeout = 10
+        self._tool_cache: dict[str, dict[str, Any]] = {}
 
     async def chat(self, user_message: str, system_override: str = None) -> str:
         """Send a message to the LLM and get a response."""
@@ -158,6 +160,148 @@ class Agent:
         summary = self._summarize_tool_results(tool_results)
         return summary if summary else await self.chat(user_message, system_override=system)
 
+    async def chat_with_react_loop(
+        self,
+        user_message: str,
+        max_iterations: int = 5,
+        max_tokens_per_iteration: int = 500,
+    ) -> dict[str, Any]:
+        if not self.router or not hasattr(self.router, "chat_with_functions"):
+            final_answer = await self.chat(user_message, system_override=self._get_system_prompt_with_tools())
+            return {
+                "final_answer": final_answer,
+                "reasoning_steps": [],
+                "tools_used": [],
+                "iterations": 0,
+                "confidence": self._calculate_confidence(final_answer, []),
+            }
+        system = self._get_react_system_prompt()
+        if self.vector_memory:
+            context = self.vector_memory.get_relevant_context(user_message)
+            if context:
+                system += f"\n\n### LONG-TERM MEMORY (PAST CONTEXT)\n{context}"
+
+        messages = [
+            {"role": "system", "content": system},
+            {"role": "user", "content": user_message},
+        ]
+
+        reasoning_steps: list[str] = []
+        tools_used: list[str] = []
+        iteration = 0
+        start_time = time.time()
+        max_total_time = 60
+
+        while iteration < max_iterations:
+            if time.time() - start_time > max_total_time:
+                final_answer = await self._force_final_answer(messages)
+                confidence = self._calculate_confidence(final_answer, tools_used, incomplete=True)
+                return {
+                    "final_answer": final_answer,
+                    "reasoning_steps": reasoning_steps,
+                    "tools_used": tools_used,
+                    "iterations": iteration,
+                    "confidence": confidence,
+                    "warning": "Reached max time — answer may be incomplete",
+                }
+
+            iteration += 1
+            try:
+                response = await asyncio.wait_for(
+                    self.router.chat_with_functions(
+                        messages=messages,
+                        functions=None,
+                        function_call="auto",
+                        max_tokens=max_tokens_per_iteration,
+                    ),
+                    timeout=15,
+                )
+            except Exception as e:
+                final_answer = await self._force_final_answer(messages)
+                confidence = self._calculate_confidence(final_answer, tools_used, incomplete=True)
+                return {
+                    "final_answer": final_answer,
+                    "reasoning_steps": reasoning_steps,
+                    "tools_used": tools_used,
+                    "iterations": iteration,
+                    "confidence": confidence,
+                    "warning": f"Iteration timeout or error: {str(e)[:100]}",
+                }
+
+            content = response.get("content")
+            function_calls = response.get("function_calls") or []
+
+            if content:
+                reasoning = self._extract_reasoning(content)
+                if reasoning:
+                    reasoning_steps.append(f"Iteration {iteration}: {reasoning}")
+
+            if content and not function_calls:
+                confidence = self._calculate_confidence(content, tools_used)
+                return {
+                    "final_answer": content,
+                    "reasoning_steps": reasoning_steps,
+                    "tools_used": tools_used,
+                    "iterations": iteration,
+                    "confidence": confidence,
+                }
+
+            if not function_calls:
+                final_answer = await self._force_final_answer(messages)
+                confidence = self._calculate_confidence(final_answer, tools_used, incomplete=True)
+                return {
+                    "final_answer": final_answer,
+                    "reasoning_steps": reasoning_steps,
+                    "tools_used": tools_used,
+                    "iterations": iteration,
+                    "confidence": confidence,
+                    "warning": "No tools selected — answer may be incomplete",
+                }
+
+            tool_results = []
+            for call in function_calls:
+                name = call.get("name")
+                args = call.get("arguments") or {}
+                cached = self._get_cached_tool_result(name, args)
+                if cached is not None:
+                    result = cached
+                else:
+                    try:
+                        result = await asyncio.wait_for(
+                            self._execute_tool(name, args),
+                            timeout=self.tool_timeout,
+                        )
+                    except Exception as e:
+                        result = {"success": False, "error": str(e)}
+                    self._set_tool_cache(name, args, result)
+
+                tools_used.append(name)
+                observation = self._format_tool_observation(name, result)
+                tool_results.append(observation)
+                messages.append({
+                    "role": "function",
+                    "name": name,
+                    "content": observation,
+                })
+
+            if tool_results:
+                observation_summary = self._summarize_observations(tool_results)
+                messages.append({
+                    "role": "user",
+                    "content": f"Observation: {observation_summary}\n\nBased on these results, what's your next step or final analysis?",
+                })
+
+        final_answer = await self._force_final_answer(messages)
+        confidence = self._calculate_confidence(final_answer, tools_used, incomplete=True)
+        return {
+            "final_answer": final_answer,
+            "reasoning_steps": reasoning_steps,
+            "tools_used": tools_used,
+            "iterations": iteration,
+            "confidence": confidence,
+            "warning": "Reached max iterations — answer may be incomplete",
+        }
+
     def _get_system_prompt_with_tools(self) -> str:
         try:
             from ..workspace import WorkspaceManager
@@ -166,6 +310,159 @@ class Agent:
             return ws.build_system_prompt()
         except Exception:
             return SYSTEM_PROMPT
+
+    def _get_react_system_prompt(self) -> str:
+        return (
+            "You are EuroScope, an AI trading analyst for EUR/USD. Use the ReAct "
+            "(Reason-Act-Observe) framework:\n\n"
+            "1. REASON: Analyze the user's request and decide what information you need\n"
+            "2. ACT: Call relevant tools (one at a time or multiple if needed)\n"
+            "3. OBSERVE: Review the tool results carefully\n"
+            "4. REPEAT: Continue reasoning based on observations until you have enough information\n"
+            "5. ANSWER: Provide a comprehensive, actionable analysis\n\n"
+            "AVAILABLE TOOLS:\n"
+            "- get_price: Current price and OHLCV data\n"
+            "- get_technical_analysis: RSI, MACD, ADX, trend bias\n"
+            "- get_fundamental_analysis: Macro data (rates, CPI, GDP)\n"
+            "- get_news_sentiment: Recent news and market sentiment\n"
+            "- get_patterns: Chart patterns (H&S, Double Top, etc.)\n"
+            "- get_risk_assessment: Trade risk and position sizing\n"
+            "- get_signals: Active trading signals\n"
+            "- get_forecast: AI directional forecast\n\n"
+            "THINKING PROCESS:\n"
+            "- Start by understanding what the user really needs\n"
+            "- Identify which tools will provide the most relevant information\n"
+            "- After each tool call, assess what is missing\n"
+            "- Synthesize all observations before giving final answer\n"
+            "- Be concise but thorough with actionable EUR/USD insights"
+        )
+
+    def _extract_reasoning(self, content: str) -> str:
+        lowered = content.lower()
+        triggers = ("reason", "thought", "i need", "let me", "i should")
+        if any(t in lowered for t in triggers):
+            return content.strip()
+        return ""
+
+    def _format_tool_observation(self, tool_name: str, result: dict) -> str:
+        if not isinstance(result, dict):
+            return str(result)
+        if not result.get("success"):
+            return f"Error executing {tool_name}: {result.get('error', 'Unknown error')}"
+
+        metadata = result.get("metadata") or {}
+        if isinstance(metadata, dict) and metadata.get("formatted"):
+            return str(metadata.get("formatted"))
+
+        data = result.get("data", {})
+        if tool_name == "get_price":
+            return (
+                f"Price: {data.get('price')} | Change: {data.get('change')} | "
+                f"Range: {data.get('spread_pips')} pips"
+            )
+        if tool_name == "get_technical_analysis":
+            if isinstance(data, dict):
+                indicators = data.get("indicators") or {}
+                bias = data.get("overall_bias") or data.get("bias")
+                rsi = indicators.get("RSI", {}).get("value") if isinstance(indicators, dict) else None
+                macd = indicators.get("MACD", {}).get("histogram") if isinstance(indicators, dict) else None
+                adx = indicators.get("ADX", {}).get("value") if isinstance(indicators, dict) else None
+                return f"RSI: {rsi} | MACD: {macd} | ADX: {adx} | Bias: {bias}"
+        if tool_name == "get_news_sentiment":
+            if isinstance(data, dict):
+                return f"Sentiment: {data.get('sentiment')} | Score: {data.get('score')}"
+        if tool_name == "get_fundamental_analysis":
+            return json.dumps(data)
+        if tool_name == "get_patterns":
+            return json.dumps(data)
+        if tool_name == "get_risk_assessment":
+            return json.dumps(data)
+        if tool_name == "get_signals":
+            return json.dumps(data)
+        if tool_name == "get_forecast":
+            return json.dumps(data)
+
+        return json.dumps(data)
+
+    def _summarize_observations(self, observations: list[str]) -> str:
+        return " | ".join(observations)
+
+    async def _force_final_answer(self, messages: list[dict]) -> str:
+        messages.append({
+            "role": "user",
+            "content": "You've reached the maximum reasoning steps. Please provide your best analysis based on the information so far.",
+        })
+        if self.router:
+            reply = await self.router.chat(messages)
+            if reply:
+                return reply
+        if not self.config.api_key:
+            return "⚠️ AI features disabled — no API key configured."
+        async with httpx.AsyncClient(timeout=60) as client:
+            response = await client.post(
+                f"{self.config.api_base}/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {self.config.api_key}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": self.config.model,
+                    "messages": messages,
+                    "max_tokens": self.config.max_tokens,
+                    "temperature": self.config.temperature,
+                },
+            )
+            response.raise_for_status()
+            data = response.json()
+        return data["choices"][0]["message"]["content"]
+
+    def _calculate_confidence(
+        self,
+        answer: str,
+        tools_used: list[str],
+        incomplete: bool = False,
+    ) -> float:
+        base_confidence = 0.3
+        tool_bonus = min(len(tools_used) * 0.15, 0.5)
+        lowered = answer.lower()
+        quality_indicators = [
+            "recommend" in lowered,
+            "suggest" in lowered,
+            "wait" in lowered,
+            "avoid" in lowered,
+            any(x in lowered for x in ["bullish", "bearish", "neutral"]),
+        ]
+        quality_bonus = sum(quality_indicators) * 0.05
+        confidence = min(1.0, base_confidence + tool_bonus + quality_bonus)
+        if incomplete:
+            confidence *= 0.7
+        return round(confidence, 2)
+
+    def _cache_key(self, tool_name: str, args: dict) -> str:
+        try:
+            encoded = json.dumps(args, sort_keys=True)
+        except Exception:
+            encoded = str(args)
+        return f"{tool_name}:{encoded}"
+
+    def _get_cached_tool_result(self, tool_name: str, args: dict) -> Optional[dict]:
+        ttl = 30 if tool_name == "get_price" else None
+        if ttl is None:
+            return None
+        key = self._cache_key(tool_name, args)
+        entry = self._tool_cache.get(key)
+        if not entry:
+            return None
+        if time.time() - entry["ts"] > ttl:
+            return None
+        return entry["result"]
+
+    def _set_tool_cache(self, tool_name: str, args: dict, result: dict) -> None:
+        ttl = 30 if tool_name == "get_price" else None
+        if ttl is None:
+            return
+        key = self._cache_key(tool_name, args)
+        self._tool_cache[key] = {"ts": time.time(), "result": result}
 
     async def _execute_tool(self, tool_name: str, arguments: dict) -> dict:
         from .orchestrator import Orchestrator

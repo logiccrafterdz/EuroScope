@@ -4,6 +4,7 @@ Tests for Vector Memory (ChromaDB).
 Tests graceful fallback when ChromaDB is not installed.
 """
 
+from datetime import datetime, timedelta
 import pytest
 from unittest.mock import patch
 
@@ -95,3 +96,18 @@ class TestVectorMemoryWithChromaDB:
         context = vm.get_relevant_context("ECB rate decision impact")
         # May or may not find results depending on embedding quality
         assert isinstance(context, str)
+
+    @pytest.mark.asyncio
+    async def test_cleanup_old_documents(self, vm):
+        old_timestamp = (datetime.utcnow() - timedelta(days=40)).isoformat()
+        recent_timestamp = (datetime.utcnow() - timedelta(days=10)).isoformat()
+
+        vm.store_analysis("Old analysis for cleanup", metadata={"timestamp": old_timestamp})
+        vm.store_analysis("Recent analysis keep", metadata={"timestamp": recent_timestamp})
+
+        before = vm.get_collection_stats().get("analyses", 0)
+        deleted = await vm.cleanup_old_documents(ttl_days=30)
+        after = vm.get_collection_stats().get("analyses", 0)
+
+        assert deleted >= 1
+        assert after <= max(0, before - 1)

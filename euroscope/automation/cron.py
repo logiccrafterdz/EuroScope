@@ -13,6 +13,8 @@ from datetime import datetime, timedelta
 from typing import Callable, Optional
 from enum import Enum
 
+from ..brain.vector_memory import VectorMemory
+
 logger = logging.getLogger("euroscope.automation.cron")
 
 
@@ -66,12 +68,37 @@ class CronScheduler:
         await cron.start()
     """
 
-    def __init__(self, tick_interval: int = 10):
+    def __init__(self, tick_interval: int = 10, config: Optional[object] = None):
         self.tick_interval = tick_interval
+        self.config = config
         self._tasks: dict[str, ScheduledTask] = {}
         self._running = False
         self._task: Optional[asyncio.Task] = None
         self._history: list[dict] = []
+        if self.config and getattr(self.config, "vector_memory_ttl_days", None):
+            self._schedule_vector_memory_cleanup()
+
+    def _seconds_until(self, hour: int, minute: int) -> int:
+        now = datetime.utcnow()
+        target = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+        if target <= now:
+            target += timedelta(days=1)
+        return max(0, int((target - now).total_seconds()))
+
+    def _schedule_vector_memory_cleanup(self):
+        async def cleanup_task():
+            try:
+                memory = VectorMemory()
+                deleted = await memory.cleanup_old_documents(
+                    ttl_days=self.config.vector_memory_ttl_days
+                )
+                if deleted > 0:
+                    logger.info(f"Vector Memory: {deleted} old documents purged")
+            except Exception as e:
+                logger.error(f"Vector Memory cleanup task failed: {e}")
+
+        delay = self._seconds_until(3, 0)
+        self.schedule("vector_memory_cleanup", TaskFrequency.DAILY, cleanup_task, delay=delay)
 
     def schedule(self, name: str, frequency: TaskFrequency,
                  callback: Callable, delay: int = 0) -> ScheduledTask:
