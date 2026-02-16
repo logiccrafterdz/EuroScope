@@ -20,6 +20,7 @@ class LLMConfig:
     temperature: float = 0.4
     # Fallback provider
     fallback_api_key: str = ""
+    fallback_key: str = ""
     fallback_api_base: str = "https://api.openai.com/v1"
     fallback_model: str = "gpt-4o-mini"
 
@@ -56,14 +57,18 @@ class Config:
         allowed_users = []
         if allowed_raw:
             allowed_users = [int(uid.strip()) for uid in allowed_raw.split(",") if uid.strip()]
+        primary_key = os.getenv("EUROSCOPE_LLM_API_KEY", "")
+        fallback_key = os.getenv("EUROSCOPE_LLM_FALLBACK_API_KEY", primary_key)
 
         return cls(
             llm=LLMConfig(
-                api_key=os.getenv("EUROSCOPE_LLM_API_KEY", ""),
+                api_key=primary_key,
                 api_base=os.getenv("EUROSCOPE_LLM_API_BASE", "https://api.deepseek.com"),
                 model=os.getenv("EUROSCOPE_LLM_MODEL", "deepseek-chat"),
                 max_tokens=int(os.getenv("EUROSCOPE_LLM_MAX_TOKENS", "4096")),
                 temperature=float(os.getenv("EUROSCOPE_LLM_TEMPERATURE", "0.4")),
+                fallback_api_key=fallback_key,
+                fallback_key=fallback_key,
             ),
             telegram=TelegramConfig(
                 token=os.getenv("EUROSCOPE_TELEGRAM_TOKEN", ""),

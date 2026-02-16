@@ -45,6 +45,7 @@ class LLMRouter:
         self._last_provider: str = ""
         self._call_count: int = 0
         self._failure_count: int = 0
+        self._warned_identical_keys: bool = False
 
     @classmethod
     def from_config(cls, primary_key: str = "", primary_base: str = "",
@@ -102,6 +103,18 @@ class LLMRouter:
             return "⚠️ No LLM providers configured. Set API keys in .env"
 
         self._call_count += 1
+        return await self._call_with_fallback(messages, temperature)
+
+    async def _call_with_fallback(self, messages: list[dict], temperature: float = None) -> str:
+        if (
+            not self._warned_identical_keys
+            and len(self.providers) >= 2
+            and self.providers[0].api_key
+            and self.providers[0].api_key == self.providers[1].api_key
+        ):
+            logger.warning("Fallback key identical to primary key — true redundancy disabled")
+            self._warned_identical_keys = True
+
         last_error = None
 
         for provider in self.providers:

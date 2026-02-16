@@ -54,6 +54,8 @@ copy .env.example .env
 ```
 Edit `.env` with your API keys:
 - `EUROSCOPE_LLM_API_KEY` — LLM provider (DeepSeek/OpenAI)
+- `EUROSCOPE_LLM_FALLBACK_API_KEY` — Backup LLM API key for true failover redundancy (optional)
+  Recommended: Use different provider (primary=DeepSeek, fallback=OpenAI)
 - `EUROSCOPE_TELEGRAM_TOKEN` — From [@BotFather](https://t.me/BotFather)
 - `EUROSCOPE_BRAVE_API_KEY` — News sentiment (optional)
 - `EUROSCOPE_ALPHAVANTAGE_KEY` — AlphaVantage data (optional)

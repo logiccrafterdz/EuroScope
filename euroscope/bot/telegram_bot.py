@@ -104,7 +104,7 @@ class EuroScopeBot:
             primary_key=config.llm.api_key,
             primary_base=config.llm.api_base,
             primary_model=config.llm.model,
-            fallback_key=config.llm.api_key, # Can add separate fallback keys here
+            fallback_key=config.llm.fallback_api_key,
         )
         self.vector_memory = VectorMemory()
         self.agent = Agent(config.llm, router=self.router, vector_memory=self.vector_memory)

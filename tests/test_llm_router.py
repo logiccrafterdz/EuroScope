@@ -2,6 +2,7 @@
 Tests for LLM Router failover logic.
 """
 
+import logging
 import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
 
@@ -78,10 +79,12 @@ class TestLLMRouterFailover:
     @pytest.mark.asyncio
     async def test_fallback_on_primary_failure(self, router):
         call_count = 0
+        keys_used = []
 
         async def mock_call(provider, messages, temperature=None):
             nonlocal call_count
             call_count += 1
+            keys_used.append(provider.api_key)
             if provider.name == "primary":
                 raise Exception("Primary down")
             return "Hello from fallback"
@@ -90,6 +93,9 @@ class TestLLMRouterFailover:
         result = await router.chat([{"role": "user", "content": "test"}])
         assert result == "Hello from fallback"
         assert router.last_provider == "fallback"
+        assert keys_used[0] == "key1"
+        assert keys_used[-1] == "key2"
+        assert keys_used.count("key2") == 1
 
     @pytest.mark.asyncio
     async def test_all_providers_fail(self, router):
@@ -113,3 +119,17 @@ class TestLLMRouterFailover:
         await router.chat([{"role": "user", "content": "1"}])
         await router.chat([{"role": "user", "content": "2"}])
         assert router.stats["total_calls"] == 2
+
+    @pytest.mark.asyncio
+    async def test_fallback_with_identical_keys_logs_warning(self, caplog):
+        providers = [
+            LLMProvider(name="primary", api_key="same-key",
+                        api_base="https://api.primary.com", model="model-1"),
+            LLMProvider(name="fallback", api_key="same-key",
+                        api_base="https://api.fallback.com", model="model-2"),
+        ]
+        router = LLMRouter(providers)
+        router._call_provider = AsyncMock(return_value="ok")
+        with caplog.at_level(logging.WARNING, logger="euroscope.brain.llm_router"):
+            await router.chat([{"role": "user", "content": "test"}])
+        assert "Fallback key identical to primary key" in caplog.text
