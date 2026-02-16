@@ -204,6 +204,20 @@ FUNCTION_SCHEMAS: Dict[str, Dict[str, Any]] = {
             "required": []
         },
     },
+    "proactive_alert_decision": {
+        "name": "proactive_alert_decision",
+        "description": "Report whether current market conditions warrant a proactive alert",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "should_alert": {"type": "boolean"},
+                "message": {"type": "string", "description": "Concise alert message (<150 chars)"},
+                "priority": {"type": "string", "enum": ["urgent", "medium", "low"]},
+                "reason": {"type": "string", "description": "Internal reasoning for logging"},
+            },
+            "required": ["should_alert"],
+        },
+    },
 }
 
 

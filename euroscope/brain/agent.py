@@ -16,6 +16,7 @@ import httpx
 from ..config import LLMConfig
 from .prompts import SYSTEM_PROMPT, ANALYSIS_PROMPT, FORECAST_PROMPT, QUESTION_PROMPT
 from .llm_router import LLMRouter
+from .function_schema import get_all_function_schemas, FUNCTION_SCHEMAS
 from .vector_memory import VectorMemory
 
 logger = logging.getLogger("euroscope.brain.agent")
@@ -165,6 +166,8 @@ class Agent:
         user_message: str,
         max_iterations: int = 5,
         max_tokens_per_iteration: int = 500,
+        custom_functions: Optional[list[dict]] = None,
+        system_override: Optional[str] = None,
     ) -> dict[str, Any]:
         if not self.router or not hasattr(self.router, "chat_with_functions"):
             final_answer = await self.chat(user_message, system_override=self._get_system_prompt_with_tools())
@@ -175,12 +178,13 @@ class Agent:
                 "iterations": 0,
                 "confidence": self._calculate_confidence(final_answer, []),
             }
-        system = self._get_react_system_prompt()
+        system = system_override or self._get_react_system_prompt()
         if self.vector_memory:
             context = self.vector_memory.get_relevant_context(user_message)
             if context:
                 system += f"\n\n### LONG-TERM MEMORY (PAST CONTEXT)\n{context}"
 
+        functions = custom_functions if custom_functions is not None else get_all_function_schemas()
         messages = [
             {"role": "system", "content": system},
             {"role": "user", "content": user_message},
@@ -210,7 +214,7 @@ class Agent:
                 response = await asyncio.wait_for(
                     self.router.chat_with_functions(
                         messages=messages,
-                        functions=None,
+                        functions=functions,
                         function_call="auto",
                         max_tokens=max_tokens_per_iteration,
                     ),
@@ -258,10 +262,26 @@ class Agent:
                     "warning": "No tools selected — answer may be incomplete",
                 }
 
+            proactive_call = next(
+                (call for call in function_calls if call.get("name") == "proactive_alert_decision"),
+                None,
+            )
+            if proactive_call:
+                return {
+                    "final_answer": content or "",
+                    "reasoning_steps": reasoning_steps,
+                    "tools_used": tools_used,
+                    "iterations": iteration,
+                    "confidence": self._calculate_confidence(content or "", tools_used),
+                    "function_call_result": proactive_call.get("arguments") or {},
+                }
+
             tool_results = []
             for call in function_calls:
                 name = call.get("name")
                 args = call.get("arguments") or {}
+                if name == "proactive_alert_decision":
+                    continue
                 cached = self._get_cached_tool_result(name, args)
                 if cached is not None:
                     result = cached
@@ -300,6 +320,50 @@ class Agent:
             "iterations": iteration,
             "confidence": confidence,
             "warning": "Reached max iterations — answer may be incomplete",
+        }
+
+    async def run_proactive_analysis(self) -> dict[str, Any]:
+        """
+        Autonomous market analysis for proactive alerts.
+        """
+        proactive_prompt = (
+            "You are EuroScope's autonomous monitoring system for EUR/USD.\n\n"
+            "ANALYZE THESE CRITICAL ASPECTS:\n"
+            "1. Price action vs key liquidity zones (session highs/lows, psychological levels)\n"
+            "2. Technical regime (trending/ranging/volatile) + indicator alignment\n"
+            "3. Market session context (Asian/London/Overlap/NY) and its implications\n"
+            "4. Recent liquidity sweeps or unusual activity\n"
+            "5. Upcoming high-impact events (next 60 mins)\n\n"
+            "DECISION RULES:\n"
+            "- ALERT if: Clear high-probability setup, regime shift detected, high-risk condition, or major event imminent\n"
+            "- NO ALERT if: Market quiet/ranging without edge, or alert would be noise\n"
+            "- PRIORITY:\n"
+            "  * urgent: Imminent risk (stop hunt zone, volatility spike) or high-impact event <15min\n"
+            "  * medium: Strong setup forming or regime change confirmed\n"
+            "  * low: Notable but not time-sensitive observation\n\n"
+            "OUTPUT: Call proactive_alert_decision function with your decision.\n"
+            "NEVER send multiple alerts for same condition within 60 minutes."
+        )
+
+        decision_functions = get_all_function_schemas()
+        response = await self.chat_with_react_loop(
+            user_message="Analyze current EUR/USD state for proactive alerting",
+            max_iterations=3,
+            custom_functions=decision_functions,
+            system_override=proactive_prompt,
+        )
+        decision = self._extract_proactive_decision(response)
+        decision["analysis_summary"] = "\n".join(response.get("reasoning_steps", []))
+        return decision
+
+    def _extract_proactive_decision(self, response: dict[str, Any]) -> dict[str, Any]:
+        func_result = response.get("function_call_result") or {}
+        should_alert = bool(func_result.get("should_alert", False))
+        return {
+            "should_alert": should_alert,
+            "message": func_result.get("message") if should_alert else None,
+            "priority": func_result.get("priority") if should_alert else None,
+            "reason": func_result.get("reason", "No specific reason"),
         }
 
     def _get_system_prompt_with_tools(self) -> str:

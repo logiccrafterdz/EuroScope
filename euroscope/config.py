@@ -52,6 +52,12 @@ class Config:
     rate_limit_window_minutes: int = 1
     admin_chat_ids: list[str] = field(default_factory=list)
     vector_memory_ttl_days: int = 30
+    proactive_analysis_interval_minutes: int = 30
+    proactive_alert_cache_minutes: int = 60
+    proactive_alert_chat_ids: list[int] = field(default_factory=list)
+    proactive_quiet_hours: tuple[int, int] | None = None
+    proactive_disable_weekends: bool = True
+    proactive_holiday_dates: list[str] = field(default_factory=list)
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -65,6 +71,18 @@ class Config:
         admin_chat_ids = [cid.strip() for cid in admin_raw.split(",") if cid.strip()]
         primary_key = os.getenv("EUROSCOPE_LLM_API_KEY", "")
         fallback_key = os.getenv("EUROSCOPE_LLM_FALLBACK_API_KEY", primary_key)
+        proactive_chat_raw = os.getenv("EUROSCOPE_PROACTIVE_CHAT_IDS", "")
+        proactive_chat_ids = [
+            int(cid.strip()) for cid in proactive_chat_raw.split(",") if cid.strip()
+        ]
+        quiet_hours_raw = os.getenv("EUROSCOPE_PROACTIVE_QUIET_HOURS", "")
+        quiet_hours = None
+        if "-" in quiet_hours_raw:
+            parts = [p.strip() for p in quiet_hours_raw.split("-", 1)]
+            if len(parts) == 2 and parts[0].isdigit() and parts[1].isdigit():
+                quiet_hours = (int(parts[0]), int(parts[1]))
+        holidays_raw = os.getenv("EUROSCOPE_PROACTIVE_HOLIDAYS", "")
+        holiday_dates = [d.strip() for d in holidays_raw.split(",") if d.strip()]
 
         return cls(
             llm=LLMConfig(
@@ -91,6 +109,12 @@ class Config:
             rate_limit_window_minutes=int(os.getenv("EUROSCOPE_RATE_LIMIT_WINDOW_MINUTES", "1")),
             admin_chat_ids=admin_chat_ids,
             vector_memory_ttl_days=int(os.getenv("EUROSCOPE_VECTOR_MEMORY_TTL_DAYS", "30")),
+            proactive_analysis_interval_minutes=int(os.getenv("EUROSCOPE_PROACTIVE_INTERVAL_MINUTES", "30")),
+            proactive_alert_cache_minutes=int(os.getenv("EUROSCOPE_PROACTIVE_CACHE_MINUTES", "60")),
+            proactive_alert_chat_ids=proactive_chat_ids,
+            proactive_quiet_hours=quiet_hours,
+            proactive_disable_weekends=os.getenv("EUROSCOPE_PROACTIVE_DISABLE_WEEKENDS", "1") != "0",
+            proactive_holiday_dates=holiday_dates,
         )
 
     def validate(self) -> list[str]:

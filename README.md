@@ -61,6 +61,20 @@ The bot uses a **ReAct (Reason-Act-Observe)** framework:
 4. **Repeats** until enough information is gathered
 5. **Answers** with comprehensive, actionable analysis
 
+## 🤖 Proactive Intelligence
+EuroScope can autonomously monitor EUR/USD and send intelligent alerts without waiting for commands.
+
+### How It Works
+- Runs a ReAct loop every configured interval
+- Decides if conditions warrant an alert
+- Deduplicates alerts within a 60-minute window
+- Prioritizes alerts as 🚨 urgent, ⚠️ medium, or ℹ️ low
+
+### Example Alerts
+- 🚨 URGENT: "Price sweeping liquidity below 1.0800 — reversal likely. Avoid shorts."
+- ⚠️ MEDIUM: "Bullish breakout above 1.0850 with volume confirmation. Watch for pullback entry."
+- ℹ️ LOW: "Market consolidating ahead of NY session. Wait for London close direction."
+
 ## Quick Start
 
 ### 1. Clone & Install
@@ -89,6 +103,12 @@ Edit `.env` with your API keys:
 - `EUROSCOPE_RATE_LIMIT_REQUESTS` — Max commands per window (default: 5)
 - `EUROSCOPE_RATE_LIMIT_WINDOW_MINUTES` — Rate limit window minutes (default: 1)
 - `EUROSCOPE_VECTOR_MEMORY_TTL_DAYS` — Vector Memory retention in days (default: 30)
+- `EUROSCOPE_PROACTIVE_CHAT_IDS` — Chat IDs for proactive alerts (comma-separated)
+- `EUROSCOPE_PROACTIVE_INTERVAL_MINUTES` — Proactive analysis interval (default: 30)
+- `EUROSCOPE_PROACTIVE_CACHE_MINUTES` — Deduplication window (default: 60)
+- `EUROSCOPE_PROACTIVE_QUIET_HOURS` — Quiet hours in UTC, format `22-6`
+- `EUROSCOPE_PROACTIVE_DISABLE_WEEKENDS` — Disable on weekends (1/0)
+- `EUROSCOPE_PROACTIVE_HOLIDAYS` — Comma-separated holiday dates (YYYY-MM-DD)
 
 ### 3. Run
 ```bash

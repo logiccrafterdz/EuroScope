@@ -5,19 +5,21 @@ Tests for Phase 5 — Heartbeat, Cron, EventBus, SmartAlerts.
 import asyncio
 import time
 from datetime import datetime
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, AsyncMock
 
 import pandas as pd
 import pytest
 import euroscope.skills.deviation_monitor.skill as deviation_module
 from euroscope.automation.heartbeat import HeartbeatService
-from euroscope.automation.cron import CronScheduler, TaskFrequency, ScheduledTask
+from euroscope.automation.cron import CronScheduler, TaskFrequency, ScheduledTask, ProactiveAlertCache
 from euroscope.automation.events import EventBus, Event
 from euroscope.automation.alerts import (
     SmartAlerts, AlertPriority, AlertChannel, Alert, setup_default_alerts,
 )
 from euroscope.skills.base import SkillContext
 from euroscope.skills.deviation_monitor import DeviationMonitorSkill
+from euroscope.brain.agent import Agent
+from euroscope.config import LLMConfig
 
 
 # ── HeartbeatService Tests ───────────────────────────────────
@@ -124,6 +126,43 @@ class TestCronScheduler:
         await cron._tick()
         assert len(cron.history) == 1
         assert cron.history[0]["status"] == "error"
+
+
+class TestProactiveAlerts:
+    def test_proactive_alert_cache_deduplication(self):
+        cache = ProactiveAlertCache(cache_duration_minutes=10, per_user_limit=3)
+        message = "Price approaching 1.0850 resistance"
+        assert cache.is_duplicate(1, message) is False
+        cache.record_alert(1, message)
+        assert cache.is_duplicate(1, message) is True
+        assert cache.is_duplicate(2, message) is False
+        assert cache.within_user_limit(1) is True
+
+    @pytest.mark.asyncio
+    async def test_proactive_analysis_decision(self):
+        router = MagicMock()
+        router.chat_with_functions = AsyncMock(return_value={
+            "content": "Decision made",
+            "function_calls": [
+                {
+                    "name": "proactive_alert_decision",
+                    "arguments": {
+                        "should_alert": True,
+                        "message": "Test alert",
+                        "priority": "medium",
+                        "reason": "Setup detected",
+                    },
+                }
+            ],
+        })
+
+        agent = Agent(LLMConfig(), router=router)
+        decision = await agent.run_proactive_analysis()
+
+        assert decision["should_alert"] is True
+        assert decision["message"] == "Test alert"
+        assert decision["priority"] == "medium"
+        assert "analysis_summary" in decision
 
 
 # ── EventBus Tests ───────────────────────────────────────────

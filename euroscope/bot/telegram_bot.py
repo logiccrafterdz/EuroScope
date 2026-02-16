@@ -80,7 +80,7 @@ class EuroScopeBot:
         self.alerts = SmartAlerts()
         setup_default_alerts(self.alerts)
         self.heartbeat = HeartbeatService(interval=300, event_bus=self.bus)
-        self.cron = CronScheduler(config=config)
+        self.cron = CronScheduler(config=config, bot=self)
 
         # Phase 5 integrations
         self.user_settings = UserSettings(self.storage)
@@ -1236,6 +1236,8 @@ class EuroScopeBot:
 
     async def post_init(self, application: Application):
         """Called after bot is initialized, before polling starts."""
+        self.application = application
+        self.cron.set_bot(self)
         # 1. Register commands to appear in the Telegram menu button
         cmds = [
             BotCommand("start", "Start the bot"),
