@@ -119,7 +119,7 @@ class Orchestrator:
             context = self.global_context
 
         # 1. Detect session context first (needed by all safety checks)
-        await self.registry.get("session_context").execute(context, "detect")
+        await self.run_skill("session_context", "detect", context=context)
 
         now_val = context.metadata.get("now")
         if isinstance(now_val, datetime):

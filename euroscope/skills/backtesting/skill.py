@@ -23,9 +23,9 @@ class BacktestingSkill(BaseSkill):
         """Standard setter for auto-injection."""
         self._provider = provider
 
-    def execute(self, context: SkillContext, action: str, **params) -> SkillResult:
+    async def execute(self, context: SkillContext, action: str, **params) -> SkillResult:
         if action in ("run", "run_backtest"):
-            return self._run(context, **params)
+            return await self._run(context, **params)
         elif action == "compare":
             return self._compare(context, **params)
         elif action == "format_result":
@@ -34,16 +34,22 @@ class BacktestingSkill(BaseSkill):
             return self._walk_forward(context, **params)
         return SkillResult(success=False, error=f"Unknown action: {action}")
 
-    def _run(self, context: SkillContext, **params) -> SkillResult:
-        candles = params.get("candles", [])
+    async def _run(self, context: SkillContext, **params) -> SkillResult:
+        candles = params.get("candles")
         days = params.get("days", 30)
+        if candles is None:
+            candles = []
 
         # Fetch candles if not provided (V3 automation)
-        if not candles and self._provider:
+        is_empty_list = isinstance(candles, list) and len(candles) == 0
+        is_empty_df = hasattr(candles, "empty") and candles.empty
+        if (is_empty_list or is_empty_df) and self._provider:
             # Approx 24 H1 candles per day
-            candles = self._provider.get_candles("H1", count=days * 24)
+            candles = await self._provider.get_candles("H1", count=days * 24)
 
-        if not candles:
+        is_empty_list = isinstance(candles, list) and len(candles) == 0
+        is_empty_df = hasattr(candles, "empty") and candles.empty
+        if candles is None or is_empty_df or is_empty_list:
             return SkillResult(success=False, error="No historical data available for backtest")
 
         strategy = params.get("strategy_filter")

@@ -106,7 +106,10 @@ class DeviationMonitorSkill(BaseSkill):
             now_dt = now_val
         else:
             now_dt = datetime.fromtimestamp(now_val) if now_val else datetime.utcnow()
-        session = self._detect_trading_session(now_dt)
+        if self._context:
+            session = self._context.metadata.get("session_regime") or self._detect_trading_session(now_dt)
+        else:
+            session = self._detect_trading_session(now_dt)
         thresholds = self._session_thresholds(session)
         triggers = self._check_deviation_triggers(df, thresholds, session=session)
         if not triggers:

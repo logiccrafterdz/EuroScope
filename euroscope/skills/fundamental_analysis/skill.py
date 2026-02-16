@@ -31,6 +31,12 @@ class FundamentalAnalysisSkill(BaseSkill):
         """Standard setter for auto-injection."""
         self._macro = macro_provider
 
+    def set_news_engine(self, news_engine):
+        self._news = news_engine
+
+    def set_calendar(self, calendar):
+        self._calendar = calendar
+
     async def execute(self, context: SkillContext, action: str, **params) -> SkillResult:
         if action == "get_news":
             return await self._get_news(context)

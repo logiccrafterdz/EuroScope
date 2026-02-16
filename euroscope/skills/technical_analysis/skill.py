@@ -30,6 +30,9 @@ class TechnicalAnalysisSkill(BaseSkill):
         """Inject the PriceProvider instance."""
         self._provider = provider
 
+    def set_price_provider(self, provider):
+        self._provider = provider
+
     def set_pattern_tracker(self, tracker):
         """Inject the PatternTracker instance."""
         self._tracker = tracker

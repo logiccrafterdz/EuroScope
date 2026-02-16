@@ -44,7 +44,8 @@ def test_walk_forward_split():
     assert results[1].bars_tested == 100
     assert results[2].bars_tested == 100
 
-def test_backtesting_skill_integration():
+@pytest.mark.asyncio
+async def test_backtesting_skill_integration():
     """Test that BacktestingSkill exposes the new capability."""
     from euroscope.skills.backtesting.skill import BacktestingSkill
     from euroscope.skills.base import SkillContext
@@ -55,7 +56,7 @@ def test_backtesting_skill_integration():
     # 200 candles
     candles = [{"close": 1.0 + i/10000, "high": 1.0 + i/10000 + 0.0001, "low": 1.0 + i/10000 - 0.0001, "open": 1.0} for i in range(200)]
     
-    result = skill.execute(context, "walk_forward", candles=candles, strategy="trend_following", window_size=100, step_size=50)
+    result = await skill.execute(context, "walk_forward", candles=candles, strategy="trend_following", window_size=100, step_size=50)
     
     assert result.success is True
     assert len(result.data) == 3

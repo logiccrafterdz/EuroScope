@@ -227,6 +227,7 @@ class TestTradingStrategyFallback:
                 return {"candles": df, "timeframe": "M1"}
 
         ctx = SkillContext()
+        ctx.metadata["session_regime"] = "asian"
         monitor = DeviationMonitorSkill(market_data_skill=BufferSkill(), global_context=ctx)
         await monitor._check_once()
         assert ctx.metadata.get("emergency_mode") is True

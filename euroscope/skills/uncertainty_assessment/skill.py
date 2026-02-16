@@ -366,10 +366,6 @@ class UncertaintyAssessmentSkill(BaseSkill):
             # Smaller boost (1.2x) to avoid overconfidence
             confidence_adjustment = max(0.4, round(confidence_adjustment * 1.2, 3))
 
-        # Absolute Safety Clamp: Never allow high confidence in weak/moderate trends
-        if adx < 40:
-            confidence_adjustment = min(confidence_adjustment, 0.3)
-            
         return round(confidence_adjustment, 3)
 
     @staticmethod

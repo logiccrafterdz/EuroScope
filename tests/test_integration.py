@@ -265,6 +265,7 @@ class TestDataFlowPipeline:
                 return {"candles": df, "timeframe": "M1"}
 
         ctx = SkillContext()
+        ctx.metadata["session_regime"] = "asian"
         bus = EventBus()
         storage = Storage(":memory:")
         monitor = DeviationMonitorSkill(event_bus=bus, market_data_skill=BufferSkill(), storage=storage, global_context=ctx)
@@ -299,6 +300,7 @@ class TestDataFlowPipeline:
                 return {"candles": df, "timeframe": "M1"}
 
         ctx = SkillContext()
+        ctx.metadata["session_regime"] = "asian"
         bus = EventBus()
         alerts = SmartAlerts()
         executor = SignalExecutorSkill()

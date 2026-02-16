@@ -183,13 +183,13 @@ class EuroScopeBot:
         """Build the main interactive menu with professional styling."""
         return InlineKeyboardMarkup([
             [
-                InlineKeyboardButton("🎯 Signals", callback_data="cmd:signals"),
-                InlineKeyboardButton("📊 Analysis", callback_data="cmd:analysis"),
                 InlineKeyboardButton("💹 Price", callback_data="cmd:price"),
+                InlineKeyboardButton("📊 Analysis", callback_data="cmd:analysis"),
+                InlineKeyboardButton("📈 Chart", callback_data="cmd:chart"),
             ],
             [
+                InlineKeyboardButton("🎯 Signals", callback_data="cmd:signals"),
                 InlineKeyboardButton("🔮 Forecast", callback_data="cmd:forecast"),
-                InlineKeyboardButton("📈 Chart", callback_data="cmd:chart"),
                 InlineKeyboardButton("🧠 Strategy", callback_data="cmd:strategy"),
             ],
             [
@@ -201,6 +201,11 @@ class EuroScopeBot:
                 InlineKeyboardButton("📍 Levels", callback_data="cmd:levels"),
                 InlineKeyboardButton("🧩 Patterns", callback_data="cmd:patterns"),
                 InlineKeyboardButton("🛡️ Risk", callback_data="cmd:risk"),
+            ],
+            [
+                InlineKeyboardButton("📒 Trades", callback_data="cmd:trades"),
+                InlineKeyboardButton("📈 Performance", callback_data="cmd:performance"),
+                InlineKeyboardButton("🎯 Accuracy", callback_data="cmd:accuracy"),
             ],
             [
                 InlineKeyboardButton("⚙️ Settings", callback_data="cmd:settings"),
@@ -943,6 +948,27 @@ class EuroScopeBot:
                 message_thread_id=thread_id,
                 **kwargs
             )
+
+    async def _reply_photo(self, update: Update, photo, caption: str = None, topic_key: str = None, **kwargs):
+        chat_id = update.effective_chat.id
+        thread_id = None
+        if topic_key:
+            thread_id = self.storage.get_user_thread(chat_id, topic_key)
+
+        if update.message:
+            return await update.message.reply_photo(
+                photo=photo,
+                caption=caption,
+                message_thread_id=thread_id,
+                **kwargs
+            )
+        return await update.get_bot().send_photo(
+            chat_id=chat_id,
+            photo=photo,
+            caption=caption,
+            message_thread_id=thread_id,
+            **kwargs
+        )
 
     async def _bot_send_and_handle(self, bot, chat_id: int, cmd_name: str,
                                    handler, update: Update, context: ContextTypes.DEFAULT_TYPE):

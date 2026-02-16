@@ -175,7 +175,7 @@ class SmartAlerts:
         import time
         if essential_priorities is not None:
             self._essential_priorities = set(essential_priorities)
-        start_time = base_time if base_time is not None else datetime.utcnow().timestamp()
+        start_time = base_time if base_time is not None else time.time()
         self._suppress_until = max(self._suppress_until, start_time + duration_seconds)
 
     def disable_rule(self, name: str):
