@@ -8,7 +8,7 @@ news events, performance metrics, user preferences, and cached data.
 import json
 import logging
 import sqlite3
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Optional
 
@@ -242,7 +242,7 @@ class Storage:
             cursor = self._conn.execute(
                 """INSERT INTO predictions (timestamp, timeframe, direction, confidence, reasoning, target_price)
                    VALUES (?, ?, ?, ?, ?, ?)""",
-                (datetime.utcnow().isoformat(), timeframe, direction, confidence, reasoning, target_price)
+                (datetime.now(timezone.utc).isoformat(), timeframe, direction, confidence, reasoning, target_price)
             )
             return cursor.lastrowid
 
@@ -250,11 +250,11 @@ class Storage:
         with self._conn:
             self._conn.execute(
                 """UPDATE predictions SET actual_outcome=?, accuracy_score=?, resolved_at=? WHERE id=?""",
-                (outcome, accuracy, datetime.utcnow().isoformat(), pred_id)
+                (outcome, accuracy, datetime.now(timezone.utc).isoformat(), pred_id)
             )
 
     def get_accuracy_stats(self, days: int = 30) -> dict:
-        curr_time = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+        curr_time = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
         rows = self._query_rows(
             """SELECT direction, accuracy_score FROM predictions
                 WHERE resolved_at IS NOT NULL
@@ -299,7 +299,7 @@ class Storage:
         with self._conn:
             cursor = self._conn.execute(
                 "INSERT INTO alerts (created_at, condition, target_value, chat_id) VALUES (?, ?, ?, ?)",
-                (datetime.utcnow().isoformat(), condition, target_value, chat_id)
+                (datetime.now(timezone.utc).isoformat(), condition, target_value, chat_id)
             )
             return cursor.lastrowid
 
@@ -317,7 +317,7 @@ class Storage:
         with self._conn:
             self._conn.execute(
                 "UPDATE alerts SET triggered=1, triggered_at=? WHERE id=?",
-                (datetime.utcnow().isoformat(), alert_id)
+                (datetime.now(timezone.utc).isoformat(), alert_id)
             )
 
     def delete_alert(self, alert_id: int):
@@ -332,7 +332,7 @@ class Storage:
         with self._conn:
             self._conn.execute(
                 "INSERT OR REPLACE INTO memory (key, value, updated_at) VALUES (?, ?, ?)",
-                (key, data, datetime.utcnow().isoformat())
+                (key, data, datetime.now(timezone.utc).isoformat())
             )
 
     def get_memory(self, key: str) -> Optional[str]:
@@ -345,7 +345,7 @@ class Storage:
         with self._conn:
             self._conn.execute(
                 "INSERT INTO market_notes (timestamp, category, content, metadata) VALUES (?, ?, ?, ?)",
-                (datetime.utcnow().isoformat(), category, content,
+                (datetime.now(timezone.utc).isoformat(), category, content,
                  json.dumps(metadata) if metadata else None)
             )
 
@@ -374,14 +374,14 @@ class Storage:
                    (created_at, direction, entry_price, stop_loss, take_profit,
                     confidence, timeframe, source, reasoning, risk_reward_ratio)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (datetime.utcnow().isoformat(), direction, entry_price, stop_loss,
+                (datetime.now(timezone.utc).isoformat(), direction, entry_price, stop_loss,
                  take_profit, confidence, timeframe, source, reasoning, risk_reward_ratio)
             )
             return cursor.lastrowid
 
     def update_signal_status(self, signal_id: int, status: str, pnl_pips: float = 0.0):
         """Update a signal's status (active, closed, cancelled)."""
-        closed_at = datetime.utcnow().isoformat() if status in ("closed", "cancelled") else None
+        closed_at = datetime.now(timezone.utc).isoformat() if status in ("closed", "cancelled") else None
         with self._conn:
             self._conn.execute(
                 "UPDATE trading_signals SET status=?, pnl_pips=?, closed_at=? WHERE id=?",
@@ -416,7 +416,7 @@ class Storage:
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (title, source, url, description, impact_score, sentiment,
                  sentiment_score, currency_impact, published_at,
-                 datetime.utcnow().isoformat())
+                 datetime.now(timezone.utc).isoformat())
             )
             return cursor.lastrowid
 
@@ -451,7 +451,7 @@ class Storage:
                 (period, total_signals, winning_signals, losing_signals, win_rate,
                  total_pnl_pips, avg_pnl_pips, max_drawdown_pips, profit_factor,
                  sharpe_ratio, avg_risk_reward, best_trade_pips, worst_trade_pips,
-                 avg_trade_duration_hours, datetime.utcnow().isoformat())
+                 avg_trade_duration_hours, datetime.now(timezone.utc).isoformat())
             )
             return cursor.lastrowid
 
@@ -466,7 +466,7 @@ class Storage:
 
     def save_user_preferences(self, chat_id: int, **kwargs) -> int:
         """Save or update user preferences (upsert)."""
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(timezone.utc).isoformat()
         defaults = {
             "risk_tolerance": "medium",
             "preferred_timeframe": "H1",
@@ -528,7 +528,7 @@ class Storage:
                            reasoning: str = "", causal_chain: Any = None,
                            status: str = "open") -> int:
         """Save a new trade journal entry."""
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(timezone.utc).isoformat()
         if isinstance(causal_chain, (dict, list)):
             causal_payload = json.dumps(causal_chain)
         else:
@@ -553,7 +553,7 @@ class Storage:
     def close_trade_journal(self, trade_id: int, exit_price: float,
                              pnl_pips: float, is_win: bool):
         """Close a trade journal entry with outcome."""
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(timezone.utc).isoformat()
         with self._conn:
             self._conn.execute(
                 """UPDATE trade_journal SET exit_price=?, pnl_pips=?,
@@ -675,7 +675,7 @@ class Storage:
                                 price_at_detection: float,
                                 causal_chain: Optional[dict] = None) -> int:
         """Record a new pattern detection."""
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(timezone.utc).isoformat()
         causal_payload = json.dumps(causal_chain) if causal_chain else None
         with self._conn:
             cursor = self._conn.execute(
@@ -691,7 +691,7 @@ class Storage:
     def resolve_pattern(self, pattern_id: int, actual_outcome: str,
                         price_at_resolution: float, is_success: bool):
         """Resolve a pattern detection with actual outcome."""
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(timezone.utc).isoformat()
         with self._conn:
             self._conn.execute(
                 """UPDATE pattern_stats SET actual_outcome=?,
@@ -772,7 +772,7 @@ class Storage:
 
     def save_user_thread(self, chat_id: int, topic_key: str, thread_id: int):
         """Save or update a thread ID for a user's topic."""
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(timezone.utc).isoformat()
         with self._conn:
             self._conn.execute(
                 """INSERT OR REPLACE INTO user_threads (chat_id, topic_key, thread_id, created_at)

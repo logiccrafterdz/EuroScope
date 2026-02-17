@@ -10,7 +10,7 @@ import logging
 import sys
 import time
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 
@@ -19,7 +19,7 @@ class JSONFormatter(logging.Formatter):
 
     def format(self, record: logging.LogRecord) -> str:
         log_entry = {
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
             "level": record.levelname,
             "logger": record.name,
             "message": record.getMessage(),
@@ -50,7 +50,7 @@ class ConsoleFormatter(logging.Formatter):
 
     def format(self, record: logging.LogRecord) -> str:
         color = self.COLORS.get(record.levelname, self.RESET)
-        timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+        timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
         msg = record.getMessage()
         base = f"{timestamp} │ {color}{record.levelname:<7}{self.RESET} │ {record.name:<28} │ {msg}"
 
@@ -82,7 +82,7 @@ def setup_structured_logging(level: str = "INFO", log_dir: str = "data/logs"):
     # File handler — JSON structured
     log_path = Path(log_dir)
     log_path.mkdir(parents=True, exist_ok=True)
-    log_file = log_path / f"euroscope_{datetime.utcnow().strftime('%Y%m%d')}.jsonl"
+    log_file = log_path / f"euroscope_{datetime.now(timezone.utc).strftime('%Y%m%d')}.jsonl"
 
     file_handler = logging.FileHandler(str(log_file), encoding="utf-8")
     file_handler.setFormatter(JSONFormatter())
