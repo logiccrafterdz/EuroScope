@@ -45,15 +45,21 @@ def main():
         logger.error("   Create a bot via @BotFather on Telegram and set the token in .env")
         sys.exit(1)
 
+    # Start health check server (satisfies Heroku/Docker probes)
+    import os
+    from .utils.health_check import HealthCheckServer
+    port = int(os.environ.get("PORT", 8080))
+    health_server = HealthCheckServer(port=port)
+    health_server.start()
+
     # Start bot
     bot = EuroScopeBot(config)
     try:
         bot.run()
     except KeyboardInterrupt:
         logger.info("EuroScope shutting down...")
-    except Exception as e:
-        logger.error(f"Fatal error: {e}", exc_info=True)
-        sys.exit(1)
+    finally:
+        health_server.stop()
 
 
 if __name__ == "__main__":
