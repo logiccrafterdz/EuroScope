@@ -256,11 +256,12 @@ class LLMRouter:
             except Exception:
                 parsed_args = {}
             function_calls.append({
+                "id": tool_call.get("id"),
                 "name": func.get("name"),
                 "arguments": parsed_args,
             })
 
-        return {"content": content, "function_calls": function_calls}
+        return {"content": content, "function_calls": function_calls, "raw_message": message}
 
     # ─── Provider call methods ───────────────────────────────
 

@@ -131,6 +131,7 @@ class Agent:
             response = await self.router.chat_with_functions(messages=messages)
             content = response.get("content")
             function_calls = response.get("function_calls") or []
+            raw_message = response.get("raw_message")
             
             # Check for pseudo-tool calls in text if no formal function calls
             if not function_calls and content:
@@ -139,9 +140,27 @@ class Agent:
             if not function_calls:
                 return content or "❌ No response from AI."
 
-            for call in function_calls:
+            # Append the assistant's tool call message
+            if raw_message:
+                messages.append(raw_message)
+            else:
+                # Fallback if raw_message not available
+                messages.append({
+                    "role": "assistant",
+                    "content": content,
+                    "tool_calls": [
+                        {
+                            "id": f"call_{i}",
+                            "type": "function",
+                            "function": {"name": c["name"], "arguments": json.dumps(c["arguments"])}
+                        } for i, c in enumerate(function_calls)
+                    ]
+                })
+
+            for i, call in enumerate(function_calls):
                 name = call.get("name")
                 args = call.get("arguments") or {}
+                call_id = call.get("id") or f"call_{i}"
                 try:
                     result = await asyncio.wait_for(
                         self._execute_tool(name, args),
@@ -152,11 +171,9 @@ class Agent:
 
                 messages.append({
                     "role": "tool",
-                    "name": name,
-                    "tool_call_id": name or "tool",
+                    "tool_call_id": call_id,
                     "content": json.dumps(result),
                 })
-
             # After tool results, ask for synthesis
             messages.append({
                 "role": "user", 
@@ -324,10 +341,28 @@ class Agent:
                     "function_call_result": proactive_call.get("arguments") or {},
                 }
 
+            # Append assistant message with tool calls
+            raw_message = response.get("raw_message")
+            if raw_message:
+                messages.append(raw_message)
+            else:
+                messages.append({
+                    "role": "assistant",
+                    "content": content,
+                    "tool_calls": [
+                        {
+                            "id": f"call_{iteration}_{i}",
+                            "type": "function",
+                            "function": {"name": c["name"], "arguments": json.dumps(c["arguments"])}
+                        } for i, c in enumerate(function_calls)
+                    ]
+                })
+
             tool_results = []
-            for call in function_calls:
+            for i, call in enumerate(function_calls):
                 name = call.get("name")
                 args = call.get("arguments") or {}
+                call_id = call.get("id") or f"call_{iteration}_{i}"
                 if name == "proactive_alert_decision":
                     continue
                 
@@ -343,8 +378,8 @@ class Agent:
                 observation = self._format_tool_observation(name, result)
                 tool_results.append(observation)
                 messages.append({
-                    "role": "function",
-                    "name": name,
+                    "role": "tool",
+                    "tool_call_id": call_id,
                     "content": observation,
                 })
 
