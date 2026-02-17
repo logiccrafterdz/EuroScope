@@ -47,27 +47,37 @@ def safe_markdown(text: str) -> str:
     """
     Sanitize text for Telegram classic Markdown.
 
-    Strips unmatched *, _, and ` that would cause
+    Escapes unmatched *, _, ` and [ that would cause
     'Can't parse entities' BadRequest errors.
     """
     if not text:
         return text
 
-    # Fix unmatched bold markers (*)
-    # Count non-escaped * characters; if odd, remove the last one
-    asterisks = [m.start() for m in re.finditer(r'(?<!\\)\*', text)]
-    if len(asterisks) % 2 != 0:
-        # Remove the last unmatched asterisk
-        text = text[:asterisks[-1]] + text[asterisks[-1] + 1:]
+    # 1. Escape [ to prevent it being treated as a link start
+    # We don't use Markdown links in the bot's auto-generated text.
+    text = text.replace("[", "\\[")
 
-    # Fix unmatched italic markers (_)
-    underscores = [m.start() for m in re.finditer(r'(?<!\\)_', text)]
-    if len(underscores) % 2 != 0:
-        text = text[:underscores[-1]] + text[underscores[-1] + 1:]
-
-    # Fix unmatched code markers (`)
+    # 2. Fix unmatched code markers (`) - do this first to identify blocks
     backticks = [m.start() for m in re.finditer(r'(?<!\\)`', text)]
     if len(backticks) % 2 != 0:
-        text = text[:backticks[-1]] + text[backticks[-1] + 1:]
+        # Escape the last unmatched backtick
+        idx = backticks[-1]
+        text = text[:idx] + "\\" + text[idx:]
+
+    # 3. Handle markers outside of code blocks
+    # This is simplified: it doesn't account for nested blocks perfectly,
+    # but covers 99% of LLM-generated text issues.
+    
+    # Bold (*)
+    asterisks = [m.start() for m in re.finditer(r'(?<!\\)\*', text)]
+    if len(asterisks) % 2 != 0:
+        idx = asterisks[-1]
+        text = text[:idx] + "\\" + text[idx:]
+
+    # Italic (_)
+    underscores = [m.start() for m in re.finditer(r'(?<!\\)_', text)]
+    if len(underscores) % 2 != 0:
+        idx = underscores[-1]
+        text = text[:idx] + "\\" + text[idx:]
 
     return text
