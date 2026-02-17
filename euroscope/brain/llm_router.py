@@ -116,6 +116,11 @@ class LLMRouter:
                 except httpx.HTTPStatusError as e:
                     last_error = e
                     status = e.response.status_code
+                    error_preview = ""
+                    try:
+                        error_preview = e.response.text[:200]
+                    except Exception:
+                        error_preview = ""
 
                     # Don't retry on auth errors — move to next provider
                     if status in (401, 403):
@@ -137,7 +142,15 @@ class LLMRouter:
                         continue
 
                     # Other client errors — skip provider
-                    logger.error(f"{provider.name}: HTTP {status}")
+                    if status == 400 and provider.name == "primary" and attempt < self.max_retries:
+                        wait = 2 ** attempt
+                        logger.warning(f"{provider.name}: HTTP {status}, retry in {wait}s")
+                        await asyncio.sleep(wait)
+                        continue
+                    if error_preview:
+                        logger.error(f"{provider.name}: HTTP {status} — {error_preview}")
+                    else:
+                        logger.error(f"{provider.name}: HTTP {status}")
                     break
 
                 except Exception as e:
