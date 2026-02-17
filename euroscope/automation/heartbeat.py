@@ -8,7 +8,7 @@ and triggers alerts on status changes.
 import asyncio
 import logging
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Callable, Optional
 
 from .events import Event
@@ -102,7 +102,7 @@ class HeartbeatService:
     async def tick(self) -> dict[str, dict]:
         """Run all checks once and return results."""
         self._tick_count += 1
-        timestamp = datetime.utcnow().strftime("%H:%M:%S")
+        timestamp = datetime.now(timezone.utc).strftime("%H:%M:%S")
 
         for name, check_fn in self._checks.items():
             try:
@@ -147,7 +147,7 @@ class HeartbeatService:
             "component": component,
             "old_status": old,
             "new_status": new,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
         logger.warning(f"Status change: {component} {old} → {new}")
         for listener in self._listeners:

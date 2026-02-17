@@ -167,7 +167,11 @@ class EuroScopeBot:
         """Callback for SmartAlerts — sends to allowed users."""
         try:
             loop = asyncio.get_running_loop()
-            loop.create_task(self.notifications.broadcast_alert(alert))
+            # Pass allowed users as target if available
+            allowed = self.config.telegram.allowed_users or []
+            # Also include proactive chat IDs
+            targets = list(set(allowed + self.config.proactive_alert_chat_ids))
+            loop.create_task(self.notifications.broadcast_alert(alert, chat_ids=targets))
         except RuntimeError:
             logger.warning("Alert triggered outside event loop — skipped.")
 

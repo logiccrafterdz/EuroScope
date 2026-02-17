@@ -1,6 +1,6 @@
 import logging
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 import pandas as pd
@@ -64,7 +64,7 @@ class DeviationMonitorSkill(BaseSkill):
             now_dt = now_val
             now = now_val.timestamp()
         else:
-            now_dt = datetime.fromtimestamp(now_val) if now_val else datetime.utcnow()
+            now_dt = datetime.fromtimestamp(now_val) if now_val else datetime.now(timezone.utc)
             now = now_val or time.time()
         last = context.metadata.get("deviation_monitor_last_activation", 0)
         if last and now - last < 600:
@@ -105,7 +105,7 @@ class DeviationMonitorSkill(BaseSkill):
         if isinstance(now_val, datetime):
             now_dt = now_val
         else:
-            now_dt = datetime.fromtimestamp(now_val) if now_val else datetime.utcnow()
+            now_dt = datetime.fromtimestamp(now_val) if now_val else datetime.now(timezone.utc)
         if self._context:
             session = self._context.metadata.get("session_regime") or self._detect_trading_session(now_dt)
         else:

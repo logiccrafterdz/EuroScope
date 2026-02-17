@@ -280,6 +280,56 @@ class NotificationManager:
             except Exception as e:
                 logger.error(f"Failed to send news alert to {chat_id}: {e}")
 
+    # ─── Alert Broadcasting ──────────────────────────────────
+
+    async def broadcast_alert(self, alert: object, chat_ids: Optional[list[int]] = None):
+        """
+        Broadcast a SmartAlert to all authorized users.
+
+        Args:
+            alert: The Alert object (from automation.alerts)
+            chat_ids: Optional list of chat IDs to target. If None, uses storage to find all users.
+        """
+        if not self._bot:
+            return
+
+        # Fallback to all users who have preferences set if no chat_ids provided
+        if not chat_ids:
+            # We don't have a direct 'get_all_chat_ids' but we can infer from user_preferences table
+            rows = self.storage._query_rows("SELECT chat_id FROM user_preferences")
+            chat_ids = [row["chat_id"] for row in rows]
+
+        if not chat_ids:
+            logger.warning("No users found to broadcast alert to.")
+            return
+
+        priority_emoji = {
+            "low": "ℹ️",
+            "medium": "⚠️",
+            "high": "🚨",
+            "critical": "🔥"
+        }.get(getattr(alert, "priority", "medium").value, "🔔")
+
+        msg = (
+            f"{priority_emoji} *{getattr(alert, 'title', 'Alert')}*\n\n"
+            f"{getattr(alert, 'message', 'No details provided.')}\n\n"
+            f"🕒 _UTC: {getattr(alert, 'timestamp', '')[:19].replace('T', ' ')}_"
+        )
+
+        for chat_id in chat_ids:
+            try:
+                # Route to 'radar' topic by default for smart alerts
+                thread_id = self.storage.get_user_thread(chat_id, "radar")
+                await self._bot.send_message(
+                    chat_id=chat_id,
+                    text=msg,
+                    parse_mode="Markdown",
+                    message_thread_id=thread_id
+                )
+                logger.debug(f"Broadcasted alert '{getattr(alert, 'title', '')}' to {chat_id}")
+            except Exception as e:
+                logger.error(f"Failed to send broadcast alert to {chat_id}: {e}")
+
     # ─── Utility ─────────────────────────────────────────────
 
     def get_notification_stats(self) -> dict:
