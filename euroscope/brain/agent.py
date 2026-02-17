@@ -244,19 +244,43 @@ class Agent:
                 function_calls = self._parse_text_tool_calls(content)
 
             if content:
+                # Anti-hallucination: if the model wrote "Observation:" itself, it's hallucinating result.
+                # Truncate content at the first sign of hallucination.
+                for trigger in ["Observation:", "OBSERVE:", "Result:", "RESULT:"]:
+                    if trigger in content:
+                        logger.warning(f"Detected hallucinated {trigger} in iteration {iteration}")
+                        content = content.split(trigger)[0].strip()
+                        break
+                
                 reasoning = self._extract_reasoning(content)
                 if reasoning:
                     reasoning_steps.append(f"Iteration {iteration}: {reasoning}")
 
+            # If the model provided a final answer without tools, or explicitly said it's finished
             if content and not function_calls:
-                confidence = self._calculate_confidence(content, tools_used)
-                return {
-                    "final_answer": content,
-                    "reasoning_steps": reasoning_steps,
-                    "tools_used": tools_used,
-                    "iterations": iteration,
-                    "confidence": confidence,
-                }
+                # Check if it's actually a final answer or just reasoning without action
+                lowered = content.lower()
+                if any(x in lowered for x in ["final analysis:", "answer:", "comprehensive analysis", "summary:"]):
+                    # Clean up the final answer from any leftover ReAct markers
+                    clean_content = content
+                    for marker in ["REASON:", "ACT:", "THOUGHT:", "FINAL ANALYSIS:"]:
+                        clean_content = clean_content.replace(marker, "").strip()
+                    
+                    confidence = self._calculate_confidence(clean_content, tools_used)
+                    return {
+                        "final_answer": clean_content,
+                        "reasoning_steps": reasoning_steps,
+                        "tools_used": tools_used,
+                        "iterations": iteration,
+                        "confidence": confidence,
+                    }
+                else:
+                    # If it's just talking without taking action, prompt for action or final answer
+                    messages.append({
+                        "role": "user",
+                        "content": "You provided reasoning but no action. Either call a tool or provide 'FINAL ANALYSIS:' if you are finished."
+                    })
+                    continue
 
             if not function_calls:
                 final_answer = await self._force_final_answer(messages)
@@ -408,14 +432,19 @@ class Agent:
 
     def _get_react_system_prompt(self) -> str:
         return (
-            "You are EuroScope, an AI trading analyst for EUR/USD. Use the ReAct "
-            "(Reason-Act-Observe) framework:\n\n"
-            "1. REASON: Analyze the user's request and decide what information you need\n"
-            "2. ACT: Call relevant tools (one at a time or multiple if needed)\n"
-            "3. OBSERVE: Review the tool results carefully\n"
-            "4. REPEAT: Continue reasoning based on observations until you have enough information\n"
-            "5. ANSWER: Provide a comprehensive, actionable analysis\n\n"
-            "AVAILABLE TOOLS:\n"
+            "You are EuroScope, an AI trading analyst for EUR/USD. Use the strict ReAct "
+            "(Reason-Act-Observe) framework. This is a multi-step process.\n\n"
+            "## PROTOCOL RULES:\n"
+            "1. **REASON**: State what you are thinking and why you need specific data.\n"
+            "2. **ACT**: Call ONE OR MORE tools to get that data. Use formal function calls.\n"
+            "3. **STOP**: You MUST stop after an 'ACT' block. DO NOT write 'Observation:' or 'Result:'.\n"
+            "   The system will provide the Observations following your tool calls.\n"
+            "4. **OBSERVE**: You will receive data from the system. Do not hallucinate it.\n"
+            "5. **REPEAT**: Continue until you have a complete picture.\n"
+            "6. **FINAL**: When finished, start your response with 'FINAL ANALYSIS:' and provide your conclusion.\n\n"
+            "## CRITICAL: NEVER HALLUCINATE TOOL RESULTS.\n"
+            "If you write 'Observation:' or list data that wasn't provided by the system, you are failing the protocol.\n\n"
+            "## AVAILABLE TOOLS:\n"
             "- get_price: Current price and OHLCV data\n"
             "- get_technical_analysis: RSI, MACD, ADX, trend bias\n"
             "- get_fundamental_analysis: Macro data (rates, CPI, GDP)\n"
@@ -424,22 +453,36 @@ class Agent:
             "- get_risk_assessment: Trade risk and position sizing\n"
             "- get_signals: Active trading signals\n"
             "- get_forecast: AI directional forecast\n\n"
-            "THINKING PROCESS:\n"
-            "- Start by understanding what the user really needs\n"
-            "- Identify which tools will provide the most relevant information\n"
-            "- After each tool call, assess what is missing\n"
-            "- Synthesize all observations before giving final answer\n"
-            "- Be concise but thorough with actionable EUR/USD insights"
+            "## THINKING PROCESS:\n"
+            "- You only analyze EUR/USD.\n"
+            "- Be surgical: only call tools you actually need for the specific request.\n"
+            "- Synthesize all data into a professional, actionable report."
         )
 
     def _extract_reasoning(self, content: str) -> str:
-        lowered = content.lower()
-        triggers = ("reason", "thought", "i need", "let me", "i should", "step ")
+        """Extract clean reasoning from the response content."""
+        # Truncate at tool calls if they are in the text (pseudo-calls)
+        clean = content
+        if "get_" in content and "(" in content:
+            clean = content.split("get_")[0].strip()
+        
+        # Truncate at ReAct markers if listed sequentially
+        for marker in ["ACT:", "**ACT:**", "ACT ", "Observation:", "OBSERVE:", "Result:"]:
+            if marker in clean:
+                clean = clean.split(marker)[0].strip()
+
+        lowered = clean.lower()
+        triggers = ("reason", "thought", "i need", "let me", "i should", "step ", "analyzing")
         if any(t in lowered for t in triggers):
-            # If it's a tool-call block, it's not reasoning for display
-            if "get_" in lowered and "()" in lowered:
-                return ""
-            return content.strip()
+            # Clean up Reasoning headers
+            for header in ["REASON:", "**REASON:**", "THOUGHT:", "**THOUGHT:**"]:
+                clean = clean.replace(header, "").strip()
+            return clean
+        
+        # If no triggers but it looks like a thought (longer than 20 chars)
+        if len(clean) > 20 and not "FINAL ANALYSIS" in clean:
+            return clean
+            
         return ""
 
     def _parse_text_tool_calls(self, text: str) -> list[dict]:
