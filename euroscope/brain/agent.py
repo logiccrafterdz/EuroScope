@@ -8,6 +8,7 @@ forecasting, and Q&A.
 import asyncio
 import json
 import logging
+import re
 import time
 from typing import Optional, Any
 
@@ -117,6 +118,7 @@ class Agent:
             return f"❌ AI unavailable: {str(e)[:100]}"
 
     async def chat_with_tools(self, user_message: str, max_iterations: int = 3) -> str:
+        """Simple tool-enabled chat with synthesis."""
         system = self._get_system_prompt_with_tools()
         if not self.router or not hasattr(self.router, "chat_with_functions"):
             return await self.chat(user_message, system_override=system)
@@ -125,19 +127,17 @@ class Agent:
         messages.extend(self.conversation_history[-self.max_history:])
         messages.append({"role": "user", "content": user_message})
 
-        tool_results = {}
         for _ in range(max_iterations):
-            response = await self.router.chat_with_functions(
-                messages=messages,
-            )
-
+            response = await self.router.chat_with_functions(messages=messages)
             content = response.get("content")
             function_calls = response.get("function_calls") or []
-            if content and not function_calls:
-                return content
+            
+            # Check for pseudo-tool calls in text if no formal function calls
+            if not function_calls and content:
+                function_calls = self._parse_text_tool_calls(content)
 
             if not function_calls:
-                break
+                return content or "❌ No response from AI."
 
             for call in function_calls:
                 name = call.get("name")
@@ -150,15 +150,20 @@ class Agent:
                 except Exception as e:
                     result = {"success": False, "error": str(e)}
 
-                tool_results[name] = result
                 messages.append({
                     "role": "function",
                     "name": name,
                     "content": json.dumps(result),
                 })
 
-        summary = self._summarize_tool_results(tool_results)
-        return summary if summary else await self.chat(user_message, system_override=system)
+            # After tool results, ask for synthesis
+            messages.append({
+                "role": "user", 
+                "content": "Synthesize the above tool results into a final actionable analysis for the user."
+            })
+            
+        final_response = await self.router.chat(messages)
+        return final_response
 
     async def chat_with_react_loop(
         self,
@@ -233,6 +238,10 @@ class Agent:
 
             content = response.get("content")
             function_calls = response.get("function_calls") or []
+
+            # Check for pseudo-tool calls in text if no formal function calls
+            if not function_calls and content:
+                function_calls = self._parse_text_tool_calls(content)
 
             if content:
                 reasoning = self._extract_reasoning(content)
@@ -425,10 +434,42 @@ class Agent:
 
     def _extract_reasoning(self, content: str) -> str:
         lowered = content.lower()
-        triggers = ("reason", "thought", "i need", "let me", "i should")
+        triggers = ("reason", "thought", "i need", "let me", "i should", "step ")
         if any(t in lowered for t in triggers):
+            # If it's a tool-call block, it's not reasoning for display
+            if "get_" in lowered and "()" in lowered:
+                return ""
             return content.strip()
         return ""
+
+    def _parse_text_tool_calls(self, text: str) -> list[dict]:
+        """Attempt to parse function calls from text when model fails to use API."""
+        calls = []
+        # Look for code blocks with get_skill()
+        pattern = r"(get_[a-z0-9_]+)\((.*?)\)"
+        matches = re.finditer(pattern, text)
+        for match in matches:
+            name = match.group(1)
+            # Find schemas to validate name
+            if any(s.value == name for s in SkillFunction):
+                calls.append({"name": name, "arguments": {}})
+        
+        # Look for JSON blocks
+        json_pattern = r"```json\s*(\{.*?\})\s*```"
+        json_matches = re.finditer(json_pattern, text, re.DOTALL)
+        for match in json_matches:
+            try:
+                data = json.loads(match.group(1))
+                if data.get("action") == "call_tools" or "tools" in data:
+                    tools = data.get("tools", [])
+                    for t in tools:
+                        if isinstance(t, str):
+                            calls.append({"name": t, "arguments": {}})
+                        elif isinstance(t, dict) and "name" in t:
+                            calls.append({"name": t["name"], "arguments": t.get("arguments", {})})
+            except:
+                continue
+        return calls
 
     def _format_tool_observation(self, tool_name: str, result: dict) -> str:
         if not isinstance(result, dict):

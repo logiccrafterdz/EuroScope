@@ -513,17 +513,25 @@ class EuroScopeBot:
         await self._reply(update, safe_markdown(formatted), topic_key="reports", reply_markup=keyboard, parse_mode="Markdown")
 
     async def cmd_smart_analysis(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Smart analysis using LLM tool calling."""
+        """Smart analysis using LLM ReAct loop."""
         if not await self._check_rate_limit(update):
             return
 
         user_message = "What's your comprehensive analysis of EUR/USD right now?"
-        response = await self.agent.chat_with_tools(user_message)
-
-        await update.message.reply_text(
-            f"🧠 <b>Smart Analysis</b>\n\n{response}",
-            parse_mode="HTML"
-        )
+        thinking_msg = await update.message.reply_text("🧠 Thinking...")
+        
+        try:
+            result = await self.agent.chat_with_react_loop(user_message)
+            final_answer = result.get("final_answer", "")
+            
+            # Synthesis check
+            if not final_answer or "get_" in final_answer:
+                response = await self.agent.chat_with_tools(user_message)
+                await thinking_msg.edit_text(f"🧠 <b>Smart Analysis</b>\n\n{response}", parse_mode="HTML")
+            else:
+                await thinking_msg.edit_text(f"🧠 <b>Smart Analysis</b>\n\n{final_answer}", parse_mode="HTML")
+        except Exception as e:
+            await thinking_msg.edit_text(f"❌ Smart analysis failed: {e}")
 
     async def cmd_comprehensive_analysis(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Full ReAct loop analysis with reasoning steps displayed."""
@@ -582,15 +590,16 @@ class EuroScopeBot:
         if not await self._check_rate_limit(update):
             return
 
-        result = await self.agent.chat_with_react_loop(
-            "Quick analysis of EUR/USD current state",
-            max_iterations=2,
-        )
-
-        await update.message.reply_text(
-            f"⚡ <b>Quick Analysis</b>\n\n{result.get('final_answer', '')}",
-            parse_mode="HTML"
-        )
+        thinking_msg = await update.message.reply_text("⚡ Analyzing...")
+        try:
+            result = await self.agent.chat_with_react_loop(
+                "Provide a quick 3-bullet analysis of current EUR/USD price action.",
+                max_iterations=2
+            )
+            answer = result.get("final_answer", "")
+            await thinking_msg.edit_text(f"⚡ <b>Quick Analysis</b>\n\n{answer}", parse_mode="HTML")
+        except Exception as e:
+            await thinking_msg.edit_text(f"❌ Quick analysis failed: {e}")
 
     async def cmd_chart(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /chart command."""
