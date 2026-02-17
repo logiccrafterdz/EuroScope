@@ -188,7 +188,7 @@ class Agent:
         self,
         user_message: str,
         max_iterations: int = 5,
-        max_tokens_per_iteration: int = 500,
+        max_tokens_per_iteration: int = 1500,
         custom_functions: Optional[list[dict]] = None,
         system_override: Optional[str] = None,
     ) -> dict[str, Any]:
@@ -518,7 +518,7 @@ class Agent:
             clean = content.split("get_")[0].strip()
         
         # Truncate at ReAct markers if listed sequentially
-        for marker in ["ACT:", "**ACT:**", "ACT ", "Observation:", "OBSERVE:", "Result:", "RESULT:"]:
+        for marker in ["ACT:", "**ACT:**", "ACT ", "Observation:", "OBSERVE:", "Result:", "RESULT:", "FINAL ANALYSIS:"]:
             if marker in clean:
                 clean = clean.split(marker)[0].strip()
 
@@ -527,11 +527,11 @@ class Agent:
         triggers = ("reason", "thought", "i need", "let me", "i should", "step ", "analyzing", "planning")
         if any(t in lowered for t in triggers):
             # Clean up Reasoning headers
-            for header in ["REASON:", "**REASON:**", "THOUGHT:", "**THOUGHT:**", "PLANNING:", "**PLANNING:**"]:
+            for header in ["REASON:", "**REASON:**", "THOUGHT:", "**THOUGHT:**", "PLANNING:", "**PLANNING:**", "ANALYSIS:", "**ANALYSIS:**"]:
                 clean = clean.replace(header, "").strip()
             
-            # Don't return if it's just a tiny fragment
-            if len(clean) < 10:
+            # Don't return if it's just a tiny fragment or if it contains final markers
+            if len(clean) < 10 or "FINAL" in clean.upper():
                 return ""
             return clean
         
