@@ -17,7 +17,7 @@ import httpx
 from ..config import LLMConfig
 from .prompts import SYSTEM_PROMPT, ANALYSIS_PROMPT, FORECAST_PROMPT, QUESTION_PROMPT
 from .llm_router import LLMRouter
-from .function_schema import get_all_function_schemas, FUNCTION_SCHEMAS
+from .function_schema import get_all_function_schemas, FUNCTION_SCHEMAS, SkillFunction
 from .vector_memory import VectorMemory
 
 logger = logging.getLogger("euroscope.brain.agent")
@@ -467,22 +467,23 @@ class Agent:
             clean = content.split("get_")[0].strip()
         
         # Truncate at ReAct markers if listed sequentially
-        for marker in ["ACT:", "**ACT:**", "ACT ", "Observation:", "OBSERVE:", "Result:"]:
+        for marker in ["ACT:", "**ACT:**", "ACT ", "Observation:", "OBSERVE:", "Result:", "RESULT:"]:
             if marker in clean:
                 clean = clean.split(marker)[0].strip()
 
         lowered = clean.lower()
-        triggers = ("reason", "thought", "i need", "let me", "i should", "step ", "analyzing")
+        # Triggers for what constitutes a "thought" worth showing
+        triggers = ("reason", "thought", "i need", "let me", "i should", "step ", "analyzing", "planning")
         if any(t in lowered for t in triggers):
             # Clean up Reasoning headers
-            for header in ["REASON:", "**REASON:**", "THOUGHT:", "**THOUGHT:**"]:
+            for header in ["REASON:", "**REASON:**", "THOUGHT:", "**THOUGHT:**", "PLANNING:", "**PLANNING:**"]:
                 clean = clean.replace(header, "").strip()
+            
+            # Don't return if it's just a tiny fragment
+            if len(clean) < 10:
+                return ""
             return clean
         
-        # If no triggers but it looks like a thought (longer than 20 chars)
-        if len(clean) > 20 and not "FINAL ANALYSIS" in clean:
-            return clean
-            
         return ""
 
     def _parse_text_tool_calls(self, text: str) -> list[dict]:
