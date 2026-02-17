@@ -151,8 +151,9 @@ class Agent:
                     result = {"success": False, "error": str(e)}
 
                 messages.append({
-                    "role": "function",
+                    "role": "tool",
                     "name": name,
+                    "tool_call_id": name or "tool",
                     "content": json.dumps(result),
                 })
 
