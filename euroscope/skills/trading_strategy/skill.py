@@ -46,6 +46,10 @@ class TradingStrategySkill(BaseSkill):
             "rsi": self._to_float(indicators.get("indicators", {}).get("RSI", {}).get("value")),
             "overall_bias": indicators.get("overall_bias"),
             "macd": indicators.get("indicators", {}).get("MACD", {}),
+            "bollinger": indicators.get("indicators", {}).get("Bollinger", {}),
+            "ema": indicators.get("indicators", {}).get("EMA", {}),
+            "atr": indicators.get("indicators", {}).get("ATR", {}),
+            "stochastic": indicators.get("indicators", {}).get("Stochastic", {}),
         }
 
         if ind["adx"] is None or ind["rsi"] is None:
