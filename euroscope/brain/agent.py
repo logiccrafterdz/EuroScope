@@ -141,19 +141,20 @@ class Agent:
                 return content or "❌ No response from AI."
 
             # Append the assistant's tool call message
-            if raw_message:
+            # CRITICAL: If no formal tool_calls exist in the raw_message, we MUST create them
+            raw_message = response.get("raw_message")
+            if raw_message and raw_message.get("tool_calls"):
                 messages.append(raw_message)
             else:
-                # Fallback if raw_message not available
                 messages.append({
                     "role": "assistant",
                     "content": content,
                     "tool_calls": [
                         {
-                            "id": f"call_{i}",
+                            "id": call.get("id") or f"call_{i}",
                             "type": "function",
-                            "function": {"name": c["name"], "arguments": json.dumps(c["arguments"])}
-                        } for i, c in enumerate(function_calls)
+                            "function": {"name": call["name"], "arguments": json.dumps(call.get("arguments", {}))}
+                        } for i, call in enumerate(function_calls)
                     ]
                 })
 
@@ -342,19 +343,22 @@ class Agent:
                 }
 
             # Append assistant message with tool calls
+            # CRITICAL: If no formal tool_calls exist in the raw_message, we MUST create them
+            # so the API accepts the subsequent 'tool' role messages.
             raw_message = response.get("raw_message")
-            if raw_message:
+            if raw_message and raw_message.get("tool_calls"):
                 messages.append(raw_message)
             else:
+                # Create a synthetic assistant message with tool_calls for history
                 messages.append({
                     "role": "assistant",
                     "content": content,
                     "tool_calls": [
                         {
-                            "id": f"call_{iteration}_{i}",
+                            "id": call.get("id") or f"call_{iteration}_{i}",
                             "type": "function",
-                            "function": {"name": c["name"], "arguments": json.dumps(c["arguments"])}
-                        } for i, c in enumerate(function_calls)
+                            "function": {"name": call["name"], "arguments": json.dumps(call.get("arguments", {}))}
+                        } for i, call in enumerate(function_calls)
                     ]
                 })
 
@@ -383,12 +387,8 @@ class Agent:
                     "content": observation,
                 })
 
-            if tool_results:
-                observation_summary = self._summarize_observations(tool_results)
-                messages.append({
-                    "role": "user",
-                    "content": f"Observation: {observation_summary}\n\nBased on these results, what's your next step or final analysis?",
-                })
+            # Removed the intermediate user message to maintain a clean sequence:
+            # assistant(tool_calls) -> tool(results) -> assistant(response)
 
         final_answer = await self._force_final_answer(messages)
         confidence = self._calculate_confidence(final_answer, tools_used, incomplete=True)
