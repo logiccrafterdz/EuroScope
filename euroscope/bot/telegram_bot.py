@@ -113,6 +113,8 @@ class EuroScopeBot:
             primary_base=config.llm.api_base,
             primary_model=config.llm.model,
             fallback_key=config.llm.fallback_api_key,
+            fallback_base=config.llm.fallback_api_base,
+            fallback_model=config.llm.fallback_model,
         )
         self.vector_memory = VectorMemory()
         self.agent = Agent(

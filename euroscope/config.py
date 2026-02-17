@@ -92,6 +92,8 @@ class Config:
                 max_tokens=int(os.getenv("EUROSCOPE_LLM_MAX_TOKENS", "4096")),
                 temperature=float(os.getenv("EUROSCOPE_LLM_TEMPERATURE", "0.4")),
                 fallback_api_key=fallback_key,
+                fallback_api_base=os.getenv("EUROSCOPE_LLM_FALLBACK_API_BASE", "https://api.openai.com/v1"),
+                fallback_model=os.getenv("EUROSCOPE_LLM_FALLBACK_MODEL", "gpt-4o-mini"),
             ),
             telegram=TelegramConfig(
                 token=os.getenv("EUROSCOPE_TELEGRAM_TOKEN", ""),

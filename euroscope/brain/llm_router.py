@@ -312,16 +312,40 @@ class LLMRouter:
             payload["function_call"] = function_call
 
         async with httpx.AsyncClient(timeout=60) as client:
-            response = await client.post(
-                f"{provider.api_base}/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {provider.api_key}",
-                    "Content-Type": "application/json",
-                },
-                json=payload,
-            )
-            response.raise_for_status()
-            data = response.json()
+            try:
+                response = await client.post(
+                    f"{provider.api_base}/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {provider.api_key}",
+                        "Content-Type": "application/json",
+                    },
+                    json=payload,
+                )
+                response.raise_for_status()
+                data = response.json()
+            except httpx.HTTPStatusError as e:
+                if e.response.status_code == 400 and functions:
+                    tools_payload = {
+                        "model": provider.model,
+                        "messages": messages,
+                        "max_tokens": max_tokens if max_tokens is not None else provider.max_tokens,
+                        "temperature": temp,
+                        "tools": [{"type": "function", "function": f} for f in functions],
+                    }
+                    if function_call is not None:
+                        tools_payload["tool_choice"] = function_call
+                    response = await client.post(
+                        f"{provider.api_base}/chat/completions",
+                        headers={
+                            "Authorization": f"Bearer {provider.api_key}",
+                            "Content-Type": "application/json",
+                        },
+                        json=tools_payload,
+                    )
+                    response.raise_for_status()
+                    data = response.json()
+                else:
+                    raise
 
         self._log_usage(provider.name, data)
         return data
