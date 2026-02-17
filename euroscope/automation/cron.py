@@ -339,7 +339,7 @@ class CronScheduler:
         return True
 
     def schedule(self, name: str, frequency: TaskFrequency,
-                 callback: Callable, delay: int = 0) -> ScheduledTask:
+                 callback: Callable, delay: int = 0, interval_seconds: int = 0) -> ScheduledTask:
         """
         Schedule a recurring task.
 
@@ -348,8 +348,9 @@ class CronScheduler:
             frequency: How often to run
             callback: Function to execute (sync or async)
             delay: Initial delay in seconds before first run
+            interval_seconds: Custom interval (overrides frequency default if > 0)
         """
-        interval = _FREQ_SECONDS.get(frequency, 60)
+        interval = interval_seconds if interval_seconds > 0 else _FREQ_SECONDS.get(frequency, 60)
         task = ScheduledTask(
             name=name,
             frequency=frequency,
@@ -358,7 +359,7 @@ class CronScheduler:
             next_run=time.time() + delay,
         )
         self._tasks[name] = task
-        logger.info(f"Cron: scheduled '{name}' ({frequency.value})")
+        logger.info(f"Cron: scheduled '{name}' ({frequency.value}, interval={interval}s)")
         return task
 
     def schedule_once(self, name: str, callback: Callable,
