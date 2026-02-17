@@ -149,7 +149,14 @@ class LLMRouter:
 
         # All providers failed
         self._failure_count += 1
-        error_msg = str(last_error)[:200] if last_error else "Unknown error"
+        if isinstance(last_error, httpx.HTTPStatusError):
+            status = last_error.response.status_code
+            if status in (401, 403):
+                error_msg = "Authentication failed (401/403). Check provider API keys."
+            else:
+                error_msg = str(last_error)[:200]
+        else:
+            error_msg = str(last_error)[:200] if last_error else "Unknown error"
         logger.error(f"All LLM providers failed: {error_msg}")
         return fail_result(error_msg)
 

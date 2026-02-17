@@ -260,6 +260,21 @@ class Agent:
             if content and not function_calls:
                 # Check if it's actually a final answer or just reasoning without action
                 lowered = content.lower()
+                if (
+                    "get_" not in lowered
+                    and not any(x in lowered for x in ["reason:", "act:", "thought:", "observation:", "observe:"])
+                ):
+                    clean_content = content
+                    for marker in ["REASON:", "ACT:", "THOUGHT:", "FINAL ANALYSIS:"]:
+                        clean_content = clean_content.replace(marker, "").strip()
+                    confidence = self._calculate_confidence(clean_content, tools_used)
+                    return {
+                        "final_answer": clean_content,
+                        "reasoning_steps": reasoning_steps,
+                        "tools_used": tools_used,
+                        "iterations": iteration,
+                        "confidence": confidence,
+                    }
                 if any(x in lowered for x in ["final analysis:", "answer:", "comprehensive analysis", "summary:"]):
                     # Clean up the final answer from any leftover ReAct markers
                     clean_content = content
@@ -489,13 +504,15 @@ class Agent:
     def _parse_text_tool_calls(self, text: str) -> list[dict]:
         """Attempt to parse function calls from text when model fails to use API."""
         calls = []
+        allowed_names = set(FUNCTION_SCHEMAS.keys())
+        skill_enum = globals().get("SkillFunction")
         # Look for code blocks with get_skill()
         pattern = r"(get_[a-z0-9_]+)\((.*?)\)"
         matches = re.finditer(pattern, text)
         for match in matches:
             name = match.group(1)
             # Find schemas to validate name
-            if any(s.value == name for s in SkillFunction):
+            if name in allowed_names or (skill_enum and any(s.value == name for s in skill_enum)):
                 calls.append({"name": name, "arguments": {}})
         
         # Look for JSON blocks
@@ -508,9 +525,12 @@ class Agent:
                     tools = data.get("tools", [])
                     for t in tools:
                         if isinstance(t, str):
-                            calls.append({"name": t, "arguments": {}})
+                            if t in allowed_names:
+                                calls.append({"name": t, "arguments": {}})
                         elif isinstance(t, dict) and "name" in t:
-                            calls.append({"name": t["name"], "arguments": t.get("arguments", {})})
+                            name = t["name"]
+                            if name in allowed_names:
+                                calls.append({"name": name, "arguments": t.get("arguments", {})})
             except:
                 continue
         return calls
