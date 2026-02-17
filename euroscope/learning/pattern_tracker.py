@@ -89,21 +89,55 @@ class PatternTracker:
         """
         unresolved = self.get_unresolved(limit=100)
         for p in unresolved:
-            signal = p["predicted_direction"].upper()
-            entry = p["price_at_detection"]
+            signal = (p.get("predicted_direction") or "NONE").upper()
+            entry = p.get("price_at_detection")
+            if not entry:
+                continue
             
+            # Basic resolution: compare current price to entry
             is_success = False
-            if signal == "BULLISH" and current_price > entry:
-                is_success = True
-            elif signal == "BEARISH" and current_price < entry:
-                is_success = True
-                
+            outcome = "FAILURE"
+            
+            if signal == "BULLISH":
+                if current_price > entry:
+                    is_success = True
+                    outcome = "SUCCESS"
+                elif current_price < entry:
+                    is_success = False
+                    outcome = "FAILURE"
+                else:
+                    continue # No movement yet
+            elif signal == "BEARISH":
+                if current_price < entry:
+                    is_success = True
+                    outcome = "SUCCESS"
+                elif current_price > entry:
+                    is_success = False
+                    outcome = "FAILURE"
+                else:
+                    continue # No movement yet
+            else:
+                continue
+
             self.resolve(
                 pattern_id=p["id"],
-                actual_outcome="SUCCESS" if is_success else "FAILURE",
+                actual_outcome=outcome,
                 price_at_resolution=current_price,
                 is_success=is_success
             )
+
+    def get_recent_lessons(self, limit: int = 5) -> str:
+        """Summarize recent resolved patterns into a natural language string."""
+        resolved = self.storage.get_resolved_patterns(limit=limit)
+        if not resolved:
+            return "No recent patterns resolved yet. I am continuously monitoring market structure for new opportunities."
+        
+        parts = []
+        for p in resolved:
+            icon = "✅" if p.get("is_success") else "❌"
+            parts.append(f"{icon} {p.get('pattern_name')} ({p.get('timeframe')}): Anticipated {p.get('predicted_direction')}, result was {p.get('actual_outcome')}.")
+        
+        return "\n".join(parts)
 
     def get_success_rates(self) -> dict:
         """Get success rates grouped by pattern + timeframe."""

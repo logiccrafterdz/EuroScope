@@ -133,6 +133,60 @@ class CronScheduler:
             interval = int(interval_value)
         if self.config and interval and interval > 0:
             self._schedule_proactive_analysis()
+        
+        # Schedule periodic 'Market Pulse' (every 6 hours)
+        self._schedule_periodic_pulse()
+
+    def _schedule_periodic_pulse(self):
+        async def pulse_task():
+            if self._is_quiet_time():
+                return
+            try:
+                agent = getattr(self.bot, "agent", None)
+                if not agent:
+                    return
+                
+                pulse_text = await agent.run_periodic_observation()
+                chat_ids = getattr(self.config, "proactive_alert_chat_ids", [])
+                
+                for chat_id in chat_ids:
+                    message = (
+                        f"🌐 <b>EuroScope Market Pulse</b>\n\n"
+                        f"{pulse_text}\n\n"
+                        f"<i>— Continuous Thinking & Learning</i>"
+                    )
+                    await self._send_proactive_alert_message(chat_id, message)
+            except Exception as e:
+                logger.error(f"Periodic pulse task failed: {e}")
+
+        # Run every 6 hours (21600 seconds)
+        interval_secs = 6 * 3600
+        self.schedule(
+            "market_pulse",
+            TaskFrequency.MINUTELY,
+            pulse_task,
+            interval_seconds=interval_secs,
+            delay=interval_secs,
+        )
+
+    async def _send_proactive_alert_message(self, chat_id: int, text: str) -> bool:
+        if not self.bot:
+            return False
+        app = getattr(self.bot, "application", None) or getattr(self.bot, "bot", None)
+        telegram_bot = getattr(app, "bot", None) if app else None
+        if not telegram_bot:
+            return False
+            
+        try:
+            await telegram_bot.send_message(
+                chat_id=chat_id,
+                text=text,
+                parse_mode="HTML",
+            )
+            return True
+        except Exception as e:
+            logger.error(f"Failed to send proactive message to {chat_id}: {e}")
+            return False
 
     def _seconds_until(self, hour: int, minute: int) -> int:
         now = datetime.utcnow()

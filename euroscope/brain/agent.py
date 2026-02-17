@@ -319,7 +319,7 @@ class Agent:
 
     async def run_proactive_analysis(self) -> dict[str, Any]:
         """
-        Autonomous market analysis for proactive alerts.
+        Autonomous market market analysis for proactive alerts.
         """
         proactive_prompt = (
             "You are EuroScope's autonomous monitoring system for EUR/USD.\n\n"
@@ -350,6 +350,33 @@ class Agent:
         decision = self._extract_proactive_decision(response)
         decision["analysis_summary"] = "\n".join(response.get("reasoning_steps", []))
         return decision
+
+    async def run_periodic_observation(self) -> str:
+        """
+        Generate a regular 'Market Pulse' summary showing continuous thinking.
+        """
+        from ..learning.pattern_tracker import PatternTracker
+        tracker = PatternTracker()
+        lessons = tracker.get_recent_lessons(limit=3)
+
+        pulse_prompt = (
+            "You are EuroScope providing a regular 'Market Pulse' update.\n"
+            "Your goal is to demonstrate continuous analysis and self-learning.\n\n"
+            "CONTENT GUIDELINES:\n"
+            "1. **Market Context**: Brief summary of current price action and session context.\n"
+            "2. **Learning Update**: Briefly acknowledge recent successes or failures in pattern detection.\n"
+            "3. **Current Focus**: What you are watching right now (e.g., waiting for session open, monitoring a level).\n\n"
+            f"RECENT LESSONS LEARNED:\n{lessons}\n\n"
+            "Keep the reply concise, professional, and insightful. Use bullet points."
+        )
+
+        response = await self.chat_with_tools(
+            user_message="Provide a concise Market Pulse update based on current conditions.",
+            max_iterations=2,
+            system_override=pulse_prompt
+        )
+        
+        return response
 
     def _extract_proactive_decision(self, response: dict[str, Any]) -> dict[str, Any]:
         func_result = response.get("function_call_result") or {}

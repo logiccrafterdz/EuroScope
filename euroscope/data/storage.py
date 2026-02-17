@@ -735,6 +735,15 @@ class Storage:
             (limit,)
         )
 
+    def get_resolved_patterns(self, limit: int = 50) -> list[dict]:
+        """Get recently resolved patterns for reporting."""
+        return self._query_rows(
+            """SELECT * FROM pattern_stats
+                WHERE is_success IS NOT NULL
+                ORDER BY resolved_at DESC LIMIT ?""",
+            (limit,)
+        )
+
     def get_similar_patterns(
         self,
         pattern_name: str,

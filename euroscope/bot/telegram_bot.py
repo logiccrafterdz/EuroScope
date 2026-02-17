@@ -1310,6 +1310,7 @@ class EuroScopeBot:
             "settings": self.cmd_settings,
             "daily_summary": self.cmd_daily_summary,
             "ask": self.cmd_ask,
+            "id": self.cmd_id,
             "health": self.cmd_health,
         }
 
@@ -1350,6 +1351,7 @@ class EuroScopeBot:
             BotCommand("alert", "Set price level alert"),
             BotCommand("settings", "Bot preferences & alerts"),
             BotCommand("daily_summary", "Daily trading activity recap"),
+            BotCommand("id", "Get your Telegram Chat ID"),
             BotCommand("help", "List all commands"),
         ]
         await application.bot.set_my_commands(cmds)
@@ -1386,6 +1388,15 @@ class EuroScopeBot:
         result = await self.orchestrator.run_skill("monitoring", "runtime_stats")
         text = result.metadata.get("formatted", "⚠️ Could not fetch health stats.")
         await self._reply(update, safe_markdown(text), parse_mode="Markdown")
+
+    async def cmd_id(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /id command — show user's chat ID."""
+        chat_id = update.effective_chat.id
+        await update.message.reply_text(
+            f"🆔 *Your Chat ID*: `{chat_id}`\n\n"
+            "Use this ID in your `.env` file under `EUROSCOPE_PROACTIVE_CHAT_IDS` to receive proactive alerts.",
+            parse_mode="Markdown"
+        )
 
     # ─── Background Learning Tasks ───────────────────────────
 
