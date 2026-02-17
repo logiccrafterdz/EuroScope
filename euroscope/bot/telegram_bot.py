@@ -1174,26 +1174,41 @@ class EuroScopeBot:
                 )
 
     async def _reply(self, update: Update, text: str, topic_key: str = None, **kwargs):
-        """Topic-aware reply helper."""
+        """Topic-aware reply helper with Markdown fallback."""
         chat_id = update.effective_chat.id
         thread_id = None
         if topic_key:
             thread_id = self.storage.get_user_thread(chat_id, topic_key)
         
-        if update.message:
-            return await update.message.reply_text(
-                text, 
-                message_thread_id=thread_id,
-                **kwargs
-            )
-        else:
-            # Fallback for callback queries where message might be different
-            return await update.get_bot().send_message(
-                chat_id=chat_id,
-                text=text,
-                message_thread_id=thread_id,
-                **kwargs
-            )
+        try:
+            if update.message:
+                return await update.message.reply_text(
+                    text, 
+                    message_thread_id=thread_id,
+                    **kwargs
+                )
+            else:
+                # Fallback for callback queries
+                return await update.get_bot().send_message(
+                    chat_id=chat_id,
+                    text=text,
+                    message_thread_id=thread_id,
+                    **kwargs
+                )
+        except Exception as e:
+            # If parsing fails, try sending as plain text
+            if "parse" in str(e).lower() and kwargs.get("parse_mode"):
+                logger.warning(f"Markdown parsing failed, falling back to plain text: {e}")
+                kwargs.pop("parse_mode")
+                # Strip potential markers for cleaner plain text
+                clean_text = text.replace("*", "").replace("_", "").replace("`", "")
+                if update.message:
+                    return await update.message.reply_text(clean_text, message_thread_id=thread_id, **kwargs)
+                else:
+                    return await update.get_bot().send_message(chat_id=chat_id, text=clean_text, message_thread_id=thread_id, **kwargs)
+            
+            logger.error(f"Reply failed: {e}", exc_info=True)
+            raise e
 
     async def _reply_photo(self, update: Update, photo, caption: str = None, topic_key: str = None, **kwargs):
         chat_id = update.effective_chat.id

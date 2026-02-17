@@ -54,19 +54,16 @@ def safe_markdown(text: str) -> str:
         return text
 
     # 1. Escape [ to prevent it being treated as a link start
-    # We don't use Markdown links in the bot's auto-generated text.
     text = text.replace("[", "\\[")
 
-    # 2. Fix unmatched code markers (`) - do this first to identify blocks
+    # 2. Fix unmatched code markers (`) - if odd count, escape the last one
     backticks = [m.start() for m in re.finditer(r'(?<!\\)`', text)]
     if len(backticks) % 2 != 0:
-        # Escape the last unmatched backtick
         idx = backticks[-1]
         text = text[:idx] + "\\" + text[idx:]
 
     # 3. Handle markers outside of code blocks
-    # This is simplified: it doesn't account for nested blocks perfectly,
-    # but covers 99% of LLM-generated text issues.
+    # Note: We find all non-escaped markers. If count is odd, we escape the last one.
     
     # Bold (*)
     asterisks = [m.start() for m in re.finditer(r'(?<!\\)\*', text)]
