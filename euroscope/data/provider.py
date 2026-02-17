@@ -22,6 +22,7 @@ EURUSD_SYMBOL = "EURUSD=X"
 
 # Timeframe mappings: our label → yfinance args
 TIMEFRAMES = {
+    "M1":  {"interval": "1m",  "period": "2d"},
     "M15": {"interval": "15m", "period": "5d"},
     "H1":  {"interval": "1h",  "period": "30d"},
     "H4":  {"interval": "1h",  "period": "60d"},  # We resample H1 → H4
