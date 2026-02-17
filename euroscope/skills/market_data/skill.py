@@ -56,10 +56,11 @@ class MarketDataSkill(BaseSkill):
                 return SkillResult(success=False, error="No candle data returned")
             context.market_data["candles"] = df
             context.market_data["timeframe"] = timeframe
+            from datetime import timezone
             self._buffer = {
                 "candles": df,
                 "timeframe": timeframe,
-                "updated_at": datetime.utcnow().isoformat(),
+                "updated_at": datetime.now(timezone.utc).isoformat(),
             }
             return SkillResult(success=True, data=df, next_skill="technical_analysis")
         except Exception as e:

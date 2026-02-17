@@ -72,6 +72,16 @@ class DeviationMonitorSkill(BaseSkill):
 
         buffer = self._get_buffer()
         if not buffer:
+            # Attempt to bootstrap buffer if empty
+            if self._market_data_skill:
+                try:
+                    ctx = SkillContext()
+                    await self._market_data_skill.execute(ctx, "get_candles", timeframe="M1", count=100)
+                    buffer = self._get_buffer()
+                except Exception as e:
+                    logger.debug(f"DeviationMonitor: auto-fetch failed: {e}")
+
+        if not buffer:
             logger.warning("DeviationMonitor: no market data buffer available")
             return
 
