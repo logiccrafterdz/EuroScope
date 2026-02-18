@@ -14,10 +14,40 @@ logger = logging.getLogger("euroscope.automation.alerts")
 
 
 class AlertPriority(IntEnum):
-    LOW = 1
-    MEDIUM = 2
-    HIGH = 3
-    CRITICAL = 4
+    CRITICAL = 4  # Immediate action required (e.g., liquidity sweep + breakout)
+    HIGH = 3      # Strong opportunity/risk (e.g., technical breakout with confirmation)
+    MEDIUM = 2    # Notable setup forming (e.g., pattern completion)
+    LOW = 1       # Informational only (e.g., market regime change)
+
+
+def calculate_priority(event: Any) -> AlertPriority:
+    """Calculates alert priority based on event alignment."""
+    base_score = 0
+    
+    # Technical strength
+    if getattr(event, "technical_strength", 0) > 0.7:
+        base_score += 1
+    
+    # Liquidity confirmation
+    if getattr(event, "liquidity_aligned", False):
+        base_score += 1
+    
+    # Macro catalyst proximity
+    if getattr(event, "macro_event_minutes", 999) < 30:
+        base_score += 1
+    
+    # Regime shift detected
+    if getattr(event, "regime_shift", False):
+        base_score += 1
+    
+    if base_score >= 3:
+        return AlertPriority.CRITICAL
+    elif base_score == 2:
+        return AlertPriority.HIGH
+    elif base_score == 1:
+        return AlertPriority.MEDIUM
+    else:
+        return AlertPriority.LOW
 
 
 class AlertChannel(Enum):
@@ -124,32 +154,41 @@ class SmartAlerts:
     def check(self, data: dict, source: str = "") -> list[Alert]:
         """
         Check all rules against data and return triggered alerts.
-
-        Args:
-            data: Data dict to check against rules
-            source: Source identifier
-
-        Returns:
-            List of triggered Alert objects
         """
         triggered = []
-        now = datetime.utcnow().timestamp()
+        now = datetime.utcnow()
+        now_ts = now.timestamp()
+
+        # Phase 3A: Asian Session Suppression (22:00 - 07:00 UTC)
+        is_asian_session = now.hour >= 22 or now.hour < 7
 
         for rule in self._rules.values():
             if not rule.enabled:
                 continue
 
-            # Cooldown check
-            if now - rule.last_triggered < rule.cooldown_seconds:
+            # Duplicate suppression (handled by rule.cooldown_seconds)
+            # Increase default cooldown to 60 min for non-critical events
+            cooldown = rule.cooldown_seconds
+            if is_asian_session and rule.name != "drawdown_warning": # Exception for critical
+                 cooldown = max(cooldown, 3600)
+
+            if now_ts - rule.last_triggered < cooldown:
                 continue
 
             try:
                 if rule.condition(data):
                     alert = rule.alert_template(data)
                     alert.source = source or alert.source
-                    if now < self._suppress_until and alert.priority not in self._essential_priorities:
+
+                    # Context-Aware Suppression
+                    if is_asian_session and alert.priority < AlertPriority.HIGH:
+                        logger.debug(f"Suppressing {alert.title} during Asian session (Low Liquidity)")
                         continue
-                    rule.last_triggered = now
+
+                    if now_ts < self._suppress_until and alert.priority not in self._essential_priorities:
+                        continue
+
+                    rule.last_triggered = now_ts
                     triggered.append(alert)
                     self._history.append(alert)
 

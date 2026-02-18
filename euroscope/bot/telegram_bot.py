@@ -607,6 +607,18 @@ class EuroScopeBot:
         except Exception as e:
             await thinking_msg.edit_text(f"❌ Quick analysis failed: {e}")
 
+    async def cmd_daily_briefing(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /daily_briefing command."""
+        if not await self._check_auth(update):
+            return
+        
+        await self._reply(update, "⏳ Synthesizing daily intelligence briefing...", topic_key="reports")
+        try:
+            briefing = await self.briefing_engine.generate_briefing()
+            await self._reply(update, briefing, topic_key="reports", parse_mode="HTML")
+        except Exception as e:
+            await self._reply(update, f"❌ Failed to generate briefing: {e}", topic_key="reports")
+
     async def cmd_chart(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /chart command."""
         if not await self._check_auth(update):

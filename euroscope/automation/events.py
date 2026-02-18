@@ -29,6 +29,20 @@ class Event:
             self.timestamp = datetime.now(timezone.utc).isoformat()
 
 
+@dataclass
+class MarketEvent:
+    """A specialized event for proactive market monitoring."""
+    event_type: str  # technical_breakout, liquidity_sweep, macro_catalyst, regime_shift
+    symbol: str
+    timeframe: str
+    technical_strength: float = 0.0
+    liquidity_aligned: bool = False
+    macro_event_minutes: int = 999
+    regime_shift: bool = False
+    data: dict = field(default_factory=dict)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+
+
 class EventBus:
     """
     Publish/subscribe event bus for decoupled skill communication.

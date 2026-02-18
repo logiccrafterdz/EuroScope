@@ -240,6 +240,59 @@ class PatternTracker:
 
         return "unknown"
 
+    def get_current_session(self, timestamp: Optional[datetime] = None) -> str:
+        """Determines the trading session based on UTC time."""
+        now = timestamp or datetime.utcnow()
+        hour = now.hour
+        
+        if 8 <= hour < 12:
+            return "LONDON"
+        elif 12 <= hour < 16:
+            return "SYNERGY"  # London + NY overlap
+        elif 16 <= hour < 21:
+            return "NEWYORK"
+        elif 21 <= hour <= 23 or 0 <= hour < 8:
+            return "ASIAN"
+        return "OTHER"
+
+    def get_confidence_multiplier(self, pattern_name: str,
+                                   timeframe: str,
+                                   current_regime: Optional[str] = None,
+                                   current_session: Optional[str] = None) -> float:
+        """
+        Get a confidence multiplier for a pattern/timeframe combo,
+        weighted by regime and session reliability.
+        """
+        rates = self.get_success_rates()
+        key = f"{pattern_name}_{timeframe}"
+        entry = rates.get(key)
+
+        base_multiplier = 1.0
+        if entry and entry["total"] >= 3:
+            rate = entry["success_rate"]
+            base_multiplier = 0.5 + rate / 100.0
+
+        # Regime/Session weightings (Phase 3B enhancement)
+        # In a full implementation, we'd query the database for 
+        # pattern success rates specific to the regime/session.
+        # This is a simplified dynamic adjustment logic.
+        
+        regime_mod = 1.0
+        if current_regime and entry:
+            # Boost if regime matches historical success (mock logic for now)
+            if current_regime == entry.get("best_regime", "trending"):
+                regime_mod = 1.1
+            elif current_regime == "volatile":
+                regime_mod = 0.9
+
+        session_mod = 1.0
+        if current_session == "ASIAN" and pattern_name != "consolidation":
+            session_mod = 0.8 # Asian session is less reliable for breakouts
+        elif current_session == "SYNERGY":
+            session_mod = 1.2 # High liquidity synergy session is more reliable
+
+        return round(base_multiplier * regime_mod * session_mod, 2)
+
     @staticmethod
     def _normalize_causal_chain(causal_chain: Optional[dict]) -> Optional[dict]:
         if not causal_chain:

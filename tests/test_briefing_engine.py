@@ -19,24 +19,24 @@ def mock_storage():
         "total": 10,
         "total_pnl": 120.5
     }
+    # Add mock for get_trade_journal_for_date
+    storage.get_trade_journal_for_date.return_value = [
+        {"id": "T1", "pips": 15.0},
+        {"id": "T2", "pips": -5.0}
+    ]
     return storage
 
 @pytest.mark.asyncio
 async def test_generate_briefing(mock_storage):
     engine = BriefingEngine(storage=mock_storage)
     
-    # Mock HealthMonitor
-    with patch("euroscope.brain.briefing_engine.HealthMonitor") as MockHealth:
-        mock_health_instance = MockHealth.return_value
-        
-        from unittest.mock import AsyncMock
-        mock_health_instance.full_check_async = AsyncMock(return_value=MagicMock(components=[MagicMock(healthy=True)]))
-        
+    # Mock HealthMonitor - though not used in the new generate_briefing, keeping for compatibility if it was used
+    with patch("euroscope.brain.briefing_engine.HealthMonitor", autospec=True):
         report = await engine.generate_briefing()
         
-        assert "EuroScope Daily Proactive Plan" in report
+        assert "EuroScope Daily Intelligence Briefing" in report
         assert "ECB Rate Decision" in report
-        assert "Lesson from trade #123" in report
-        assert "Win Rate: 65%" in report
-        assert "P/L: +120.5 pips" in report
-        assert "Operational" in report
+        assert "Key Lesson" in report
+        assert "Win Rate: 50%" in report # 1 win out of 2 trades in mock_journal_for_date
+        assert "P/L: +10.0p" in report # 15 - 5 = 10
+        assert "CPI" in report

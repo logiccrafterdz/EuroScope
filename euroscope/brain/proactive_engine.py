@@ -104,12 +104,49 @@ class ProactiveEngine:
         Scans SkillContext for events across all layers.
         """
         events = []
+        analysis = getattr(context, "analysis", {})
+        metadata = getattr(context, "metadata", {})
         
-        # This is a stub for the actual detection logic which will 
-        # pull from context.analysis and context.metadata
-        
-        # Example Technical Breakout Detection
-        # if context.analysis.get("technical", {}).get("breakout"):
-        #    events.append(MarketEvent(type="technical", ...))
+        # Layer 1: Technical Breakouts
+        technical = analysis.get("technical", {})
+        if technical.get("breakout"):
+            events.append(MarketEvent(
+                type="technical",
+                description=f"Technical breakout detected: {technical.get('breakout_type', 'Price')}",
+                technical_strength=technical.get("strength", 0.5),
+                metadata=technical
+            ))
+
+        # Layer 2: Liquidity Events
+        liquidity = analysis.get("liquidity", {})
+        if liquidity.get("sweep") or liquidity.get("order_block"):
+            events.append(MarketEvent(
+                type="liquidity",
+                description=f"Liquidity event: {liquidity.get('event_name', 'Sweep')}",
+                liquidity_aligned=True,
+                metadata=liquidity
+            ))
+
+        # Layer 3: Macro Catalysts
+        calendar = analysis.get("calendar", [])
+        for item in calendar:
+            minutes = item.get("minutes_to_event", 999)
+            if minutes < 60:
+                events.append(MarketEvent(
+                    type="macro",
+                    description=f"Upcoming Macro Catalyst: {item.get('event_name')}",
+                    macro_event_minutes=int(minutes),
+                    metadata=item
+                ))
+
+        # Layer 4: Regime Shifts
+        regime = analysis.get("regime", {})
+        if regime.get("shift_detected"):
+            events.append(MarketEvent(
+                type="regime",
+                description=f"Market Regime Shift: {regime.get('previous_regime')} -> {regime.get('current_regime')}",
+                regime_shift=True,
+                metadata=regime
+            ))
             
         return events

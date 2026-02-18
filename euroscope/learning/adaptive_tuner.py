@@ -77,6 +77,14 @@ class AdaptiveTuner:
                 "suggested_change": "Require 'complete' quality",
             })
 
+        if factors_count.get("liquidity_analysis_error", 0) >= 2:
+            recommendations.append({
+                "param": "liquidity_volume_threshold",
+                "action": "increase",
+                "reason": "Liquidity analysis error detected — require stronger volume confirmation",
+                "suggested_change": "+5%",
+            })
+
         # 2. Win rate analysis
         if stats["win_rate"] < 40:
             recommendations.append({
@@ -85,7 +93,7 @@ class AdaptiveTuner:
                 "reason": f"Low win rate ({stats['win_rate']}%) — raise entry bar",
                 "suggested_change": "+5",
             })
-        elif stats["win_rate"] > 70:
+        elif stats.get("win_rate", 0) > 70:
             recommendations.append({
                 "param": "confidence_threshold",
                 "action": "decrease",
@@ -94,7 +102,7 @@ class AdaptiveTuner:
             })
 
         # 2. P/L analysis
-        if stats["avg_pnl"] < -5:
+        if stats.get("avg_pnl", 0) < -5:
             recommendations.append({
                 "param": "stop_loss_pips",
                 "action": "tighten",

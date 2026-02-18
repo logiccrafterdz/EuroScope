@@ -55,11 +55,26 @@ class PostTradeAnalyzer:
         )
 
     def _calculate_prediction_accuracy(self, trade: Dict) -> float:
-        """Simple accuracy mapping: 1.0 for full profit, 0.0 for stop loss."""
-        # This can be more sophisticated
-        if trade.get("pips", 0) > 0:
+        """
+        Calculates accuracy based on distance from targets.
+        1.0 = Full Take Profit hit.
+        0.0 = Stop Loss hit.
+        0.5 = Exit at breakeven.
+        """
+        pips = trade.get("pips", 0)
+        tp = trade.get("tp_pips", 30)
+        sl = trade.get("sl_pips", 15)
+        
+        if pips >= tp:
             return 1.0
-        return 0.0
+        if pips <= -sl:
+            return 0.0
+        
+        # Linear interp between SL and TP
+        total_range = tp + sl
+        if total_range == 0:
+            return 0.5
+        return round((pips + sl) / total_range, 2)
 
     def _identify_success_factors(self, trade: Dict, context: Dict) -> List[str]:
         factors = ["trend_alignment"]
