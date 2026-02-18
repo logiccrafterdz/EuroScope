@@ -8,7 +8,7 @@ import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum, IntEnum
-from typing import Callable, Optional
+from typing import Callable, Optional, Any
 
 logger = logging.getLogger("euroscope.automation.alerts")
 
