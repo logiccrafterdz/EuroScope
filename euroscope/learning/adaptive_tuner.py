@@ -53,8 +53,31 @@ class AdaptiveTuner:
             }
 
         recommendations = []
+        
+        # 1. Qualitative Learning Analysis (Phase 3B)
+        insights = self.storage.get_recent_learning_insights(limit=10)
+        factors_count = {}
+        for insight in insights:
+            for factor in insight.get("factors", []):
+                factors_count[factor] = factors_count.get(factor, 0) + 1
+        
+        if factors_count.get("regime_misidentification", 0) >= 2:
+            recommendations.append({
+                "param": "regime_sensitivity",
+                "action": "increase",
+                "reason": "Frequent regime misidentification detected in recent trades",
+                "suggested_change": "+10%",
+            })
+            
+        if factors_count.get("incomplete_fundamental_data", 0) >= 2:
+            recommendations.append({
+                "param": "data_quality_threshold",
+                "action": "increase",
+                "reason": "Trades failing due to incomplete macro data",
+                "suggested_change": "Require 'complete' quality",
+            })
 
-        # 1. Win rate analysis
+        # 2. Win rate analysis
         if stats["win_rate"] < 40:
             recommendations.append({
                 "param": "confidence_threshold",

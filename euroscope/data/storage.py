@@ -187,6 +187,15 @@ class Storage:
                     causal_chain TEXT
                 );
 
+                CREATE TABLE IF NOT EXISTS learning_insights (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    trade_id TEXT NOT NULL,
+                    accuracy REAL NOT NULL,
+                    factors TEXT DEFAULT '[]',
+                    recommendations TEXT DEFAULT '[]',
+                    timestamp TEXT NOT NULL
+                );
+
                 CREATE TABLE IF NOT EXISTS user_threads (
                     chat_id INTEGER NOT NULL,
                     topic_key TEXT NOT NULL,
@@ -767,6 +776,31 @@ class Storage:
         params.append(limit)
         results = self._query_rows(query, tuple(params))
         return [r for r in results if r.get("similarity", 0) >= min_similarity]
+
+    # ── Learning Insights ─────────────────────────────────────
+
+    def save_learning_insight(self, trade_id: str, accuracy: float,
+                              factors: list[str], recommendations: list[str]) -> int:
+        """Save a new learning insight extract from a trade."""
+        now = datetime.now(timezone.utc).isoformat()
+        with self._conn:
+            cursor = self._conn.execute(
+                """INSERT INTO learning_insights (trade_id, accuracy, factors, recommendations, timestamp)
+                   VALUES (?, ?, ?, ?, ?)""",
+                (trade_id, accuracy, json.dumps(factors), json.dumps(recommendations), now)
+            )
+            return cursor.lastrowid
+
+    def get_recent_learning_insights(self, limit: int = 20) -> list[dict]:
+        """Get the most recent learning insights."""
+        rows = self._query_rows(
+            "SELECT * FROM learning_insights ORDER BY timestamp DESC LIMIT ?",
+            (limit,)
+        )
+        for r in rows:
+            r["factors"] = self._parse_json_payload(r.get("factors"))
+            r["recommendations"] = self._parse_json_payload(r.get("recommendations"))
+        return rows
 
     # ─── User Threads (Private Topics) ───────────────────────
 

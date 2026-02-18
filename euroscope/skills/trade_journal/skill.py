@@ -1,8 +1,11 @@
 """Trade Journal Skill — Full context trade logging and analysis."""
 
+import logging
+import json
 from ..base import BaseSkill, SkillCategory, SkillContext, SkillResult
 from ...data.storage import Storage
 
+logger = logging.getLogger("euroscope.skills.trade_journal")
 
 class TradeJournalSkill(BaseSkill):
     """
@@ -63,12 +66,51 @@ class TradeJournalSkill(BaseSkill):
             return SkillResult(success=False, error=str(e))
 
     def _close_trade(self, **params) -> SkillResult:
-        """Close a trade with outcome."""
+        """Close a trade with outcome and extract learning insights."""
         try:
             trade_id = params["trade_id"]
             exit_price = params["exit_price"]
             pnl_pips = params["pnl_pips"]
             is_win = params.get("is_win", pnl_pips > 0)
+
+            # Phase 3B: Continuous Learning Loop
+            trade_data = self.storage.get_trade_with_causal(trade_id)
+            if trade_data:
+                from ...learning.post_trade_analyzer import PostTradeAnalyzer
+                analyzer = PostTradeAnalyzer()
+                
+                # Market context for analyzer (partially from recorded snapshots)
+                try:
+                    raw_ind = trade_data.get("indicators_snapshot", "{}")
+                    indicators = json.loads(raw_ind) if isinstance(raw_ind, str) else (raw_ind or {})
+                except (json.JSONDecodeError, TypeError):
+                    indicators = {}
+                
+                # Handle potential string causal_chain
+                causal = trade_data.get("causal_chain")
+                if isinstance(causal, str):
+                    try:
+                        causal = json.loads(causal)
+                    except:
+                        causal = {}
+                elif not isinstance(causal, dict):
+                    causal = {}
+
+                market_context = {
+                    "regime": trade_data.get("regime"),
+                    "liquidity_aligned": causal.get("liquidity_aligned", False),
+                    "data_quality": causal.get("data_quality", "unknown"),
+                    "indicators": indicators
+                }
+                
+                insight = analyzer.analyze_trade_outcome(trade_data, market_context)
+                self.storage.save_learning_insight(
+                    trade_id=str(trade_id),
+                    accuracy=insight.accuracy,
+                    factors=insight.key_factors,
+                    recommendations=insight.recommendations
+                )
+                logger.info(f"Learning insight saved for trade #{trade_id}: {insight.key_factors}")
 
             self.storage.close_trade_journal(trade_id, exit_price, pnl_pips, is_win)
 
@@ -79,6 +121,7 @@ class TradeJournalSkill(BaseSkill):
                 metadata={"formatted": f"{icon} Trade #{trade_id} closed: {pnl_pips:+.1f} pips"},
             )
         except Exception as e:
+            logger.error(f"Error closing trade: {e}", exc_info=True)
             return SkillResult(success=False, error=str(e))
 
     def _get_journal(self, **params) -> SkillResult:

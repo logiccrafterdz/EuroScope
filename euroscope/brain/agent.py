@@ -404,31 +404,31 @@ class Agent:
 
     async def run_proactive_analysis(self) -> dict[str, Any]:
         """
-        Autonomous market market analysis for proactive alerts.
+        Autonomous market market analysis for proactive alerts (Phase 3A).
         """
         proactive_prompt = (
-            "You are EuroScope's autonomous monitoring system for EUR/USD.\n\n"
-            "ANALYZE THESE CRITICAL ASPECTS:\n"
-            "1. Price action vs key liquidity zones (session highs/lows, psychological levels)\n"
-            "2. Technical regime (trending/ranging/volatile) + indicator alignment\n"
-            "3. Market session context (Asian/London/Overlap/NY) and its implications\n"
-            "4. Recent liquidity sweeps or unusual activity\n"
-            "5. Upcoming high-impact events (next 60 mins)\n\n"
-            "DECISION RULES:\n"
-            "- ALERT if: Clear high-probability setup, regime shift detected, high-risk condition, or major event imminent\n"
-            "- NO ALERT if: Market quiet/ranging without edge, or alert would be noise\n"
-            "- PRIORITY:\n"
-            "  * urgent: Imminent risk (stop hunt zone, volatility spike) or high-impact event <15min\n"
-            "  * medium: Strong setup forming or regime change confirmed\n"
-            "  * low: Notable but not time-sensitive observation\n\n"
-            "OUTPUT: Call proactive_alert_decision function with your decision.\n"
-            "NEVER send multiple alerts for same condition within 60 minutes."
+            "You are EuroScope's proactive intelligence engine for EUR/USD.\n\n"
+            "YOUR GOAL: Discover opportunities and risks before the user asks.\n\n"
+            "MULTI-LAYER DETECTION SYSTEM:\n"
+            "1. **Layer 1: Technical Breakouts**: Price breaking key levels (Support/Resistance/Fib) with volume confirmation.\n"
+            "2. **Layer 2: Liquidity Events**: Order blocks, sweeps of session highs/lows, or institutional accumulation/distribution.\n"
+            "3. **Layer 3: Macro Catalysts**: High-impact events (Interest rates, CPI, NFP) occurring within the next 60 minutes.\n"
+            "4. **Layer 4: Regime Shifts**: Sudden deviations in volatility or trend direction (Trending vs Ranging).\n\n"
+            "ALERT PRIORITIZATION (critical, high, medium, low):\n"
+            "- CRITICAL: Immediate action! Liquidity sweep + breakout or extreme high-impact event < 15m.\n"
+            "- HIGH: Strong setup! Technical breakout with sentiment and liquidity alignment.\n"
+            "- MEDIUM: Notable observation! Pattern completing or regime change confirmed.\n"
+            "- LOW: Informational baseline (Asian session setup, minor levels).\n\n"
+            "GUIDELINES:\n"
+            "- NO ALERT if market is quiet or setup is weak/noisy.\n"
+            "- Be selective. Do not alert for duplicates within 60 minutes.\n"
+            "- Call proactive_alert_decision with your final decision."
         )
 
         decision_functions = get_all_function_schemas()
         response = await self.chat_with_react_loop(
-            user_message="Analyze current EUR/USD state for proactive alerting",
-            max_iterations=3,
+            user_message="Scan EUR/USD multilayer events for proactive intelligence",
+            max_iterations=4,
             custom_functions=decision_functions,
             system_override=proactive_prompt,
         )

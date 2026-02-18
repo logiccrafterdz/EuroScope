@@ -14,6 +14,7 @@ from typing import Callable, Optional
 from enum import Enum
 
 from ..brain.vector_memory import VectorMemory
+from ..brain.proactive_engine import ProactiveEngine, AlertPriority
 
 logger = logging.getLogger("euroscope.automation.cron")
 
@@ -123,6 +124,7 @@ class CronScheduler:
             cache_duration_minutes=cache_minutes,
             per_user_limit=3,
         )
+        self.proactive_engine = ProactiveEngine()
         if self.config and getattr(self.config, "vector_memory_ttl_days", None):
             self._schedule_vector_memory_cleanup()
         interval_value = getattr(self.config, "proactive_analysis_interval_minutes", None)
@@ -263,6 +265,26 @@ class CronScheduler:
                     logger.debug("Proactive analysis: No alert warranted")
                     return
 
+                # Phase 3A: Context-Aware Suppression
+                from ..brain.proactive_engine import MarketEvent, AlertPriority as EnginePriority
+                
+                # Convert string priority from LLM to EnginePriority enum
+                p_str = decision.get("priority", "low").upper()
+                try:
+                    priority = EnginePriority[p_str]
+                except KeyError:
+                    priority = EnginePriority.LOW
+
+                event = MarketEvent(
+                    type="proactive_scan",
+                    description=decision.get("message", ""),
+                    metadata=decision
+                )
+
+                if self.proactive_engine.should_suppress(event, user_min_priority=EnginePriority.LOW):
+                    logger.info(f"Proactive alert suppressed by engine logic ({p_str})")
+                    return
+
                 message = decision.get("message") or ""
                 if not message:
                     logger.debug("Proactive analysis: Missing alert message")
@@ -284,6 +306,7 @@ class CronScheduler:
                         continue
                     sent = await self._send_proactive_alert(chat_id, decision)
                     if sent:
+                        self.proactive_engine.mark_alerted(event)
                         self._alert_cache.record_alert(chat_id, message)
                         logger.info(
                             f"Proactive alert sent [{decision.get('priority')}]: "
@@ -325,7 +348,12 @@ class CronScheduler:
                 if not allowed:
                     return False
 
-        emoji = {"urgent": "🚨", "medium": "⚠️", "low": "ℹ️"}.get(decision.get("priority"), "ℹ️")
+        emoji = {
+            "critical": "🚨",
+            "high": "🔥",
+            "medium": "⚠️",
+            "low": "ℹ️"
+        }.get(decision.get("priority"), "ℹ️")
         message = (
             f"{emoji} <b>Proactive Alert ({decision.get('priority', 'low').upper()})</b>\n\n"
             f"{decision.get('message')}\n\n"

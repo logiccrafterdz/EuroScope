@@ -212,7 +212,7 @@ FUNCTION_SCHEMAS: Dict[str, Dict[str, Any]] = {
             "properties": {
                 "should_alert": {"type": "boolean"},
                 "message": {"type": "string", "description": "Concise alert message (<150 chars)"},
-                "priority": {"type": "string", "enum": ["urgent", "medium", "low"]},
+                "priority": {"type": "string", "enum": ["critical", "high", "medium", "low"]},
                 "reason": {"type": "string", "description": "Internal reasoning for logging"},
             },
             "required": ["should_alert"],

@@ -47,6 +47,8 @@ from ..utils.formatting import truncate, safe_markdown
 from .rate_limiter import RateLimiter
 from .user_settings import UserSettings
 from .notification_manager import NotificationManager
+from ..brain.briefing_engine import BriefingEngine
+from ..analytics.evolution_tracker import EvolutionTracker
 
 from ..skills.registry import SkillsRegistry
 from ..skills.base import SkillContext
@@ -131,6 +133,8 @@ class EuroScopeBot:
         
         self.forecaster = Forecaster(self.agent, self.memory, self.orchestrator, pattern_tracker=self.pattern_tracker)
         self.agent.forecaster = self.forecaster
+        self.briefing_engine = BriefingEngine(self.storage)
+        self.evolution_tracker = EvolutionTracker(self.storage)
 
         self.orchestrator.set_alerts(self.alerts)
         market_data_skill = self.registry.get("market_data")
@@ -1349,6 +1353,8 @@ class EuroScopeBot:
             "performance": self.cmd_performance,
             "settings": self.cmd_settings,
             "daily_summary": self.cmd_daily_summary,
+            "daily_briefing": self.cmd_daily_briefing,
+            "system_evolution": self.cmd_system_evolution,
             "ask": self.cmd_ask,
             "id": self.cmd_id,
             "health": self.cmd_health,
@@ -1393,6 +1399,7 @@ class EuroScopeBot:
             BotCommand("alert", "Set price level alert"),
             BotCommand("settings", "Bot preferences & alerts"),
             BotCommand("daily_summary", "Daily trading activity recap"),
+            BotCommand("system_evolution", "Track intelligence growth & milestones"),
             BotCommand("id", "Get your Telegram Chat ID"),
             BotCommand("help", "List all commands"),
         ]
@@ -1411,6 +1418,12 @@ class EuroScopeBot:
             TaskFrequency.DAILY,
             self.daily_tracker.run,
             delay=self.cron._seconds_until(23, 55),
+        )
+        self.cron.schedule(
+            "daily_briefing",
+            TaskFrequency.DAILY,
+            self._task_daily_briefing,
+            delay=self.cron._seconds_until(7, 0),
         )
 
         logger.info("⚡ Background services & Commands registered.")
@@ -1520,6 +1533,38 @@ class EuroScopeBot:
         self.workspace.refresh_memory(self.storage)
         self.workspace.refresh_identity(self.storage)
         logger.info("Cron: Weekly reflection complete.")
+
+    async def _task_daily_briefing(self):
+        """Generate and broadcast the morning briefing."""
+        logger.info("Cron: Running daily briefing...")
+        report = await self.briefing_engine.generate_briefing()
+        
+        # Broadcast to proactive alert chat IDs
+        chat_ids = self.config.proactive_alert_chat_ids
+        if chat_ids:
+            await self.notifications.broadcast_message(
+                report,
+                chat_ids=chat_ids,
+                parse_mode="HTML"
+            )
+        logger.info("Cron: Daily briefing sent.")
+
+    async def cmd_daily_briefing(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /daily_briefing — manual trigger for morning plan."""
+        if not await self._check_auth(update):
+            return
+            
+        await update.message.reply_text("⏳ Generating your daily briefing...")
+        report = await self.briefing_engine.generate_briefing()
+        await update.message.reply_text(report, parse_mode="HTML")
+
+    async def cmd_system_evolution(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /system_evolution — show intelligence growth metrics."""
+        if not await self._check_auth(update):
+            return
+            
+        report = self.evolution_tracker.get_evolution_report()
+        await update.message.reply_text(report, parse_mode="HTML")
 
     def run(self):
         """Start the Telegram bot polling and automation services."""

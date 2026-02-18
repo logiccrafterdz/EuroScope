@@ -7,17 +7,17 @@ Monitors skill results and triggers alerts based on configurable rules.
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime
-from enum import Enum
+from enum import Enum, IntEnum
 from typing import Callable, Optional
 
 logger = logging.getLogger("euroscope.automation.alerts")
 
 
-class AlertPriority(Enum):
-    LOW = "low"
-    MEDIUM = "medium"
-    HIGH = "high"
-    CRITICAL = "critical"
+class AlertPriority(IntEnum):
+    LOW = 1
+    MEDIUM = 2
+    HIGH = 3
+    CRITICAL = 4
 
 
 class AlertChannel(Enum):
@@ -161,7 +161,7 @@ class SmartAlerts:
                         except Exception as e:
                             logger.error(f"Alert handler error: {e}")
                     else:
-                        logger.info(f"Alert [{alert.priority.value}]: {alert.title} — {alert.message}")
+                        logger.info(f"Alert [{alert.priority.name}]: {alert.title} — {alert.message}")
 
             except Exception as e:
                 logger.error(f"Alert rule '{rule.name}' check error: {e}")
