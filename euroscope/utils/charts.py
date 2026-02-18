@@ -73,15 +73,15 @@ def generate_chart(df: pd.DataFrame, timeframe: str = "H1",
                 wick={"up": "#26A69A", "down": "#EF5350"},
                 volume={"up": "#26A69A40", "down": "#EF535040"}, # Subtle volume
             ),
-            figcolor="#0B0E11",  # Deep Charcoal/Black
-            facecolor="#0B0E11",
+            figcolor="#111827",  # Zinc-900 (logiccrafterdz.site)
+            facecolor="#111827",
             gridstyle="--",
-            gridcolor="#1F2937", # Subtle grid
+            gridcolor="#374151", # Zinc-700
             rc={
                 "font.family": "sans-serif",
-                "axes.labelcolor": "#848E9C",
-                "xtick.color": "#848E9C",
-                "ytick.color": "#848E9C",
+                "axes.labelcolor": "#9ca3af",
+                "xtick.color": "#9ca3af",
+                "ytick.color": "#9ca3af",
             }
         )
 

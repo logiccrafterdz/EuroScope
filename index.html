@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
@@ -8,14 +9,21 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
-            --bg-color: #0B0E11;
-            --card-bg: rgba(23, 27, 34, 0.7);
-            --accent-blue: #2196F3;
-            --accent-gold: #FFC107;
-            --text-main: #FFFFFF;
-            --text-dim: #848E9C;
-            --up-color: #26A69A;
-            --down-color: #EF5350;
+            --bg-color: #111827;
+            /* Zinc-900 */
+            --card-bg: #1f2937;
+            /* Zinc-800 */
+            --accent-emerald: #10b981;
+            /* Emerald-500 */
+            --accent-emerald-dim: rgba(16, 185, 129, 0.1);
+            --text-main: #e5e7eb;
+            /* Zinc-200 */
+            --text-dim: #9ca3af;
+            /* Zinc-400 */
+            --border-color: #374151;
+            /* Zinc-700 */
+            --up-color: #10b981;
+            --down-color: #ef4444;
         }
 
         * {
@@ -47,48 +55,52 @@
 
         .logo {
             font-weight: 700;
-            font-size: 1.2rem;
-            letter-spacing: 1px;
-            color: var(--accent-gold);
+            font-size: 1rem;
+            letter-spacing: 2px;
+            color: var(--accent-emerald);
+            font-family: 'Fira Code', monospace;
         }
 
         .status-badge {
-            background: rgba(38, 166, 154, 0.1);
-            color: var(--up-color);
+            background: var(--accent-emerald-dim);
+            color: var(--accent-emerald);
             padding: 4px 12px;
-            border-radius: 20px;
-            font-size: 0.75rem;
+            border-radius: 6px;
+            font-size: 0.7rem;
             font-weight: 600;
-            border: 1px solid rgba(38, 166, 154, 0.2);
+            border: 1px solid rgba(16, 185, 129, 0.2);
+            text-transform: uppercase;
         }
 
         .price-card {
             background: var(--card-bg);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.05);
-            border-radius: 24px;
-            padding: 24px;
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 32px 24px;
             margin-bottom: 16px;
             text-align: center;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
         }
 
         .price-label {
             color: var(--text-dim);
-            font-size: 0.85rem;
-            margin-bottom: 8px;
+            font-size: 0.75rem;
+            margin-bottom: 12px;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
         }
 
         .price-value {
-            font-size: 2.5rem;
+            font-size: 2.8rem;
             font-weight: 700;
             margin-bottom: 8px;
-            font-variant-numeric: tabular-nums;
+            font-family: 'Fira Code', monospace;
+            color: var(--text-main);
         }
 
         .price-change {
-            font-size: 1rem;
-            font-weight: 600;
+            font-size: 0.95rem;
+            font-weight: 500;
+            font-family: 'Fira Code', monospace;
         }
 
         .stats-grid {
@@ -100,81 +112,73 @@
 
         .stat-card {
             background: var(--card-bg);
-            border-radius: 16px;
+            border-radius: 12px;
             padding: 16px;
-            border: 1px solid rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border-color);
         }
 
         .stat-label {
             color: var(--text-dim);
-            font-size: 0.75rem;
-            margin-bottom: 4px;
+            font-size: 0.7rem;
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
         }
 
         .stat-value {
             font-weight: 600;
-            font-size: 1rem;
+            font-size: 1.1rem;
+            font-family: 'Fira Code', monospace;
         }
 
         .chart-placeholder {
-            background: var(--card-bg);
-            border-radius: 20px;
-            height: 200px;
+            background: var(--bg-color);
+            border-radius: 12px;
+            height: 180px;
             display: flex;
             align-items: center;
             justify-content: center;
             margin-bottom: 24px;
-            border: 1px solid rgba(255, 255, 255, 0.03);
+            border: 1px dashed var(--border-color);
             position: relative;
-            overflow: hidden;
-        }
-
-        .chart-placeholder::after {
-            content: '';
-            position: absolute;
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.02), transparent);
-            animation: move 3s infinite;
-        }
-
-        @keyframes move {
-            0% { transform: translateX(-100%); }
-            100% { transform: translateX(100%); }
         }
 
         .action-button {
-            background: var(--accent-blue);
-            color: white;
+            background: var(--accent-emerald);
+            color: #064e3b;
+            /* emerald-900 for high contrast */
             border: none;
             width: 100%;
-            padding: 16px;
-            border-radius: 16px;
+            padding: 18px;
+            border-radius: 8px;
             font-weight: 700;
-            font-size: 1rem;
+            font-size: 0.95rem;
             margin-bottom: 12px;
-            box-shadow: 0 4px 15px rgba(33, 150, 243, 0.3);
             cursor: pointer;
-            transition: transform 0.1s;
-        }
-
-        .action-button:active {
-            transform: scale(0.98);
+            text-transform: uppercase;
+            letter-spacing: 1px;
         }
 
         .secondary-button {
-            background: rgba(255, 255, 255, 0.05);
-            color: var(--text-main);
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: transparent;
+            color: var(--text-dim);
+            border: 1px solid var(--border-color);
             width: 100%;
             padding: 14px;
-            border-radius: 16px;
+            border-radius: 8px;
             font-weight: 600;
-            font-size: 0.9rem;
+            font-size: 0.85rem;
             cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .secondary-button:hover {
+            border-color: var(--accent-emerald);
+            color: var(--text-main);
         }
     </style>
 </head>
+
 <body>
     <div class="container">
         <header>
@@ -227,4 +231,5 @@
         document.documentElement.style.setProperty('--bg-color', tg.themeParams.bg_color || '#0B0E11');
     </script>
 </body>
+
 </html>

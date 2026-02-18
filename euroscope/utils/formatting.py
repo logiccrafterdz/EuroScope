@@ -45,10 +45,10 @@ def rich_header(text: str, type: str = "main") -> str:
     """
     # Mapping for pseudo-bold/serif icons and text styles
     headers = {
-        "main": ("◈", "★"),
+        "main": ("🌐", ""),
         "sub": ("▹", ""),
         "info": ("ℹ️", ""),
-        "success": ("✅", ""),
+        "success": ("💹", ""),
         "warning": ("⚠️", ""),
         "signal": ("🎯", ""),
     }
@@ -68,7 +68,7 @@ def progress_bar(percent: float, width: int = 10) -> str:
 
 def thematic_divider() -> str:
     """A high-end financial thematic divider."""
-    return "◈" + "─" * 15 + "◈"
+    return "⚡" + "─" * 15 + "⚡"
 
 
 def priority_label(text: str, color: str = "blue") -> str:
