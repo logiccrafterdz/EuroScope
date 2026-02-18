@@ -7,7 +7,7 @@ drawdown limits for disciplined EUR/USD trading.
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 from typing import Optional
 
 logger = logging.getLogger("euroscope.trading.risk_manager")
@@ -221,7 +221,7 @@ class RiskManager:
         risk_amount = round(self.config.account_balance * (self.config.risk_per_trade / 100), 2)
 
         # ── Drawdown checks ──
-        today = datetime.utcnow().strftime("%Y-%m-%d")
+        today = datetime.now(UTC).strftime("%Y-%m-%d")
         if self._daily_pnl_date != today:
             self._daily_pnl = 0.0
             self._daily_pnl_date = today

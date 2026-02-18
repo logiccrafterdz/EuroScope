@@ -2,7 +2,7 @@
 Technical Analysis Skill — Wraps TechnicalAnalyzer, PatternDetector, LevelAnalyzer.
 """
 
-from datetime import datetime
+from datetime import datetime, UTC
 
 from ...analysis.technical import TechnicalAnalyzer
 from ...analysis.patterns import PatternDetector
@@ -351,7 +351,7 @@ class TechnicalAnalysisSkill(BaseSkill):
         events = context.analysis.get("calendar", []) or []
         if not events:
             return False
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         for e in events:
             impact = (e.get("impact") if isinstance(e, dict) else getattr(e, "impact", "")) or ""
             if str(impact).lower() != "high":

@@ -6,7 +6,7 @@ interest rates, CPI, GDP, bond yields, and rate differentials.
 """
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 from typing import Optional
 
 import httpx
@@ -22,14 +22,9 @@ FRED_SERIES = {
     "us_gdp": "GDP",                      # US Gross Domestic Product
     "us_unemployment": "UNRATE",          # US Unemployment Rate
     "eur_usd_rate": "DEXUSEU",           # EUR/USD Exchange Rate (FRED)
-}
-
-# ECB Statistical Data Warehouse endpoints
-ECB_BASE_URL = "https://data-api.ecb.europa.eu/service/data"
-ECB_SERIES = {
-    "ecb_main_rate": "FM/M.U2.EUR.4F.KR.MRR_FR.LEV",  # Main Refinancing Rate
-    "ecb_deposit_rate": "FM/M.U2.EUR.4F.KR.DFR.LEV",   # Deposit Facility Rate
-    "eurozone_hicp": "ICP/M.U2.N.000000.4.ANR",         # Eurozone HICP (CPI)
+    "ecb_main_rate": "ECBMRRFR",         # ECB Main Refinancing Operations Rate
+    "ecb_deposit_rate": "ECBDFR",        # ECB Deposit Facility Rate
+    "eurozone_hicp": "CP0000EZCCM086NEST", # Euro Area HICP (CPI)
 }
 
 FRED_BASE_URL = "https://api.stlouisfed.org/fred/series/observations"
@@ -47,13 +42,13 @@ class FundamentalDataProvider:
         """Return cached data if still valid."""
         if key in self._cache:
             data, cached_at = self._cache[key]
-            if datetime.utcnow() - cached_at < self._cache_ttl:
+            if datetime.now(UTC) - cached_at < self._cache_ttl:
                 return data
         return None
 
     def _set_cache(self, key: str, data: dict):
         """Store data in cache."""
-        self._cache[key] = (data, datetime.utcnow())
+        self._cache[key] = (data, datetime.now(UTC))
 
     # ─── FRED Data ───────────────────────────────────────────
 
@@ -133,77 +128,39 @@ class FundamentalDataProvider:
             return result
         return None
 
-    # ─── ECB Data ────────────────────────────────────────────
-
-    def _fetch_ecb_series(self, series_key: str) -> Optional[dict]:
-        """Fetch latest data from ECB Statistical Data Warehouse."""
-        try:
-            url = f"{ECB_BASE_URL}/{series_key}"
-            with httpx.Client(timeout=15) as client:
-                resp = client.get(url, params={
-                    "format": "jsondata",
-                    "lastNObservations": 3,
-                })
-                resp.raise_for_status()
-                data = resp.json()
-
-            # Parse ECB JSON structure
-            datasets = data.get("dataSets", [])
-            if not datasets:
-                return None
-
-            series = datasets[0].get("series", {})
-            if not series:
-                return None
-
-            # Get first series key
-            first_key = next(iter(series))
-            observations = series[first_key].get("observations", {})
-            if not observations:
-                return None
-
-            # Get periods from dimensions
-            periods = data.get("structure", {}).get("dimensions", {}).get("observation", [])
-            period_values = periods[0].get("values", []) if periods else []
-
-            # Build result from latest observation
-            latest_idx = max(observations.keys(), key=int)
-            latest_value = observations[latest_idx][0]
-
-            period_label = ""
-            idx = int(latest_idx)
-            if idx < len(period_values):
-                period_label = period_values[idx].get("id", "")
-
-            return {"value": float(latest_value), "date": period_label, "source": "ECB"}
-
-        except Exception as e:
-            logger.error(f"ECB fetch error for {series_key}: {e}")
-            return None
+    # ─── Eurozone Data (via FRED) ────────────────────────────
 
     def get_ecb_main_rate(self) -> Optional[dict]:
-        """Get the ECB Main Refinancing Rate."""
+        """Get the ECB Main Refinancing Rate (from FRED)."""
         cached = self._get_cached("ecb_main_rate")
         if cached:
             return cached
 
-        result = self._fetch_ecb_series(ECB_SERIES["ecb_main_rate"])
-        if result:
-            result["name"] = "ECB Main Refinancing Rate"
+        data = self._fetch_fred_series(FRED_SERIES["ecb_main_rate"], limit=3)
+        if data:
+            result = {
+                "value": data[0]["value"], "name": "ECB Main Refinancing Rate",
+                "date": data[0]["date"], "source": "FRED (ECB Data)"
+            }
             self._set_cache("ecb_main_rate", result)
-        return result
+            return result
+        return None
 
     def get_ecb_deposit_rate(self) -> Optional[dict]:
-        """Get the ECB Deposit Facility Rate."""
+        """Get the ECB Deposit Facility Rate (from FRED)."""
         cached = self._get_cached("ecb_deposit_rate")
         if cached:
             return cached
 
-        result = self._fetch_ecb_series(ECB_SERIES["ecb_deposit_rate"])
-        if result:
-            result["name"] = "ECB Deposit Rate"
+        data = self._fetch_fred_series(FRED_SERIES["ecb_deposit_rate"], limit=3)
+        if data:
+            result = {
+                "value": data[0]["value"], "name": "ECB Deposit Rate",
+                "date": data[0]["date"], "source": "FRED (ECB Data)"
+            }
             self._set_cache("ecb_deposit_rate", result)
-        return result
+            return result
+        return None
 
     # ─── Derived Metrics ─────────────────────────────────────
 
