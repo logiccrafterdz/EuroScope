@@ -1575,8 +1575,26 @@ class EuroScopeBot:
 
     # ─── API Server (Mini App Backend) ──────────────────────────
 
+    @web.middleware
+    async def _cors_middleware(self, request, handler):
+        """Middleware to handle CORS headers and preflight requests."""
+        if request.method == "OPTIONS":
+            response = web.Response()
+        else:
+            try:
+                response = await handler(request)
+            except Exception as e:
+                logger.error(f"API Error ({request.path}): {e}")
+                response = web.json_response({"success": False, "error": str(e)}, status=500)
+        
+        response.headers["Access-Control-Allow-Origin"] = "*"
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+        response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-Requested-With"
+        return response
+
     async def _api_summary(self, request):
         """API endpoint for live price and sentiment summary."""
+        logger.debug("API: Fetching market summary...")
         result = await self.orchestrator.run_skill("market_data", "get_price")
         if not result.success:
             return web.json_response({"success": False, "error": result.error}, status=500)
@@ -1590,26 +1608,29 @@ class EuroScopeBot:
             "change_pct": data["change_pct"],
             "sentiment": "bullish" if data["change"] >= 0 else "bearish",
             "timestamp": datetime.now().isoformat()
-        }, headers={"Access-Control-Allow-Origin": "*"})
+        })
 
     async def _api_signals(self, request):
         """API endpoint for recent trading signals."""
+        logger.debug("API: Fetching recent signals...")
         signals = self.storage.get_signals(limit=5)
         return web.json_response({
             "success": True,
             "signals": signals
-        }, headers={"Access-Control-Allow-Origin": "*"})
+        })
 
     async def _api_alerts(self, request):
         """API endpoint for active price alerts."""
+        logger.debug("API: Fetching active alerts...")
         alerts = self.storage.get_active_alerts()
         return web.json_response({
             "success": True,
             "alerts": alerts
-        }, headers={"Access-Control-Allow-Origin": "*"})
+        })
 
     async def _api_analysis(self, request):
         """API endpoint for technical analysis snapshot."""
+        logger.debug("API: Running real-time technical analysis...")
         ctx = SkillContext()
         res_ta = await self.orchestrator.run_skill("technical_analysis", "analyze", context=ctx, timeframe="H1")
         if not res_ta.success:
@@ -1619,11 +1640,11 @@ class EuroScopeBot:
             "success": True,
             "data": res_ta.data,
             "formatted": res_ta.metadata.get("formatted")
-        }, headers={"Access-Control-Allow-Origin": "*"})
+        })
 
     async def start_api_server(self):
         """Run the AIOHTTP server as a background task."""
-        app = web.Application()
+        app = web.Application(middlewares=[self._cors_middleware])
         app.add_routes([
             web.get('/api/summary', self._api_summary),
             web.get('/api/signals', self._api_signals),
@@ -1631,10 +1652,11 @@ class EuroScopeBot:
             web.get('/api/analysis', self._api_analysis),
         ])
         
+        port = int(os.getenv("PORT", 8080))
         runner = web.AppRunner(app)
         await runner.setup()
-        site = web.TCPSite(runner, '0.0.0.0', 8080) # VPS-friendly port
-        logger.info("📡 Mini App API server pulse: http://0.0.0.0:8080")
+        site = web.TCPSite(runner, '0.0.0.0', port)
+        logger.info(f"📡 Mini App API server pulse: http://0.0.0.0:{port}")
         await site.start()
 
     def run(self):

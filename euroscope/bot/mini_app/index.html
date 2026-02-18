@@ -13,8 +13,8 @@
         :root {
             --bg-color: #111827;
             /* Zinc-900 */
-            --card-bg: #1f2937;
-            /* Zinc-800 */
+            --card-bg: rgba(31, 41, 55, 0.7);
+            /* Zinc-800 with glass opacity */
             --accent-emerald: #10b981;
             /* Emerald-500 */
             --accent-emerald-dim: rgba(16, 185, 129, 0.1);
@@ -22,10 +22,11 @@
             /* Zinc-200 */
             --text-dim: #9ca3af;
             /* Zinc-400 */
-            --border-color: #374151;
-            /* Zinc-700 */
+            --border-color: rgba(55, 65, 81, 0.5);
+            /* Zinc-700 glassy */
             --up-color: #10b981;
             --down-color: #ef4444;
+            --glass-blur: blur(12px);
         }
 
         * {
@@ -38,10 +39,12 @@
         body {
             font-family: 'Inter', sans-serif;
             background-color: var(--bg-color);
+            background-image: radial-gradient(circle at top right, rgba(16, 185, 129, 0.05), transparent 400px);
             color: var(--text-main);
             overflow-x: hidden;
             padding: 16px;
-            padding-bottom: 80px;
+            padding-bottom: 30px;
+            min-height: 100vh;
         }
 
         .container {
@@ -54,14 +57,16 @@
             justify-content: space-between;
             align-items: center;
             margin-bottom: 24px;
+            padding: 4px;
         }
 
         .logo {
             font-weight: 700;
-            font-size: 1rem;
-            letter-spacing: 2px;
+            font-size: 0.9rem;
+            letter-spacing: 3px;
             color: var(--accent-emerald);
-            font-family: 'Fira Code', monospace;
+            font-family: 'Fira+Code', monospace;
+            text-shadow: 0 0 10px rgba(16, 185, 129, 0.3);
         }
 
         .status-badge {
@@ -69,25 +74,33 @@
             color: var(--accent-emerald);
             padding: 4px 12px;
             border-radius: 6px;
-            font-size: 0.7rem;
-            font-weight: 600;
+            font-size: 0.65rem;
+            font-weight: 700;
             border: 1px solid rgba(16, 185, 129, 0.2);
             text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .status-badge.error {
+            background: rgba(239, 68, 68, 0.1);
+            color: var(--down-color);
+            border-color: rgba(239, 68, 68, 0.2);
         }
 
         /* Navigation Tabs */
         .nav-tabs {
             display: flex;
             background: var(--card-bg);
+            backdrop-filter: var(--glass-blur);
             border: 1px solid var(--border-color);
             border-radius: 12px;
             margin-bottom: 20px;
-            overflow: hidden;
+            padding: 4px;
         }
 
         .tab-btn {
             flex: 1;
-            padding: 12px;
+            padding: 10px;
             border: none;
             background: transparent;
             color: var(--text-dim);
@@ -96,27 +109,29 @@
             text-transform: uppercase;
             letter-spacing: 1px;
             cursor: pointer;
-            transition: all 0.2s;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            border-radius: 8px;
         }
 
         .tab-btn.active {
             color: var(--accent-emerald);
-            background: rgba(16, 185, 129, 0.05);
+            background: rgba(16, 185, 129, 0.1);
+            box-shadow: inset 0 0 10px rgba(16, 185, 129, 0.05);
         }
 
         .tab-content {
             display: none;
-            animation: fadeIn 0.3s ease;
+            animation: slideUp 0.4s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
         .tab-content.active {
             display: block;
         }
 
-        @keyframes fadeIn {
+        @keyframes slideUp {
             from {
                 opacity: 0;
-                transform: translateY(5px);
+                transform: translateY(10px);
             }
 
             to {
@@ -125,34 +140,54 @@
             }
         }
 
-        .price-card {
+        .glass-card {
             background: var(--card-bg);
+            backdrop-filter: var(--glass-blur);
             border: 1px solid var(--border-color);
-            border-radius: 12px;
+            border-radius: 16px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        .price-card {
             padding: 32px 24px;
             margin-bottom: 16px;
             text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .price-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, var(--accent-emerald), transparent);
+            opacity: 0.3;
         }
 
         .price-label {
             color: var(--text-dim);
-            font-size: 0.75rem;
+            font-size: 0.7rem;
             margin-bottom: 12px;
-            letter-spacing: 1.5px;
+            letter-spacing: 2px;
             text-transform: uppercase;
+            font-weight: 600;
         }
 
         .price-value {
-            font-size: 2.8rem;
+            font-size: 3rem;
             font-weight: 700;
             margin-bottom: 8px;
             font-family: 'Fira Code', monospace;
             color: var(--text-main);
+            letter-spacing: -2px;
         }
 
         .price-change {
-            font-size: 0.95rem;
-            font-weight: 500;
+            font-size: 0.9rem;
+            font-weight: 600;
             font-family: 'Fira Code', monospace;
         }
 
@@ -160,40 +195,36 @@
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 12px;
-            margin-bottom: 16px;
+            margin-bottom: 20px;
         }
 
         .stat-card {
-            background: var(--card-bg);
-            border-radius: 12px;
             padding: 16px;
-            border: 1px solid var(--border-color);
         }
 
         .stat-label {
             color: var(--text-dim);
-            font-size: 0.7rem;
-            margin-bottom: 6px;
+            font-size: 0.65rem;
+            margin-bottom: 8px;
             text-transform: uppercase;
-            letter-spacing: 1px;
+            letter-spacing: 1.5px;
+            font-weight: 600;
         }
 
         .stat-value {
-            font-weight: 600;
-            font-size: 1.1rem;
+            font-weight: 700;
+            font-size: 1rem;
             font-family: 'Fira Code', monospace;
         }
 
         .chart-placeholder {
-            background: var(--bg-color);
-            border-radius: 12px;
-            height: 180px;
+            height: 140px;
             display: flex;
             align-items: center;
             justify-content: center;
             margin-bottom: 24px;
-            border: 1px dashed var(--border-color);
-            position: relative;
+            border-style: dashed;
+            opacity: 0.7;
         }
 
         /* Signal Cards */
@@ -204,57 +235,77 @@
         }
 
         .signal-card {
-            background: var(--card-bg);
-            border: 1px solid var(--border-color);
-            border-radius: 12px;
             padding: 16px;
+            transition: transform 0.2s;
+        }
+
+        .signal-card:active {
+            transform: scale(0.98);
         }
 
         .signal-header {
             display: flex;
             justify-content: space-between;
-            margin-bottom: 12px;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        .signal-info {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .signal-pair {
+            font-size: 0.75rem;
+            font-weight: 700;
+            color: var(--text-main);
+        }
+
+        .signal-time {
+            font-size: 0.6rem;
+            color: var(--text-dim);
         }
 
         .signal-type {
             font-weight: 700;
             font-family: 'Fira Code', monospace;
-            padding: 2px 8px;
-            border-radius: 4px;
-            font-size: 0.7rem;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 0.65rem;
+            text-transform: uppercase;
         }
 
         .type-buy {
-            background: rgba(16, 185, 129, 0.1);
+            background: rgba(16, 185, 129, 0.15);
             color: #10b981;
+            border: 1px solid rgba(16, 185, 129, 0.2);
         }
 
         .type-sell {
-            background: rgba(239, 68, 68, 0.1);
+            background: rgba(239, 68, 68, 0.15);
             color: #ef4444;
+            border: 1px solid rgba(239, 68, 68, 0.2);
         }
 
         .signal-price-row {
             display: grid;
             grid-template-columns: 1fr 1fr 1fr;
-            gap: 8px;
-            text-align: center;
-        }
-
-        .price-box {
-            display: flex;
-            flex-direction: column;
+            gap: 12px;
+            text-align: left;
         }
 
         .price-box label {
-            font-size: 0.6rem;
+            display: block;
+            font-size: 0.55rem;
             color: var(--text-dim);
             margin-bottom: 4px;
+            text-transform: uppercase;
+            font-weight: 600;
         }
 
         .price-box span {
             font-family: 'Fira Code', monospace;
-            font-size: 0.8rem;
+            font-size: 0.85rem;
             font-weight: 600;
         }
 
@@ -263,14 +314,22 @@
             color: #064e3b;
             border: none;
             width: 100%;
-            padding: 18px;
-            border-radius: 8px;
+            padding: 16px;
+            border-radius: 12px;
             font-weight: 700;
-            font-size: 0.95rem;
+            font-size: 0.9rem;
+            margin-top: 20px;
             margin-bottom: 12px;
             cursor: pointer;
             text-transform: uppercase;
-            letter-spacing: 1px;
+            letter-spacing: 2px;
+            box-shadow: 0 4px 20px rgba(16, 185, 129, 0.3);
+            transition: all 0.2s;
+        }
+
+        .action-button:active {
+            transform: translateY(2px);
+            box-shadow: 0 2px 10px rgba(16, 185, 129, 0.2);
         }
 
         .secondary-button {
@@ -279,11 +338,36 @@
             border: 1px solid var(--border-color);
             width: 100%;
             padding: 14px;
-            border-radius: 8px;
+            border-radius: 12px;
             font-weight: 600;
-            font-size: 0.85rem;
+            font-size: 0.8rem;
             cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 1px;
             transition: all 0.2s;
+        }
+
+        .secondary-button:hover {
+            border-color: var(--accent-emerald);
+            color: var(--text-main);
+            background: rgba(16, 185, 129, 0.05);
+        }
+
+        /* Loading Animation */
+        .loading-shimmer {
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.03), transparent);
+            background-size: 200% 100%;
+            animation: shimmer 1.5s infinite;
+        }
+
+        @keyframes shimmer {
+            0% {
+                background-position: -200% 0;
+            }
+
+            100% {
+                background-position: 200% 0;
+            }
         }
     </style>
 </head>
@@ -291,73 +375,90 @@
 <body>
     <div class="container">
         <header>
-            <div class="logo">EURO/SC_</div>
-            <div class="status-badge" id="api-status">Connecting...</div>
+            <div class="logo">EURO/SC_ZENITH</div>
+            <div class="status-badge" id="api-status">CONNECTING...</div>
         </header>
 
         <nav class="nav-tabs">
-            <button class="tab-btn active" onclick="showTab('live')">Terminal</button>
-            <button class="tab-btn" onclick="showTab('signals')">Signals</button>
-            <button class="tab-btn" onclick="showTab('alerts')">Alerts</button>
+            <button class="tab-btn active" id="tab-live" onclick="showTab('live')">Terminal</button>
+            <button class="tab-btn" id="tab-signals" onclick="showTab('signals')">Signals</button>
+            <button class="tab-btn" id="tab-alerts" onclick="showTab('alerts')">Alerts</button>
         </nav>
 
         <!-- LIVE TAB -->
         <div id="live" class="tab-content active">
-            <div class="price-card">
-                <div class="price-label">EUR/USD PRO PRICE</div>
+            <div class="glass-card price-card">
+                <div class="price-label">Live Market Pulse</div>
                 <div class="price-value" id="price">-.-----</div>
                 <div class="price-change" id="change">--.--- (---%)</div>
             </div>
 
             <div class="stats-grid">
-                <div class="stat-card">
-                    <div class="stat-label">DAILY RANGE</div>
+                <div class="glass-card stat-card">
+                    <div class="stat-label">Daily Reach</div>
                     <div class="stat-value" id="range">--- pips</div>
                 </div>
-                <div class="stat-card">
-                    <div class="stat-label">SENTIMENT</div>
-                    <div class="stat-value" id="sentiment">NEUTRAL</div>
+                <div class="glass-card stat-card">
+                    <div class="stat-label">Volatility</div>
+                    <div class="stat-value" id="sentiment">STABLE</div>
                 </div>
             </div>
 
-            <div class="chart-placeholder">
-                <span style="color: var(--text-dim); font-size: 0.8rem; z-index: 1;">REAL-TIME TICKER ACTIVE</span>
+            <div class="glass-card chart-placeholder">
+                <div style="text-align: center;">
+                    <p style="color: var(--accent-emerald); font-size: 0.65rem; font-weight: 700; letter-spacing: 1px;">
+                        ENCRYPTED DATA STREAM</p>
+                    <p style="color: var(--text-dim); font-size: 0.6rem; margin-top: 4px;">SECURE ANALYTICS ACTIVE</p>
+                </div>
             </div>
         </div>
 
         <!-- SIGNALS TAB -->
         <div id="signals" class="tab-content">
             <div class="signal-list" id="signal-list">
-                <div style="text-align: center; color: var(--text-dim); padding: 40px;">SCANNING FOR SIGNALS...</div>
+                <div style="text-align: center; color: var(--text-dim); padding: 40px; font-size: 0.8rem;">
+                    <div class="loading-shimmer"
+                        style="height: 20px; width: 100px; margin: 0 auto 10px; border-radius: 4px;"></div>
+                    SYNCHRONIZING FEED...
+                </div>
             </div>
         </div>
 
         <!-- ALERTS TAB -->
         <div id="alerts" class="tab-content">
             <div class="signal-list" id="alert-list">
-                <div style="text-align: center; color: var(--text-dim); padding: 40px;">MONITORING PRICE LEVELS...</div>
+                <div style="text-align: center; color: var(--text-dim); padding: 40px; font-size: 0.8rem;">
+                    MONITORING THRESHOLDS...
+                </div>
             </div>
         </div>
 
         <button class="action-button" onclick="refreshData()" id="refresh-btn">REFRESH SYSTEM</button>
-        <button class="secondary-button" onclick="Telegram.WebApp.close()">CLOSE TERMINAL</button>
+        <button class="secondary-button" onclick="Telegram.WebApp.close()">DISCONNECT</button>
     </div>
 
     <script>
         const tg = window.Telegram.WebApp;
         tg.expand();
         tg.enableClosingConfirmation();
+        tg.headerColor = '#111827';
+        tg.backgroundColor = '#111827';
 
-        // API Configuration - Set YOUR_VPS_IP in your .env or replace here
+        // API Endpoint via Vercel Rewrite
         const API_BASE = "/api";
 
         async function fetchAPI(endpoint) {
             try {
-                const response = await fetch(`${API_BASE}${endpoint}`);
+                const response = await fetch(`${API_BASE}${endpoint}`, {
+                    headers: { 'Cache-Control': 'no-cache' }
+                });
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
                 return await response.json();
             } catch (e) {
                 console.error("API Error:", e);
-                return null;
+                document.getElementById('api-status').innerText = "OFFLINE";
+                document.getElementById('api-status').classList.add('error');
+                return { success: false, error: e.message };
             }
         }
 
@@ -365,21 +466,26 @@
             document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
             document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
             document.getElementById(tabId).classList.add('active');
-            event.target.classList.add('active');
-            tg.HapticFeedback.impactOccurred('light');
+            document.getElementById('tab-' + tabId).classList.add('active');
+            tg.HapticFeedback.impactOccurred('medium');
             refreshData();
         }
 
         async function refreshData() {
             const refreshBtn = document.getElementById('refresh-btn');
+            const originalText = refreshBtn.innerText;
             refreshBtn.innerText = "REFRESHING...";
+            refreshBtn.disabled = true;
+            refreshBtn.style.opacity = '0.7';
 
             const activeTab = document.querySelector('.tab-content.active').id;
 
             if (activeTab === 'live') {
                 const data = await fetchAPI('/summary');
                 if (data && data.success) {
-                    document.getElementById('price').innerText = data.price.toFixed(5);
+                    const priceEl = document.getElementById('price');
+                    priceEl.innerText = data.price.toFixed(5);
+
                     const changeEl = document.getElementById('change');
                     const sign = data.change >= 0 ? '+' : '';
                     changeEl.innerText = `${sign}${data.change.toFixed(5)} (${sign}${data.change_pct.toFixed(2)}%)`;
@@ -389,54 +495,69 @@
                     sentEl.innerText = data.sentiment.toUpperCase();
                     sentEl.style.color = data.sentiment === 'bullish' ? 'var(--up-color)' : 'var(--down-color)';
 
-                    document.getElementById('api-status').innerText = "● LIVE";
-                    document.getElementById('api-status').style.color = "var(--up-color)";
+                    const status = document.getElementById('api-status');
+                    status.innerText = "● LIVE";
+                    status.classList.remove('error');
+                    status.style.color = "var(--up-color)";
                 }
             } else if (activeTab === 'signals') {
                 const data = await fetchAPI('/signals');
                 const list = document.getElementById('signal-list');
-                if (data && data.success && data.signals.length > 0) {
+                if (data && data.success && data.signals && data.signals.length > 0) {
                     list.innerHTML = data.signals.map(s => `
-                        <div class="signal-card">
+                        <div class="glass-card signal-card">
                             <div class="signal-header">
+                                <div class="signal-info">
+                                    <span class="signal-pair">EUR/USD ${s.timeframe || 'H1'}</span>
+                                    <span class="signal-time">${new Date(s.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                </div>
                                 <span class="signal-type type-${s.direction.toLowerCase()}">${s.direction.toUpperCase()}</span>
-                                <span style="font-size: 0.6rem; color: var(--text-dim);">${s.created_at.split('T')[1].split('.')[0]}</span>
                             </div>
                             <div class="signal-price-row">
-                                <div class="price-box"><label>ENTRY</label><span>${s.entry_price.toFixed(5)}</span></div>
-                                <div class="price-box"><label>SL</label><span style="color: var(--down-color)">${s.stop_loss.toFixed(5)}</span></div>
-                                <div class="price-box"><label>TP</label><span style="color: var(--up-color)">${s.take_profit.toFixed(5)}</span></div>
+                                <div class="price-box"><label>Entry</label><span>${s.entry_price.toFixed(5)}</span></div>
+                                <div class="price-box"><label>S/L</label><span style="color: var(--down-color)">${s.stop_loss.toFixed(5)}</span></div>
+                                <div class="price-box"><label>T/P</label><span style="color: var(--up-color)">${s.take_profit.toFixed(5)}</span></div>
                             </div>
                         </div>
                     `).join('');
+                } else if (data && data.success) {
+                    list.innerHTML = '<div style="text-align: center; color: var(--text-dim); padding: 40px; font-size: 0.8rem;">NO ACTIVE SIGNALS</div>';
                 }
             } else if (activeTab === 'alerts') {
                 const data = await fetchAPI('/alerts');
                 const list = document.getElementById('alert-list');
-                if (data && data.success && data.alerts.length > 0) {
+                if (data && data.success && data.alerts && data.alerts.length > 0) {
                     list.innerHTML = data.alerts.map(a => `
-                        <div class="signal-card">
-                            <div class="signal-header">
-                                <span style="font-weight: 600; font-size: 0.8rem;">${a.condition.toUpperCase()} ${a.target_value.toFixed(5)}</span>
-                                <span style="font-size: 0.6rem; color: var(--text-dim);">ACTIVE</span>
+                        <div class="glass-card signal-card">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <div>
+                                    <p style="font-size: 0.55rem; color: var(--text-dim); text-transform: uppercase; font-weight: 700; margin-bottom: 4px;">Condition Active</p>
+                                    <p style="font-family: 'Fira Code', monospace; font-size: 0.9rem; font-weight: 700;">${a.condition.toUpperCase()} ${a.target_value.toFixed(5)}</p>
+                                </div>
+                                <div style="height: 8px; width: 8px; background: var(--accent-emerald); border-radius: 50%; box-shadow: 0 0 10px var(--accent-emerald);"></div>
                             </div>
                         </div>
                     `).join('');
+                } else if (data && data.success) {
+                    list.innerHTML = '<div style="text-align: center; color: var(--text-dim); padding: 40px; font-size: 0.8rem;">NO TARGETS SET</div>';
                 }
             }
 
-            refreshBtn.innerText = "REFRESH SYSTEM";
+            refreshBtn.innerText = originalText;
+            refreshBtn.disabled = false;
+            refreshBtn.style.opacity = '1';
             tg.HapticFeedback.notificationOccurred('success');
         }
 
-        // Auto-refresh every 30 seconds
+        // Pulse timer for live data
         setInterval(() => {
             if (document.querySelector('.tab-content.active').id === 'live') {
                 refreshData();
             }
         }, 30000);
 
-        refreshData();
+        // Initial Startup
+        window.onload = refreshData;
     </script>
 </body>
 
