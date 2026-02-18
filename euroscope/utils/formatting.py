@@ -38,6 +38,44 @@ def header(text: str, emoji: str = "📊") -> str:
     return f"{emoji} *{text}*"
 
 
+def rich_header(text: str, type: str = "main") -> str:
+    """
+    Create a stylized Unicode header.
+    Types: main (Large/Bold), sub (Serif/Sleek), info (Italic/Clean)
+    """
+    # Mapping for pseudo-bold/serif icons and text styles
+    headers = {
+        "main": ("◈", "★"),
+        "sub": ("▹", ""),
+        "info": ("ℹ️", ""),
+        "success": ("✅", ""),
+        "warning": ("⚠️", ""),
+        "signal": ("🎯", ""),
+    }
+    prefix, suffix = headers.get(type, ("◈", ""))
+    
+    # We use bold for now as Telegram's Unicode support for mathematical alphanumeric symbols 
+    # can be inconsistent across fonts, but we enhance it with thematic characters.
+    return f"{prefix} *{text.upper()}* {suffix}"
+
+
+def progress_bar(percent: float, width: int = 10) -> str:
+    """Create a sleek visual progress bar."""
+    filled = int(round(percent * width))
+    bar = "▩" * filled + "□" * (width - filled)
+    return f"`{bar}` {percent*100:.0f}%"
+
+
+def thematic_divider() -> str:
+    """A high-end financial thematic divider."""
+    return "◈" + "─" * 15 + "◈"
+
+
+def priority_label(text: str, color: str = "blue") -> str:
+    """Create a stylized box label for priority/status."""
+    return f"⟦ *{text.upper()}* ⟧"
+
+
 def divider() -> str:
     """A simple divider."""
     return "─" * 25

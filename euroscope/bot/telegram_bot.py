@@ -13,7 +13,7 @@ from typing import Optional
 
 from telegram import (
     Update, InputFile,
-    InlineKeyboardButton, InlineKeyboardMarkup,
+    InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo,
 )
 from telegram.ext import (
     Application,
@@ -43,7 +43,7 @@ from ..trading.risk_manager import RiskManager
 from ..trading.strategy_engine import StrategyEngine
 from ..trading.signal_executor import SignalExecutor
 from ..utils.charts import generate_chart
-from ..utils.formatting import truncate, safe_markdown
+from ..utils.formatting import truncate, safe_markdown, rich_header, thematic_divider, priority_label, progress_bar
 from .rate_limiter import RateLimiter
 from .user_settings import UserSettings
 from .notification_manager import NotificationManager
@@ -232,36 +232,30 @@ class EuroScopeBot:
 
     def _main_menu_keyboard(self) -> InlineKeyboardMarkup:
         """Build the main interactive menu with professional styling."""
+        web_app_url = getattr(self.config.telegram, "web_app_url", "https://example.com/miniapp")
         return InlineKeyboardMarkup([
             [
-                InlineKeyboardButton("💹 Price", callback_data="cmd:price"),
-                InlineKeyboardButton("📊 Analysis", callback_data="cmd:analysis"),
-                InlineKeyboardButton("📈 Chart", callback_data="cmd:chart"),
+                InlineKeyboardButton("💎 ZENITH DASHBOARD", web_app=WebAppInfo(url=web_app_url)),
             ],
             [
-                InlineKeyboardButton("🎯 Signals", callback_data="cmd:signals"),
-                InlineKeyboardButton("🔮 Forecast", callback_data="cmd:forecast"),
-                InlineKeyboardButton("🧠 Strategy", callback_data="cmd:strategy"),
+                InlineKeyboardButton("💹 LIVE PRICE", callback_data="cmd:price"),
+                InlineKeyboardButton("📊 ANALYSIS", callback_data="cmd:analysis"),
             ],
             [
-                InlineKeyboardButton("📰 News", callback_data="cmd:news"),
-                InlineKeyboardButton("📅 Calendar", callback_data="cmd:calendar"),
-                InlineKeyboardButton("📝 Report", callback_data="cmd:report"),
+                InlineKeyboardButton("🔮 FORECAST", callback_data="cmd:forecast"),
+                InlineKeyboardButton("🎯 SIGNALS", callback_data="cmd:signals"),
             ],
             [
-                InlineKeyboardButton("📍 Levels", callback_data="cmd:levels"),
-                InlineKeyboardButton("🧩 Patterns", callback_data="cmd:patterns"),
-                InlineKeyboardButton("🛡️ Risk", callback_data="cmd:risk"),
+                InlineKeyboardButton("📈 CHART", callback_data="cmd:chart"),
+                InlineKeyboardButton("📅 CALENDAR", callback_data="cmd:calendar"),
             ],
             [
-                InlineKeyboardButton("📒 Trades", callback_data="cmd:trades"),
-                InlineKeyboardButton("📈 Performance", callback_data="cmd:performance"),
-                InlineKeyboardButton("🎯 Accuracy", callback_data="cmd:accuracy"),
+                InlineKeyboardButton("📰 NEWS", callback_data="cmd:news"),
+                InlineKeyboardButton("⚙️ SETTINGS", callback_data="cmd:settings"),
             ],
             [
-                InlineKeyboardButton("⚙️ Settings", callback_data="cmd:settings"),
-                InlineKeyboardButton("🧪 Health", callback_data="cmd:health"),
-                InlineKeyboardButton("🔔 Alerts", callback_data="settings:manage_alerts"),
+                InlineKeyboardButton("🔙 TERMINAL", callback_data="menu:main"),
+                InlineKeyboardButton("🧪 HELP", callback_data="cmd:help"),
             ],
         ])
 
@@ -356,11 +350,12 @@ class EuroScopeBot:
         await self._reply(
             update,
             (
-                "🌐 *Welcome to EuroScope V3*\n\n"
-                "I am your EUR/USD personal expert. I use AI and technical analysis "
-                "to find high-quality trade ideas and keep you updated on macro news.\n\n"
-                "I've organized our workspace into specialized topics (Radar, Reports, News).\n\n"
-                "💡 _Use the button below to see available commands._"
+                f"{rich_header('Welcome to EuroScope Zenith', 'main')}\n\n"
+                "I am your elite EUR/USD financial intelligence partner. "
+                "Leveraging neural forecasting and institutional-grade analytics.\n\n"
+                f"{thematic_divider()}\n"
+                "⚡ *READY FOR EXECUTION*\n\n"
+                "💡 _Select an operation from the terminal below._"
             ),
             reply_markup=self._main_menu_keyboard(),
             parse_mode="Markdown"
@@ -409,30 +404,18 @@ class EuroScopeBot:
             return
 
         help_text = (
-            "📋 *Available Commands:*\n\n"
-            "├ /price — Current price & daily stats\n"
-            "├ /analysis [tf] — Technical analysis\n"
-            "├ /comprehensive_analysis [query] — Full ReAct analysis\n"
-            "├ /quick_analysis — Fast ReAct summary\n"
-            "├ /chart [tf] — Candlestick chart\n"
-            "├ /patterns — Chart patterns\n"
-            "├ /levels — Support/resistance & Fibonacci\n"
-            "├ /signals — Trading signals\n"
-            "├ /news — Latest EUR/USD news\n"
-            "├ /calendar — Economic events\n"
-            "├ /forecast — AI directional forecast\n"
-            "├ /strategy — Strategy recommendation\n"
-            "├ /risk — Risk assessment\n"
-            "├ /trades — Open paper trades\n"
-            "├ /alert [above/below] [price] — Set price level alert\n"
-            "├ /performance — Trading stats\n"
-            "├ /report — Full daily report\n"
-            "├ /daily_summary — Daily trading activity recap\n"
-            "├ /accuracy — Prediction track record\n"
-            "├ /settings — Bot preferences & alerts\n"
-            "├ /menu — Interactive menu\n"
-            "└ /ask [question] — Ask about EUR/USD\n\n"
-            "💡 _Just type any message to chat!_"
+            f"{rich_header('EuroScope Help Terminal', 'main')}\n\n"
+            "├ `/price` — Live Market Pulse\n"
+            "├ `/analysis` — Deep Tech Analytics\n"
+            "├ `/forecast` — Neural Directional Insight\n"
+            "├ `/signals` — High-Conviction IDEAs\n"
+            "├ `/news` — Macro Intelligence\n"
+            "├ `/calendar` — Economic Events\n"
+            "├ `/report` — Daily PDF Dossier\n"
+            "├ `/settings` — Preference Console\n"
+            "└ `/menu` — Main Terminal\n\n"
+            f"{thematic_divider()}\n"
+            "💡 _Just type any market question to chat with the Expert AI!_"
         )
         await self._reply(update, help_text, parse_mode="Markdown")
 
@@ -458,20 +441,25 @@ class EuroScopeBot:
             return
 
         data = result.data
+        direction_icon = "🟢" if data['change'] >= 0 else "🔴"
+        
         msg = (
-            f"💱 *EUR/USD Price*\n\n"
-            f"{data['direction']} Price: `{data['price']}`\n"
-            f" Change: `{data['change']:+.5f}` ({data['change_pct']:+.3f}%)\n"
-            f"📏 Range: `{data['spread_pips']} pips`"
+            f"{rich_header('Market Pulse', 'main')}\n\n"
+            f"💹 *EUR/USD* | `REAL-TIME`\n"
+            f"{thematic_divider()}\n\n"
+            f"💰 *PRICE:* `{data['price']}`\n"
+            f"📈 *CHANGE:* `{data['change']:+.5f}` ({data['change_pct']:+.3f}%)\n"
+            f"📏 *RANGE:* `{data['spread_pips']} pips`\n\n"
+            f"{direction_icon} *SENTIMENT:* `{'BULLISH' if data['change'] >= 0 else 'BEARISH'}`\n"
+            f"{priority_label('LIVE DATA', 'blue')}\n"
         )
         
         keyboard = InlineKeyboardMarkup([
             [
-                InlineKeyboardButton("📊 Analysis", callback_data="cmd:analysis"),
-                InlineKeyboardButton("📈 Chart", callback_data="cmd:chart"),
-                InlineKeyboardButton("🎯 Signals", callback_data="cmd:signals"),
+                InlineKeyboardButton("📊 ANALYSIS", callback_data="cmd:analysis"),
+                InlineKeyboardButton("📈 CHART", callback_data="cmd:chart"),
             ],
-            [InlineKeyboardButton("🔙 Menu", callback_data="menu:main")],
+            [InlineKeyboardButton("🔙 TERMINAL", callback_data="menu:main")],
         ])
         await self._reply(update, msg, topic_key="radar", reply_markup=keyboard, parse_mode="Markdown")
 
@@ -508,15 +496,21 @@ class EuroScopeBot:
         formatted = result.metadata.get("formatted", str(result.data))
         formatted = self._format_for_user(chat_id, formatted)
         
+        msg = (
+            f"{rich_header(f'Analysis: {tf}', 'main')}\n\n"
+            f"{safe_markdown(formatted)}\n\n"
+            f"{thematic_divider()}\n"
+        )
+        
         keyboard = InlineKeyboardMarkup([
             [
-                InlineKeyboardButton("📈 Chart", callback_data="cmd:chart"),
-                InlineKeyboardButton("🎯 Signals", callback_data="cmd:signals"),
-                InlineKeyboardButton("🔮 Forecast", callback_data="cmd:forecast"),
+                InlineKeyboardButton("📈 CHART", callback_data="cmd:chart"),
+                InlineKeyboardButton("🎯 SIGNALS", callback_data="cmd:signals"),
+                InlineKeyboardButton("🔮 FORECAST", callback_data="cmd:forecast"),
             ],
-            [InlineKeyboardButton("🔙 Menu", callback_data="menu:main")],
+            [InlineKeyboardButton("🔙 TERMINAL", callback_data="menu:main")],
         ])
-        await self._reply(update, safe_markdown(formatted), topic_key="reports", reply_markup=keyboard, parse_mode="Markdown")
+        await self._reply(update, msg, topic_key="reports", reply_markup=keyboard, parse_mode="Markdown")
 
     async def cmd_smart_analysis(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Smart analysis using LLM ReAct loop."""

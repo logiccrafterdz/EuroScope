@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>EuroScope Zenith Dashboard</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0B0E11;
+            --card-bg: rgba(23, 27, 34, 0.7);
+            --accent-blue: #2196F3;
+            --accent-gold: #FFC107;
+            --text-main: #FFFFFF;
+            --text-dim: #848E9C;
+            --up-color: #26A69A;
+            --down-color: #EF5350;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            overflow-x: hidden;
+            padding: 16px;
+        }
+
+        .container {
+            max-width: 500px;
+            margin: 0 auto;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+        }
+
+        .logo {
+            font-weight: 700;
+            font-size: 1.2rem;
+            letter-spacing: 1px;
+            color: var(--accent-gold);
+        }
+
+        .status-badge {
+            background: rgba(38, 166, 154, 0.1);
+            color: var(--up-color);
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            border: 1px solid rgba(38, 166, 154, 0.2);
+        }
+
+        .price-card {
+            background: var(--card-bg);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 24px;
+            padding: 24px;
+            margin-bottom: 16px;
+            text-align: center;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+
+        .price-label {
+            color: var(--text-dim);
+            font-size: 0.85rem;
+            margin-bottom: 8px;
+        }
+
+        .price-value {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 8px;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .price-change {
+            font-size: 1rem;
+            font-weight: 600;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .stat-card {
+            background: var(--card-bg);
+            border-radius: 16px;
+            padding: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.03);
+        }
+
+        .stat-label {
+            color: var(--text-dim);
+            font-size: 0.75rem;
+            margin-bottom: 4px;
+        }
+
+        .stat-value {
+            font-weight: 600;
+            font-size: 1rem;
+        }
+
+        .chart-placeholder {
+            background: var(--card-bg);
+            border-radius: 20px;
+            height: 200px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 24px;
+            border: 1px solid rgba(255, 255, 255, 0.03);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .chart-placeholder::after {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.02), transparent);
+            animation: move 3s infinite;
+        }
+
+        @keyframes move {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
+        }
+
+        .action-button {
+            background: var(--accent-blue);
+            color: white;
+            border: none;
+            width: 100%;
+            padding: 16px;
+            border-radius: 16px;
+            font-weight: 700;
+            font-size: 1rem;
+            margin-bottom: 12px;
+            box-shadow: 0 4px 15px rgba(33, 150, 243, 0.3);
+            cursor: pointer;
+            transition: transform 0.1s;
+        }
+
+        .action-button:active {
+            transform: scale(0.98);
+        }
+
+        .secondary-button {
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text-main);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            width: 100%;
+            padding: 14px;
+            border-radius: 16px;
+            font-weight: 600;
+            font-size: 0.9rem;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="logo">EUROSCOPE</div>
+            <div class="status-badge">● LIVE</div>
+        </header>
+
+        <div class="price-card">
+            <div class="price-label">EUR/USD PRO PRICE</div>
+            <div class="price-value" id="price">1.08456</div>
+            <div class="price-change" id="change" style="color: var(--up-color);">+0.00245 (+0.23%)</div>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-label">DAILY RANGE</div>
+                <div class="stat-value">64.2 pips</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">SENTIMENT</div>
+                <div class="stat-value" style="color: var(--up-color);">BULLISH</div>
+            </div>
+        </div>
+
+        <div class="chart-placeholder">
+            <span style="color: var(--text-dim); font-size: 0.8rem; z-index: 1;">LOADING REAL-TIME ANALYTICS...</span>
+        </div>
+
+        <button class="action-button" onclick="Telegram.WebApp.close()">CLOSE TERMINAL</button>
+        <button class="secondary-button" onclick="refresh()">REFRESH DATA</button>
+    </div>
+
+    <script>
+        const tg = window.Telegram.WebApp;
+        tg.expand();
+        tg.enableClosingConfirmation();
+
+        function refresh() {
+            tg.HapticFeedback.impactOccurred('medium');
+            // Mock refresh animation
+            const priceEl = document.getElementById('price');
+            priceEl.style.opacity = '0.5';
+            setTimeout(() => {
+                priceEl.style.opacity = '1';
+                priceEl.innerText = (1.08 + Math.random() * 0.01).toFixed(5);
+            }, 300);
+        }
+
+        // Apply theme colors
+        document.documentElement.style.setProperty('--bg-color', tg.themeParams.bg_color || '#0B0E11');
+    </script>
+</body>
+</html>

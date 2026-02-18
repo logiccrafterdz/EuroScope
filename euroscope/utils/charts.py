@@ -64,19 +64,25 @@ def generate_chart(df: pd.DataFrame, timeframe: str = "H1",
                 added_plots.append(mpf.make_addplot(ema_data, color=color, width=1.2,
                                                      label=f"EMA {period}"))
 
-        # Chart style
+        # Pro Dark Chart Style (Binance-inspired)
         style = mpf.make_mpf_style(
             base_mpf_style="nightclouds",
             marketcolors=mpf.make_marketcolors(
-                up="#26A69A", down="#EF5350",
+                up="#26A69A", down="#EF5350",  # Professional Teal/Red
                 edge={"up": "#26A69A", "down": "#EF5350"},
                 wick={"up": "#26A69A", "down": "#EF5350"},
-                volume={"up": "#26A69A80", "down": "#EF535080"},
+                volume={"up": "#26A69A40", "down": "#EF535040"}, # Subtle volume
             ),
-            figcolor="#1A1A2E",
-            facecolor="#1A1A2E",
+            figcolor="#0B0E11",  # Deep Charcoal/Black
+            facecolor="#0B0E11",
             gridstyle="--",
-            gridcolor="#333355",
+            gridcolor="#1F2937", # Subtle grid
+            rc={
+                "font.family": "sans-serif",
+                "axes.labelcolor": "#848E9C",
+                "xtick.color": "#848E9C",
+                "ytick.color": "#848E9C",
+            }
         )
 
         # Render chart
