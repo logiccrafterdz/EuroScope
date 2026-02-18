@@ -8,6 +8,8 @@ and integrated notification system.
 import asyncio
 import logging
 import re
+import os
+import traceback
 from datetime import datetime
 from typing import Optional
 from aiohttp import web
@@ -1433,7 +1435,10 @@ class EuroScopeBot:
             delay=self.cron._seconds_until(7, 0),
         )
 
-        logger.info("⚡ Background services & Commands registered.")
+        # 4. Start Zenith Dashboard API
+    asyncio.create_task(self.start_api_server())
+
+    logger.info("⚡ Background services & Commands registered.")
 
     async def post_shutdown(self, application: Application):
         """Gracefully stop background services on shutdown."""
@@ -1643,21 +1648,25 @@ class EuroScopeBot:
         })
 
     async def start_api_server(self):
-        """Run the AIOHTTP server as a background task."""
-        app = web.Application(middlewares=[self._cors_middleware])
-        app.add_routes([
-            web.get('/api/summary', self._api_summary),
-            web.get('/api/signals', self._api_signals),
-            web.get('/api/alerts', self._api_alerts),
-            web.get('/api/analysis', self._api_analysis),
-        ])
-        
-        port = int(os.getenv("PORT", 8080))
-        runner = web.AppRunner(app)
-        await runner.setup()
-        site = web.TCPSite(runner, '0.0.0.0', port)
-        logger.info(f"📡 Mini App API server pulse: http://0.0.0.0:{port}")
-        await site.start()
+        """Run the AIOHTTP server as a background task with robust error handling."""
+        try:
+            app = web.Application(middlewares=[self._cors_middleware])
+            app.add_routes([
+                web.get('/api/summary', self._api_summary),
+                web.get('/api/signals', self._api_signals),
+                web.get('/api/alerts', self._api_alerts),
+                web.get('/api/analysis', self._api_analysis),
+            ])
+            
+            port = int(os.getenv("PORT", 8080))
+            runner = web.AppRunner(app)
+            await runner.setup()
+            site = web.TCPSite(runner, '0.0.0.0', port)
+            logger.info(f"📡 Zenith API established at: http://0.0.0.0:{port}")
+            await site.start()
+        except Exception as e:
+            logger.error(f"❌ API Server CRASH: {e}")
+            logger.error(traceback.format_exc())
 
     def run(self):
         """Start the Telegram bot and the integrated API server."""
@@ -1677,11 +1686,5 @@ class EuroScopeBot:
                 app.job_queue, self.config.telegram.allowed_users
             )
 
-        # Create event loop and run everything concurrently
-        loop = asyncio.get_event_loop()
-        
-        # Start API server in background
-        loop.create_task(self.start_api_server())
-        
-        # Run Telegram application
+        # Run Telegram application (polling will use the default loop)
         app.run_polling(drop_pending_updates=True)
