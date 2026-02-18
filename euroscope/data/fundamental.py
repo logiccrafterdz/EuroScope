@@ -6,8 +6,9 @@ interest rates, CPI, GDP, bond yields, and rate differentials.
 """
 
 import logging
+import asyncio
 from datetime import datetime, timedelta, UTC
-from typing import Optional
+from typing import Optional, Dict, Any, List
 
 import httpx
 
@@ -31,12 +32,15 @@ FRED_BASE_URL = "https://api.stlouisfed.org/fred/series/observations"
 
 
 class FundamentalDataProvider:
-    """Fetches key macroeconomic data for EUR/USD analysis."""
+    """Fetches key macroeconomic data for EUR/USD analysis with high resilience."""
 
     def __init__(self, fred_api_key: str = ""):
         self.fred_api_key = fred_api_key
         self._cache: dict[str, tuple[dict, datetime]] = {}
-        self._cache_ttl = timedelta(hours=4)  # Macro data updates infrequently
+        self._cache_ttl = timedelta(hours=24)  # Extended for fallback
+        self.session = httpx.AsyncClient(timeout=10)
+        self.last_quality = "complete"
+        self.warnings = []
 
     def _get_cached(self, key: str) -> Optional[dict]:
         """Return cached data if still valid."""
@@ -50,16 +54,17 @@ class FundamentalDataProvider:
         """Store data in cache."""
         self._cache[key] = (data, datetime.now(UTC))
 
-    # ─── FRED Data ───────────────────────────────────────────
+    # ─── Data Fetching Logic ─────────────────────────────────
 
-    def _fetch_fred_series(self, series_id: str, limit: int = 5) -> list[dict]:
-        """Fetch latest observations from a FRED series."""
+    async def _fetch_series(self, series_id: str, limit: int = 5) -> List[Dict]:
+        """Fetch latest observations with retry logic and caching fallback."""
         if not self.fred_api_key:
             return []
 
-        try:
-            with httpx.Client(timeout=15) as client:
-                resp = client.get(FRED_BASE_URL, params={
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                resp = await self.session.get(FRED_BASE_URL, params={
                     "series_id": series_id,
                     "api_key": self.fred_api_key,
                     "file_type": "json",
@@ -69,108 +74,84 @@ class FundamentalDataProvider:
                 resp.raise_for_status()
                 data = resp.json()
 
-            observations = []
-            for obs in data.get("observations", []):
-                value = obs.get("value", ".")
-                if value != ".":
-                    observations.append({
-                        "date": obs["date"],
-                        "value": float(value),
-                    })
-            return observations
+                observations = []
+                for obs in data.get("observations", []):
+                    value = obs.get("value", ".")
+                    if value != ".":
+                        observations.append({
+                            "date": obs["date"],
+                            "value": float(value),
+                        })
+                
+                # Success!
+                return observations
 
-        except Exception as e:
-            logger.error(f"FRED fetch error for {series_id}: {e}")
-            return []
+            except Exception as e:
+                logger.warning(f"Fetch attempt {attempt+1} failed for {series_id}: {e}")
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(2 ** attempt)  # Exponential backoff
+                else:
+                    logger.error(f"All retries failed for {series_id}. Attempting cache fallback.")
+        
+        return []
 
-    def get_fed_funds_rate(self) -> Optional[dict]:
+    async def _get_series_data(self, key: str, series_id: str, field_name: str = "value") -> Optional[Dict]:
+        """Unified fetcher with caching and quality tracking."""
+        data = await self._fetch_series(series_id)
+        
+        if data:
+            result = {
+                field_name: data[0]["value"],
+                "date": data[0]["date"],
+                "source": "FRED",
+                "quality": "reliable"
+            }
+            # Special logic for CPI (needs 2 points)
+            if key == "us_cpi" and len(data) >= 2:
+                current = data[0]["value"]
+                previous = data[1]["value"]
+                result["previous"] = previous
+                result["yoy_change"] = round((current - previous) / previous * 100, 2)
+                
+            self._set_cache(key, result)
+            return result
+        
+        # Fallback to cache
+        cached = self._get_cached(key)
+        if cached:
+            cached["quality"] = "cached"
+            self.warnings.append(f"Using cached data for {key} (stale)")
+            return cached
+            
+        self.warnings.append(f"Data unavailable for {key}")
+        return None
+
+    async def get_fed_funds_rate(self) -> Optional[Dict]:
         """Get the current Federal Funds Rate."""
-        cached = self._get_cached("fed_funds_rate")
-        if cached:
-            return cached
+        return await self._get_series_data("fed_funds_rate", FRED_SERIES["fed_funds_rate"], "rate")
 
-        data = self._fetch_fred_series(FRED_SERIES["fed_funds_rate"], limit=3)
-        if data:
-            result = {"rate": data[0]["value"], "date": data[0]["date"], "source": "FRED"}
-            self._set_cache("fed_funds_rate", result)
-            return result
-        return None
-
-    def get_us_10y_yield(self) -> Optional[dict]:
+    async def get_us_10y_yield(self) -> Optional[Dict]:
         """Get the US 10-Year Treasury yield."""
-        cached = self._get_cached("us_10y_treasury")
-        if cached:
-            return cached
+        return await self._get_series_data("us_10y_treasury", FRED_SERIES["us_10y_treasury"], "yield")
 
-        data = self._fetch_fred_series(FRED_SERIES["us_10y_treasury"], limit=3)
-        if data:
-            result = {"yield": data[0]["value"], "date": data[0]["date"], "source": "FRED"}
-            self._set_cache("us_10y_treasury", result)
-            return result
-        return None
-
-    def get_us_cpi(self) -> Optional[dict]:
+    async def get_us_cpi(self) -> Optional[Dict]:
         """Get the latest US CPI reading."""
-        cached = self._get_cached("us_cpi")
-        if cached:
-            return cached
+        return await self._get_series_data("us_cpi", FRED_SERIES["us_cpi"])
 
-        data = self._fetch_fred_series(FRED_SERIES["us_cpi"], limit=3)
-        if len(data) >= 2:
-            current = data[0]["value"]
-            previous = data[1]["value"]
-            yoy_change = round((current - previous) / previous * 100, 2)
-            result = {
-                "value": current, "previous": previous,
-                "yoy_change": yoy_change, "date": data[0]["date"], "source": "FRED",
-            }
-            self._set_cache("us_cpi", result)
-            return result
-        return None
+    async def get_ecb_main_rate(self) -> Optional[Dict]:
+        """Get the ECB Main Refinancing Rate."""
+        return await self._get_series_data("ecb_main_rate", FRED_SERIES["ecb_main_rate"])
 
-    # ─── Eurozone Data (via FRED) ────────────────────────────
-
-    def get_ecb_main_rate(self) -> Optional[dict]:
-        """Get the ECB Main Refinancing Rate (from FRED)."""
-        cached = self._get_cached("ecb_main_rate")
-        if cached:
-            return cached
-
-        data = self._fetch_fred_series(FRED_SERIES["ecb_main_rate"], limit=3)
-        if data:
-            result = {
-                "value": data[0]["value"], "name": "ECB Main Refinancing Rate",
-                "date": data[0]["date"], "source": "FRED (ECB Data)"
-            }
-            self._set_cache("ecb_main_rate", result)
-            return result
-        return None
-
-    def get_ecb_deposit_rate(self) -> Optional[dict]:
-        """Get the ECB Deposit Facility Rate (from FRED)."""
-        cached = self._get_cached("ecb_deposit_rate")
-        if cached:
-            return cached
-
-        data = self._fetch_fred_series(FRED_SERIES["ecb_deposit_rate"], limit=3)
-        if data:
-            result = {
-                "value": data[0]["value"], "name": "ECB Deposit Rate",
-                "date": data[0]["date"], "source": "FRED (ECB Data)"
-            }
-            self._set_cache("ecb_deposit_rate", result)
-            return result
-        return None
+    async def get_ecb_deposit_rate(self) -> Optional[Dict]:
+        """Get the ECB Deposit Facility Rate."""
+        return await self._get_series_data("ecb_deposit_rate", FRED_SERIES["ecb_deposit_rate"])
 
     # ─── Derived Metrics ─────────────────────────────────────
 
-    def get_interest_rate_differential(self) -> Optional[dict]:
-        """
-        Calculate the interest rate differential between Fed and ECB.
-        Positive = USD has higher rate (tends to support USD / bearish EUR/USD).
-        """
-        fed = self.get_fed_funds_rate()
-        ecb = self.get_ecb_main_rate()
+    async def get_interest_rate_differential(self) -> Optional[Dict]:
+        """Calculate the interest rate differential."""
+        fed = await self.get_fed_funds_rate()
+        ecb = await self.get_ecb_main_rate()
 
         if not fed or not ecb:
             return None
@@ -189,23 +170,23 @@ class FundamentalDataProvider:
             ),
         }
 
-    def get_yield_spread(self) -> Optional[dict]:
-        """
-        Calculate US 10Y vs German 10Y bond yield spread.
-        Positive = higher US yields (supports USD / bearish EUR/USD).
-        """
-        us_yield = self.get_us_10y_yield()
-
-        # Try FRED for German yields
-        german_data = self._fetch_fred_series(FRED_SERIES["german_10y_bund"], limit=3)
-
+    async def get_yield_spread(self) -> Optional[Dict]:
+        """Calculate US 10Y vs German 10Y bond yield spread."""
+        us_yield = await self.get_us_10y_yield()
+        
+        # Proxy or direct fetch for German yields
+        german_data = await self._fetch_series(FRED_SERIES["german_10y_bund"])
+        
         if not us_yield or not german_data:
+            # Try cache for yield spread
+            cached = self._get_cached("yield_spread")
+            if cached: return cached
             return None
 
         german_yield = german_data[0]["value"]
         spread = round(us_yield["yield"] - german_yield, 2)
 
-        return {
+        result = {
             "us_10y": us_yield["yield"],
             "german_10y": german_yield,
             "spread": spread,
@@ -214,39 +195,68 @@ class FundamentalDataProvider:
                 f"Spread: {spread:+.2f}% ({'supports USD' if spread > 0 else 'supports EUR'})"
             ),
         }
+        self._set_cache("yield_spread", result)
+        return result
 
     # ─── AI Context ──────────────────────────────────────────
 
-    def get_macro_context_for_ai(self) -> str:
-        """Get formatted macro summary for AI prompt injection."""
+    async def get_macro_context_for_ai(self) -> str:
+        """Get formatted macro summary."""
         lines = ["📊 Current Macroeconomic Context (EUR/USD):\n"]
 
-        # Interest rates
-        rate_diff = self.get_interest_rate_differential()
+        rate_diff = await self.get_interest_rate_differential()
         if rate_diff:
             lines.append(f"🏦 Interest Rates: {rate_diff['interpretation']}")
         else:
             lines.append("🏦 Interest Rates: Data unavailable")
 
-        # Bond yields
-        yield_spread = self.get_yield_spread()
+        yield_spread = await self.get_yield_spread()
         if yield_spread:
             lines.append(f"📈 Bond Yields: {yield_spread['interpretation']}")
 
-        # US CPI
-        cpi = self.get_us_cpi()
+        cpi = await self.get_us_cpi()
         if cpi:
             lines.append(f"📉 US CPI: {cpi['value']} (YoY: {cpi['yoy_change']}%)")
 
-        # ECB rates
-        ecb_deposit = self.get_ecb_deposit_rate()
+        ecb_deposit = await self.get_ecb_deposit_rate()
         if ecb_deposit:
             lines.append(f"🇪🇺 ECB Deposit Rate: {ecb_deposit['value']}%")
 
         if len(lines) <= 1:
-            return "Macroeconomic data currently unavailable (API keys may not be configured)."
+            return "Macroeconomic data currently unavailable."
 
         return "\n".join(lines)
+
+    async def fetch_complete_macro_data(self) -> Dict[str, Any]:
+        """
+        Fetches all macro data and returns with quality flags.
+        Phase 2 implementation.
+        """
+        self.warnings = []
+        fed = await self.get_fed_funds_rate()
+        ecb = await self.get_ecb_main_rate()
+        cpi = await self.get_us_cpi()
+        yields = await self.get_yield_spread()
+        
+        # Determine quality
+        us_ok = all(x is not None for x in [fed, cpi])
+        eu_ok = all(x is not None for x in [ecb])
+        
+        quality = "complete"
+        if not us_ok and not eu_ok: quality = "minimal"
+        elif not us_ok: quality = "partial_us"
+        elif not eu_ok: quality = "partial_eu"
+        
+        return {
+            "us_data": {"fed": fed, "cpi": cpi},
+            "eu_data": {"ecb": ecb, "yield_spread": yields},
+            "quality": quality,
+            "warnings": list(set(self.warnings))
+        }
+
+    async def close(self):
+        """Close the httpx session."""
+        await self.session.aclose()
 
     def clear_cache(self):
         """Clear all cached data."""

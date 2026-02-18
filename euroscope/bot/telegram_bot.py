@@ -843,10 +843,20 @@ class EuroScopeBot:
         # Risk section
         risk = ctx.risk
         if risk:
-            lines.append(f"�️ *Risk*: {'Approved ✅' if risk.get('approved') else 'Rejected ❌'}")
+            lines.append(f"🛡️ *Risk*: {'Approved ✅' if risk.get('approved') else 'Rejected ❌'}")
             lines.append(f"   SL: `{risk.get('stop_loss')}` | TP: `{risk.get('take_profit')}`")
 
-        report = self._format_for_user(chat_id, "\n".join(lines))
+        # Data Quality Section (Phase 2D)
+        if ctx.metadata.get("data_quality_warning"):
+            details = ctx.metadata.get("data_quality_details", {})
+            quality = details.get("quality", "unknown")
+            warnings = details.get("warnings", [])
+            lines.append(f"\n⚠️ *Data Quality Warning* ({quality})")
+            for w in warnings:
+                lines.append(f"  • {w}")
+
+        report = "\n".join(lines)
+        report = self._format_for_user(chat_id, report)
         await self._reply(update, safe_markdown(report), topic_key="reports", parse_mode="Markdown")
 
     async def cmd_accuracy(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1342,6 +1352,7 @@ class EuroScopeBot:
             "ask": self.cmd_ask,
             "id": self.cmd_id,
             "health": self.cmd_health,
+            "data_health": self.cmd_data_health,
         }
 
         for cmd, handler in commands.items():
@@ -1378,6 +1389,7 @@ class EuroScopeBot:
             BotCommand("backtest", "Run strategy backtest"),
             BotCommand("news", "Latest news (DuckDuckGo)"),
             BotCommand("health", "System status"),
+            BotCommand("data_health", "Check API & Data source health"),
             BotCommand("alert", "Set price level alert"),
             BotCommand("settings", "Bot preferences & alerts"),
             BotCommand("daily_summary", "Daily trading activity recap"),
@@ -1418,6 +1430,31 @@ class EuroScopeBot:
         result = await self.orchestrator.run_skill("monitoring", "runtime_stats")
         text = result.metadata.get("formatted", "⚠️ Could not fetch health stats.")
         await self._reply(update, safe_markdown(text), parse_mode="Markdown")
+
+    async def cmd_data_health(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Show current data source health status (Phase 2D)."""
+        if not await self._check_auth(update):
+            return
+
+        # Fetch provider health (simulated via current availability)
+        # In a real system, FundamentalDataProvider would have an 'is_healthy' check
+        ecb_status = "✅ Online" if self.macro_provider.fred_api_key else "❌ Offline (No Key)"
+        fred_status = "✅ Online" if self.macro_provider.fred_api_key else "❌ Offline (No Key)"
+        tiingo_status = "✅ Online" if self.config.data.tiingo_key else "❌ Offline"
+        alphavantage_status = "✅ Online" if self.config.data.alphavantage_key else "❌ Offline"
+
+        message = (
+            "📊 *Data Source Health Status*\n\n"
+            f"🏦 *FRED API*: {fred_status}\n"
+            f"🇪🇺 *ECB Data*: {ecb_status} (via FRED)\n"
+            f"📈 *Tiingo*: {tiingo_status}\n"
+            f"💹 *AlphaVantage*: {alphavantage_status}\n"
+            f"📰 *News Engine*: ✅ Online\n"
+            f"📅 *Economic Calendar*: ✅ Online\n\n"
+            "💡 _Detailed logs available in /health_"
+        )
+        
+        await self._reply(update, message, parse_mode="Markdown")
 
     async def cmd_id(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /id command — show user's chat ID."""

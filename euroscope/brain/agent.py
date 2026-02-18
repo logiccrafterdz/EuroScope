@@ -34,6 +34,7 @@ class Agent:
         self.vector_memory = vector_memory
         self.orchestrator = orchestrator
         self.forecaster = forecaster
+        self.skill_function_enum = SkillFunction  # Resolves Scope/NameError
         self.conversation_history: list[dict] = []
         self.max_history = 20
         self.tool_timeout = 10
@@ -541,7 +542,7 @@ class Agent:
         """Attempt to parse function calls from text when model fails to use API."""
         calls = []
         allowed_names = set(FUNCTION_SCHEMAS.keys())
-        skill_enum = globals().get("SkillFunction")
+        skill_enum = self.skill_function_enum
         # Look for code blocks with get_skill()
         pattern = r"(get_[a-z0-9_]+)\((.*?)\)"
         matches = re.finditer(pattern, text)

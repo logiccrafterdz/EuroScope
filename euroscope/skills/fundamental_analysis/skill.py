@@ -96,48 +96,99 @@ class FundamentalAnalysisSkill(BaseSkill):
     async def _get_macro(self, context: SkillContext) -> SkillResult:
         if not self._macro:
             return SkillResult(success=False, error="No macro provider configured")
+        
         try:
-            # Macro data is usually blocking but fast with caching, 
-            # we wrap it or assume it's acceptable in this context.
-            context_str = self._macro.get_macro_context_for_ai()
-            data = {
-                "differential": self._macro.get_interest_rate_differential(),
-                "spread": self._macro.get_yield_spread(),
-                "cpi": self._macro.get_us_cpi()
-            }
-            context.analysis["macro_data"] = data
+            # Phase 2: Comprehensive fetch with quality assessment
+            macro_pkg = await self._macro.fetch_complete_macro_data()
+            quality = macro_pkg.get("quality", "complete")
+            warnings = macro_pkg.get("warnings", [])
             
-            # Key integration: propagate macro confidence to intent
-            diff = data.get("differential", {})
-            if isinstance(diff, dict) and "confidence" in diff:
-                context.metadata["market_intent_confidence"] = diff["confidence"]
-                
-            return SkillResult(success=True, data=data, metadata={"formatted": context_str})
+            # Fetch formatted context for AI
+            context_str = await self._macro.get_macro_context_for_ai()
+            
+            # Calculate macro impact
+            macro_impact = "neutral"
+            # Simple logic: check ECB rate or USD rates
+            ecb = macro_pkg["eu_data"].get("ecb")
+            fed = macro_pkg["us_data"].get("fed")
+            
+            if ecb and fed:
+                diff = fed.get("rate", 0) - ecb.get("value", 0)
+                macro_impact = "bullish" if diff < 0 else "bearish" if diff > 1.0 else "neutral"
+
+            # Adaptive Confidence (Phase 2B)
+            base_confidence = 0.85
+            if quality == "partial_eu" or quality == "partial_us":
+                confidence = base_confidence * 0.6  # 40% reduction
+            elif quality == "minimal":
+                confidence = base_confidence * 0.3  # 70% reduction
+            else:
+                confidence = base_confidence
+
+            data = {
+                "macro_data": macro_pkg,
+                "macro_impact": macro_impact,
+                "data_quality": quality,
+                "confidence": confidence
+            }
+            
+            context.analysis["macro_data"] = data
+            context.metadata["macro_quality"] = quality
+            context.metadata["fundamental_confidence"] = confidence
+            
+            if warnings:
+                context.metadata["macro_warnings"] = warnings
+
+            return SkillResult(
+                success=True, 
+                data=data, 
+                metadata={
+                    "formatted": context_str,
+                    "warnings": warnings,
+                    "quality": quality
+                }
+            )
         except Exception as e:
-            return SkillResult(success=False, error=str(e))
+            return SkillResult(success=False, error=f"Macro analysis failed: {str(e)}")
 
     async def _full(self, context: SkillContext) -> SkillResult:
         news = await self._get_news(context)
         cal = await self._get_calendar(context)
         sent = await self._get_sentiment(context)
         macro = await self._get_macro(context)
+        
         data = {
             "news": news.data if news.success else [],
             "calendar": cal.data if cal.success else [],
             "sentiment": sent.data if sent.success else {},
             "macro": macro.data if macro.success else {},
+            "summary": self._generate_summary(macro) if macro.success else "Macro analysis failed"
         }
         return SkillResult(success=True, data=data)
 
+    def _generate_summary(self, macro_result: SkillResult) -> str:
+        """Adaptive summary based on data quality (Phase 2B)."""
+        data = macro_result.data
+        if not data: return "Macro analysis failed"
+        
+        quality = data.get("data_quality", "complete")
+        impact = data.get("macro_impact", "neutral")
+        
+        if quality == "complete":
+            return f"Macro analysis: {impact.capitalize()} bias (US & EU data complete)"
+        elif quality == "partial_eu":
+            return f"Macro analysis: {impact.capitalize()} bias (US data only — EU data missing)"
+        elif quality == "partial_us":
+            return f"Macro analysis: {impact.capitalize()} bias (EU data only — US data missing)"
+        else:
+            return "Macro analysis unavailable — critical data sources offline"
+
     def _format_calendar(self, events: list) -> str:
-        # Check if events is None or empty
         if not events:
             return "📅 No major impacted events upcoming."
         
         lines = ["📅 *Economic Calendar*"]
-        # Limit to 5 events
         for e in events[:5]:
-            # Handle both dict and object (though we converted to dict in _get_calendar)
             time = e.get("time", "") if isinstance(e, dict) else getattr(e, "time", "")
             currency = e.get("currency", "") if isinstance(e, dict) else getattr(e, "currency", "")
             impact = e.get("impact", "Low") if isinstance(e, dict) else getattr(e, "impact", "Low")

@@ -39,6 +39,7 @@ class SkillResult:
     success: bool = True
     data: Any = None
     error: str = ""
+    status: str = "success"
     metadata: dict = field(default_factory=dict)
     next_skill: Optional[str] = None  # Suggest next skill in chain
 

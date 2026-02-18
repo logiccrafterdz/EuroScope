@@ -51,6 +51,18 @@ class TechnicalAnalysisSkill(BaseSkill):
         if df is None or (hasattr(df, 'empty') and df.empty):
             return SkillResult(success=False, error="No candle data available")
 
+        # Validate data sufficiency BEFORE analysis
+        if not self._has_sufficient_data(df):
+            return SkillResult(
+                status="rejected",
+                data={},
+                metadata={
+                    "rejection_reason": "insufficient_candle_data",
+                    "required_candles": 50,
+                    "available_candles": len(df)
+                }
+            )
+
         if action == "analyze":
             return await self._analyze(context, df)
         elif action == "detect_patterns":
@@ -389,3 +401,10 @@ class TechnicalAnalysisSkill(BaseSkill):
             return False
         position = (pattern_price - low) / (high - low)
         return 0.4 <= position <= 0.6
+    async def _analyze_one(self, df, timeframe, context):
+        # Implementation of single timeframe analysis
+        pass
+
+    def _has_sufficient_data(self, df) -> bool:
+        """Check if we have enough candles for reliable technical analysis."""
+        return df is not None and len(df) >= 50
