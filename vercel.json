@@ -2,7 +2,7 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "http://YOUR_VPS_IP:8080/api/:path*"
+      "destination": "https://site--euroscope--zyn6vtt48jxf.code.run/api/:path*"
     }
   ]
 }
