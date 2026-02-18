@@ -1647,11 +1647,17 @@ class EuroScopeBot:
             "formatted": res_ta.metadata.get("formatted")
         })
 
+    async def _api_health(self, request):
+        """Standard health check endpoint."""
+        return web.Response(text="OK", content_type="text/plain")
+
     async def start_api_server(self):
         """Run the AIOHTTP server as a background task with robust error handling."""
         try:
             app = web.Application(middlewares=[self._cors_middleware])
             app.add_routes([
+                web.get('/', self._api_health),
+                web.get('/healthz', self._api_health),
                 web.get('/api/summary', self._api_summary),
                 web.get('/api/signals', self._api_signals),
                 web.get('/api/alerts', self._api_alerts),

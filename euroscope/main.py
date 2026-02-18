@@ -45,12 +45,8 @@ def main():
         logger.error("   Create a bot via @BotFather on Telegram and set the token in .env")
         sys.exit(1)
 
-    # Start health check server (satisfies Heroku/Docker probes)
-    import os
-    from .utils.health_check import HealthCheckServer
-    port = int(os.environ.get("PORT", 8080))
-    health_server = HealthCheckServer(port=port)
-    health_server.start()
+    # Health check is now handled via the integrated API server in EuroScopeBot
+    # to avoid port conflicts on single-port platforms like Northflank/Heroku.
 
     # Start bot
     bot = EuroScopeBot(config)
@@ -59,7 +55,7 @@ def main():
     except KeyboardInterrupt:
         logger.info("EuroScope shutting down...")
     finally:
-        health_server.stop()
+        pass
 
 
 if __name__ == "__main__":
