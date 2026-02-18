@@ -1436,9 +1436,9 @@ class EuroScopeBot:
         )
 
         # 4. Start Zenith Dashboard API
-    asyncio.create_task(self.start_api_server())
+        asyncio.create_task(self.start_api_server())
 
-    logger.info("⚡ Background services & Commands registered.")
+        logger.info("⚡ Background services & Commands registered.")
 
     async def post_shutdown(self, application: Application):
         """Gracefully stop background services on shutdown."""
