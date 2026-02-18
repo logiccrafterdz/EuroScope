@@ -10,6 +10,7 @@ import logging
 import re
 from datetime import datetime
 from typing import Optional
+from aiohttp import web
 
 from telegram import (
     Update, InputFile,
@@ -1572,15 +1573,79 @@ class EuroScopeBot:
         report = self.evolution_tracker.get_evolution_report()
         await update.message.reply_text(report, parse_mode="HTML")
 
+    # ─── API Server (Mini App Backend) ──────────────────────────
+
+    async def _api_summary(self, request):
+        """API endpoint for live price and sentiment summary."""
+        result = await self.orchestrator.run_skill("market_data", "get_price")
+        if not result.success:
+            return web.json_response({"success": False, "error": result.error}, status=500)
+        
+        data = result.data
+        return web.json_response({
+            "success": True,
+            "symbol": "EUR/USD",
+            "price": data["price"],
+            "change": data["change"],
+            "change_pct": data["change_pct"],
+            "sentiment": "bullish" if data["change"] >= 0 else "bearish",
+            "timestamp": datetime.now().isoformat()
+        }, headers={"Access-Control-Allow-Origin": "*"})
+
+    async def _api_signals(self, request):
+        """API endpoint for recent trading signals."""
+        signals = self.storage.get_signals(limit=5)
+        return web.json_response({
+            "success": True,
+            "signals": signals
+        }, headers={"Access-Control-Allow-Origin": "*"})
+
+    async def _api_alerts(self, request):
+        """API endpoint for active price alerts."""
+        alerts = self.storage.get_active_alerts()
+        return web.json_response({
+            "success": True,
+            "alerts": alerts
+        }, headers={"Access-Control-Allow-Origin": "*"})
+
+    async def _api_analysis(self, request):
+        """API endpoint for technical analysis snapshot."""
+        ctx = SkillContext()
+        res_ta = await self.orchestrator.run_skill("technical_analysis", "analyze", context=ctx, timeframe="H1")
+        if not res_ta.success:
+            return web.json_response({"success": False, "error": res_ta.error}, status=500)
+        
+        return web.json_response({
+            "success": True,
+            "data": res_ta.data,
+            "formatted": res_ta.metadata.get("formatted")
+        }, headers={"Access-Control-Allow-Origin": "*"})
+
+    async def start_api_server(self):
+        """Run the AIOHTTP server as a background task."""
+        app = web.Application()
+        app.add_routes([
+            web.get('/api/summary', self._api_summary),
+            web.get('/api/signals', self._api_signals),
+            web.get('/api/alerts', self._api_alerts),
+            web.get('/api/analysis', self._api_analysis),
+        ])
+        
+        runner = web.AppRunner(app)
+        await runner.setup()
+        site = web.TCPSite(runner, '0.0.0.0', 8080) # VPS-friendly port
+        logger.info("📡 Mini App API server pulse: http://0.0.0.0:8080")
+        await site.start()
+
     def run(self):
-        """Start the Telegram bot polling and automation services."""
+        """Start the Telegram bot and the integrated API server."""
         if not self.config.telegram.token:
             logger.error("Telegram token not configured!")
             return
 
-        logger.info("🌐 EuroScope bot V3 starting...")
+        logger.info("🌐 EuroScope Zenith starting...")
         
-        # Build app (now includes post_init)
+        # Build app
         app = self.build_app()
 
         # Set up notifications
@@ -1590,4 +1655,11 @@ class EuroScopeBot:
                 app.job_queue, self.config.telegram.allowed_users
             )
 
+        # Create event loop and run everything concurrently
+        loop = asyncio.get_event_loop()
+        
+        # Start API server in background
+        loop.create_task(self.start_api_server())
+        
+        # Run Telegram application
         app.run_polling(drop_pending_updates=True)
