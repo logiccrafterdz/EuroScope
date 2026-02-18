@@ -232,7 +232,7 @@ class EuroScopeBot:
 
     def _main_menu_keyboard(self) -> InlineKeyboardMarkup:
         """Build the main interactive menu with professional styling."""
-        web_app_url = getattr(self.config.telegram, "web_app_url", "https://example.com/miniapp")
+        web_app_url = getattr(self.config.telegram, "web_app_url", "") or "https://euro-scope.vercel.app/"
         return InlineKeyboardMarkup([
             [
                 InlineKeyboardButton("💎 ZENITH DASHBOARD", web_app=WebAppInfo(url=web_app_url)),

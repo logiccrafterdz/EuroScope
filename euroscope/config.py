@@ -28,6 +28,7 @@ class LLMConfig:
 class TelegramConfig:
     token: str = ""
     allowed_users: list[int] = field(default_factory=list)
+    web_app_url: str = ""
 
 
 @dataclass
@@ -98,6 +99,7 @@ class Config:
             telegram=TelegramConfig(
                 token=os.getenv("EUROSCOPE_TELEGRAM_TOKEN", ""),
                 allowed_users=allowed_users,
+                web_app_url=os.getenv("EUROSCOPE_TELEGRAM_WEB_APP_URL", ""),
             ),
             data=DataConfig(
                 brave_api_key=os.getenv("EUROSCOPE_BRAVE_API_KEY", ""),
