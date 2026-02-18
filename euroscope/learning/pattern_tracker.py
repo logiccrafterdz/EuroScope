@@ -8,7 +8,8 @@ multiplier for each pattern/timeframe combination.
 import json
 import logging
 import re
-from typing import Optional
+from datetime import datetime
+from typing import Optional, List, Dict, Any
 
 from ..data.storage import Storage
 from ..skills.base import SkillContext
