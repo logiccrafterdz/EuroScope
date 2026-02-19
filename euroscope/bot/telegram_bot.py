@@ -1611,6 +1611,9 @@ class EuroScopeBot:
             "price": data["price"],
             "change": data["change"],
             "change_pct": data["change_pct"],
+            "high": data.get("high"),
+            "low": data.get("low"),
+            "range_pips": data.get("spread_pips", 0),
             "sentiment": "bullish" if data["change"] >= 0 else "bearish",
             "timestamp": datetime.now().isoformat()
         })
@@ -1647,6 +1650,31 @@ class EuroScopeBot:
             "formatted": res_ta.metadata.get("formatted")
         })
 
+    async def _api_candles(self, request):
+        """API endpoint for chart data (OHLC)."""
+        timeframe = request.query.get("timeframe", "H1")
+        logger.debug(f"API: Fetching {timeframe} candles for chart...")
+        result = await self.orchestrator.run_skill("market_data", "get_candles", timeframe=timeframe, count=100)
+        
+        if not result.success:
+            return web.json_response({"success": False, "error": result.error}, status=500)
+        
+        df = result.data
+        candles = []
+        for idx, row in df.iterrows():
+            candles.append({
+                "time": int(idx.timestamp()),
+                "open": float(row["Open"]),
+                "high": float(row["High"]),
+                "low": float(row["Low"]),
+                "close": float(row["Close"])
+            })
+        
+        return web.json_response({
+            "success": True,
+            "candles": candles
+        })
+
     async def _api_health(self, request):
         """Standard health check endpoint."""
         return web.Response(text="OK", content_type="text/plain")
@@ -1662,6 +1690,7 @@ class EuroScopeBot:
                 web.get('/api/signals', self._api_signals),
                 web.get('/api/alerts', self._api_alerts),
                 web.get('/api/analysis', self._api_analysis),
+                web.get('/api/candles', self._api_candles),
             ])
             
             port = int(os.getenv("PORT", 8080))
