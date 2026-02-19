@@ -1605,19 +1605,21 @@ class EuroScopeBot:
             return web.json_response({"success": False, "error": result.error}, status=500)
         
         data = result.data
-        return web.json_response({
+        resp = {
             "success": True,
             "symbol": "EUR/USD",
-            "price": data["price"],
-            "change": data["change"],
-            "change_pct": data["change_pct"],
+            "price": data.get("price", 0),
+            "change": data.get("change", 0),
+            "change_pct": data.get("change_pct", 0),
             "high": data.get("high"),
             "low": data.get("low"),
             "open": data.get("open"),
             "range_pips": data.get("spread_pips", 0),
-            "sentiment": "bullish" if data["change"] >= 0 else "bearish",
+            "sentiment": "bullish" if data.get("change", 0) >= 0 else "bearish",
             "timestamp": datetime.now().isoformat()
-        })
+        }
+        logger.debug(f"API: Summary response sent for {resp['price']}")
+        return web.json_response(resp)
 
     async def _api_status(self, request):
         """API endpoint for market status and trading hours."""
@@ -1653,8 +1655,16 @@ class EuroScopeBot:
         ctx = SkillContext()
         res_ta = await self.orchestrator.run_skill("technical_analysis", "analyze", context=ctx, timeframe="H1")
         if not res_ta.success:
-            return web.json_response({"success": False, "error": res_ta.error}, status=500)
+            logger.warning(f"API: Analysis skill partial failure: {res_ta.error}")
+            # Instead of 500, return partial=True so the frontend can still show cached or empty states nicely
+            return web.json_response({
+                "success": False,
+                "partial": True,
+                "error": res_ta.error,
+                "data": {"indicators": {}, "overall_bias": "NEUTRAL"}
+            })
         
+        logger.debug("API: Technical analysis snapshot delivered.")
         return web.json_response({
             "success": True,
             "data": res_ta.data,
