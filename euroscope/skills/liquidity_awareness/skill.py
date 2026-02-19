@@ -46,12 +46,14 @@ class LiquidityAwarenessSkill(BaseSkill):
             context.metadata["liquidity_zones"] = zones
             context.metadata["market_intent"] = intent
             context.metadata["liquidity_aware"] = True
+            context.metadata["liquidity_signal"] = self._intent_to_signal(intent)
             return SkillResult(success=True, data={"liquidity_zones": zones, "market_intent": intent})
         except Exception as e:
             logger.warning(f"LiquidityAwarenessSkill failed: {e}")
             context.metadata["liquidity_zones"] = []
             context.metadata["market_intent"] = self._neutral_intent()
             context.metadata["liquidity_aware"] = True
+            context.metadata["liquidity_signal"] = "NEUTRAL"
             return SkillResult(success=True, data={"liquidity_zones": [], "market_intent": self._neutral_intent()})
 
     def _run(self, df, session_regime: str) -> tuple[list[dict], dict]:
@@ -63,6 +65,15 @@ class LiquidityAwarenessSkill(BaseSkill):
         zones = self._detect_liquidity_zones(df, session_regime)
         intent = self._assess_market_intent(df, zones, session_regime)
         return zones, intent
+
+    def _intent_to_signal(self, intent: dict) -> str:
+        move = (intent.get("next_likely_move") or intent.get("direction") or intent.get("bias") or "")
+        move = str(move).strip().lower()
+        if "up" in move or "bull" in move or "buy" in move or "long" in move:
+            return "BUY"
+        if "down" in move or "bear" in move or "sell" in move or "short" in move:
+            return "SELL"
+        return "NEUTRAL"
 
     def _normalize_df(self, df: pd.DataFrame) -> pd.DataFrame:
         if not isinstance(df, pd.DataFrame):

@@ -259,10 +259,6 @@ class Orchestrator:
         if market_state.get("regime") in ("trending", "breakout") or market_state.get("volatility") == "high":
             await self.run_pipeline([("fundamental_analysis", "full")], ctx)
 
-        direction = ctx.signals.get("direction")
-        if direction in ("BUY", "SELL"):
-            await self.run_pipeline([("risk_management", "assess_trade")], ctx)
-
         # Store in vector memory if available
         if self.vector_memory and ctx.analysis:
             formatted = ctx.metadata.get("formatted", "")

@@ -208,7 +208,7 @@ class TradingStrategySkill(BaseSkill):
         else:
             strength = "WEAK_SIGNAL"
             direction = "BUY" if bullish else "SELL" if bearish else "WAIT"
-            confidence = 0.5
+            confidence = 50.0
 
         regime = self._infer_regime_from_adx(adx)
         context.metadata["regime"] = regime

@@ -79,6 +79,8 @@ class TechnicalAnalysisSkill(BaseSkill):
         if "error" in ta:
             return SkillResult(success=False, error=ta["error"])
         context.analysis["indicators"] = ta
+        bias = str(ta.get("overall_bias", "neutral")).upper()
+        context.metadata["technical_bias"] = bias
         
         formatted = self._format_analysis(ta)
         return SkillResult(success=True, data=ta, metadata={"formatted": formatted})
@@ -115,6 +117,7 @@ class TechnicalAnalysisSkill(BaseSkill):
         context.analysis["patterns"] = adjusted
         context.metadata["patterns"] = adjusted
         context.metadata["pattern_context_applied"] = True
+        context.metadata["pattern_signal"] = self._infer_pattern_signal(adjusted)
         
         # Record patterns if tracker available
         multipliers = {}
@@ -176,8 +179,11 @@ class TechnicalAnalysisSkill(BaseSkill):
 
         data = {"indicators": ta, "patterns": adjusted, "levels": levels}
         context.analysis.update(data)
+        bias = str(ta.get("overall_bias", "neutral")).upper()
+        context.metadata["technical_bias"] = bias
         context.metadata["patterns"] = adjusted
         context.metadata["pattern_context_applied"] = True
+        context.metadata["pattern_signal"] = self._infer_pattern_signal(adjusted)
         if multipliers:
             context.metadata["pattern_multipliers"] = multipliers
         
@@ -196,6 +202,22 @@ class TechnicalAnalysisSkill(BaseSkill):
         if signal == "bearish":
             return name, "BEARISH"
         return name, "NEUTRAL"
+
+    @staticmethod
+    def _infer_pattern_signal(patterns: list) -> str:
+        bullish = 0
+        bearish = 0
+        for p in patterns:
+            signal = str(p.get("signal") or p.get("type") or p.get("bias") or "neutral").strip().lower()
+            if signal == "bullish":
+                bullish += 1
+            elif signal == "bearish":
+                bearish += 1
+        if bullish > bearish:
+            return "BULLISH"
+        if bearish > bullish:
+            return "BEARISH"
+        return "NEUTRAL"
 
     def _apply_pattern_context(self, patterns: list, context: SkillContext, df) -> list:
         session_regime = context.metadata.get("session_regime", "unknown")

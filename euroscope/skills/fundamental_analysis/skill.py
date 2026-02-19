@@ -135,6 +135,7 @@ class FundamentalAnalysisSkill(BaseSkill):
             context.analysis["macro_data"] = data
             context.metadata["macro_quality"] = quality
             context.metadata["fundamental_confidence"] = confidence
+            context.metadata["fundamental_bias"] = str(macro_impact).upper()
             
             if warnings:
                 context.metadata["macro_warnings"] = warnings
