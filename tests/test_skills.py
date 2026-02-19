@@ -240,6 +240,8 @@ class TestSkillExecution:
         ctx = SkillContext()
         ctx.signals = {"direction": "BUY", "entry_price": 1.0850, "strategy": "trend_following"}
         ctx.risk = {"stop_loss": 1.0820, "take_profit": 1.0910}
+        ctx.metadata["session_regime"] = "overlap"
+        ctx.metadata["macro_quality"] = "complete"
 
         # Open
         r = await s.safe_execute(ctx, "open_trade")
@@ -270,6 +272,8 @@ class TestSkillExecution:
         ctx.signals = {"direction": "BUY", "entry_price": 1.0850, "strategy": "trend_following"}
         ctx.risk = {"stop_loss": 1.0820, "take_profit": 1.0910}
         ctx.metadata["uncertainty_score"] = 0.7
+        ctx.metadata["session_regime"] = "overlap"
+        ctx.metadata["macro_quality"] = "complete"
 
         r = await s.safe_execute(ctx, "open_trade")
         assert not r.success

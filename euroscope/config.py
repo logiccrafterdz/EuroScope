@@ -59,6 +59,9 @@ class Config:
     proactive_disable_weekends: bool = True
     proactive_holiday_dates: list[str] = field(default_factory=list)
     paper_trading_only: bool = True
+    safety_news_block_minutes: int = 30
+    safety_asian_min_confidence: float = 0.75
+    safety_volatility_stop_min: int = 25
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -119,6 +122,9 @@ class Config:
             proactive_disable_weekends=os.getenv("EUROSCOPE_PROACTIVE_DISABLE_WEEKENDS", "1") != "0",
             proactive_holiday_dates=holiday_dates,
             paper_trading_only=os.getenv("EUROSCOPE_PAPER_TRADING_ONLY", "1") != "0",
+            safety_news_block_minutes=int(os.getenv("EUROSCOPE_SAFETY_NEWS_BLOCK_MINUTES", "30")),
+            safety_asian_min_confidence=float(os.getenv("EUROSCOPE_SAFETY_ASIAN_MIN_CONFIDENCE", "0.75")),
+            safety_volatility_stop_min=int(os.getenv("EUROSCOPE_SAFETY_VOLATILITY_STOP_MIN", "25")),
         )
 
     def validate(self) -> list[str]:

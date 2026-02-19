@@ -7,6 +7,8 @@ from dataclasses import dataclass, field
 from ..base import BaseSkill, SkillCategory, SkillContext, SkillResult
 from ...automation.events import Event
 from ...data.storage import Storage
+from ...config import Config
+from ...trading.safety_guardrails import SafetyGuardrail
 
 
 @dataclass
@@ -43,6 +45,8 @@ class SignalExecutorSkill(BaseSkill):
         self._emergency_halt = False
         self._emergency_halt_until = 0.0
         self._paper_trading_only = True
+        self._config = None
+        self._guardrail = None
 
     def set_storage(self, storage):
         self._storage = storage
@@ -51,6 +55,8 @@ class SignalExecutorSkill(BaseSkill):
         self._bus = event_bus
 
     def set_config(self, config):
+        self._config = config
+        self._guardrail = SafetyGuardrail(config)
         value = getattr(config, "paper_trading_only", None)
         if value is None:
             value = getattr(config, "EUROSCOPE_PAPER_TRADING_ONLY", None)
@@ -73,6 +79,20 @@ class SignalExecutorSkill(BaseSkill):
         return await self._open_trade(context, **params)
 
     async def _open_trade(self, context: SkillContext, **params) -> SkillResult:
+        if self._guardrail is None:
+            self._guardrail = SafetyGuardrail(self._config or Config())
+        if self._guardrail:
+            should_block, reason = await self._guardrail.should_block_signal(context)
+            if should_block:
+                context.metadata["safety_guardrail_triggered"] = True
+                context.metadata["signal_rejected"] = True
+                context.metadata["rejection_reason"] = reason
+                await self._record_abort(context, params, reason)
+                return SkillResult(success=False, error=reason, data={
+                    "aborted": True,
+                    "reason": reason,
+                })
+            await self._guardrail.enhance_signal_safety(context)
         abort_reason = self._guard_trade(context)
         if abort_reason:
             await self._record_abort(context, params, abort_reason)

@@ -1,26 +1,14 @@
 import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
 from euroscope.brain.orchestrator import Orchestrator
-from euroscope.brain.agent import Agent
-from euroscope.brain.skill_registry import SkillRegistry
 from euroscope.skills.base import SkillContext, SkillResult
-
-@pytest.fixture
-async def orchestrator():
-    registry = SkillRegistry()
-    # Mock dependencies
-    agent = MagicMock(spec=Agent)
-    config = MagicMock()
-    return Orchestrator(agent=agent, config=config, registry=registry)
 
 @pytest.mark.asyncio
 async def test_orchestrator_confidence_propagation_with_poor_data():
     """Verify that Orchestrator reduces final confidence based on data quality."""
     
     # Setup Orchestrator
-    agent = MagicMock()
-    config = MagicMock()
-    orch = Orchestrator(agent=agent, config=config)
+    orch = Orchestrator()
     
     # Mock Skill Results
     # 1. Fundamental analysis returns 'minimal' quality

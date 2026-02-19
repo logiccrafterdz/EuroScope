@@ -235,30 +235,36 @@ class EuroScopeBot:
 
     def _main_menu_keyboard(self) -> InlineKeyboardMarkup:
         """Build the main interactive menu with professional styling."""
-        web_app_url = getattr(self.config.telegram, "web_app_url", "") or "https://euro-scope.vercel.app/"
         return InlineKeyboardMarkup([
             [
-                InlineKeyboardButton("💎 ZENITH DASHBOARD", web_app=WebAppInfo(url=web_app_url)),
-            ],
-            [
-                InlineKeyboardButton("💹 LIVE PRICE", callback_data="cmd:price"),
+                InlineKeyboardButton("💹 PRICE", callback_data="cmd:price"),
                 InlineKeyboardButton("📊 ANALYSIS", callback_data="cmd:analysis"),
+                InlineKeyboardButton("� CHART", callback_data="cmd:chart"),
             ],
             [
-                InlineKeyboardButton("🔮 FORECAST", callback_data="cmd:forecast"),
+                InlineKeyboardButton("� FORECAST", callback_data="cmd:forecast"),
                 InlineKeyboardButton("🎯 SIGNALS", callback_data="cmd:signals"),
+                InlineKeyboardButton("📋 REPORT", callback_data="cmd:report"),
             ],
             [
-                InlineKeyboardButton("📈 CHART", callback_data="cmd:chart"),
+                InlineKeyboardButton("� NEWS", callback_data="cmd:news"),
                 InlineKeyboardButton("📅 CALENDAR", callback_data="cmd:calendar"),
+                InlineKeyboardButton("🧭 LEVELS", callback_data="cmd:levels"),
             ],
             [
-                InlineKeyboardButton("📰 NEWS", callback_data="cmd:news"),
+                InlineKeyboardButton("🧩 PATTERNS", callback_data="cmd:patterns"),
+                InlineKeyboardButton("🧠 STRATEGY", callback_data="cmd:strategy"),
+                InlineKeyboardButton("🛡️ RISK", callback_data="cmd:risk"),
+            ],
+            [
+                InlineKeyboardButton("� TRADES", callback_data="cmd:trades"),
+                InlineKeyboardButton("📈 PERFORMANCE", callback_data="cmd:performance"),
+                InlineKeyboardButton("🎯 ACCURACY", callback_data="cmd:accuracy"),
+            ],
+            [
                 InlineKeyboardButton("⚙️ SETTINGS", callback_data="cmd:settings"),
-            ],
-            [
-                InlineKeyboardButton("🔙 TERMINAL", callback_data="menu:main"),
                 InlineKeyboardButton("🧪 HELP", callback_data="cmd:help"),
+                InlineKeyboardButton("📋 MENU", callback_data="cmd:menu"),
             ],
         ])
 
@@ -859,6 +865,12 @@ class EuroScopeBot:
             lines.append(f"🛡️ *Risk*: {'Approved ✅' if risk.get('approved') else 'Rejected ❌'}")
             lines.append(f"   SL: `{risk.get('stop_loss')}` | TP: `{risk.get('take_profit')}`")
 
+        if ctx.metadata.get("signal_rejected"):
+            reason = ctx.metadata.get("rejection_reason", "Safety guardrail blocked the signal")
+            lines.append(f"🧯 *Guardrail*: Blocked — {reason}")
+        elif ctx.metadata.get("safety_enhanced"):
+            lines.append("🧯 *Guardrail*: Safety adjustments applied")
+
         # Data Quality Section (Phase 2D)
         if ctx.metadata.get("data_quality_warning"):
             details = ctx.metadata.get("data_quality_details", {})
@@ -1197,6 +1209,8 @@ class EuroScopeBot:
             "cmd:accuracy": "Loading accuracy...",
             "cmd:settings": "Loading settings...",
             "cmd:health": "Loading health...",
+            "cmd:help": "Opening help...",
+            "cmd:menu": "Opening menu...",
         }
 
         if data in cmd_map:

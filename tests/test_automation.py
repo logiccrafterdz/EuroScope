@@ -393,6 +393,12 @@ class TestDeviationMonitor:
             @classmethod
             def utcnow(cls):
                 return target_dt
+            @classmethod
+            def now(cls, tz=None):
+                return target_dt
+            @classmethod
+            def now(cls, tz=None):
+                return target_dt
 
         monkeypatch.setattr(deviation_module, "datetime", FixedDateTime)
         skill = DeviationMonitorSkill()
@@ -413,6 +419,9 @@ class TestDeviationMonitor:
         class FixedDateTime:
             @classmethod
             def utcnow(cls):
+                return target_dt
+            @classmethod
+            def now(cls, tz=None):
                 return target_dt
 
         monkeypatch.setattr(deviation_module, "datetime", FixedDateTime)
@@ -436,6 +445,9 @@ class TestDeviationMonitor:
         class FixedDateTime:
             @classmethod
             def utcnow(cls):
+                return target_dt
+            @classmethod
+            def now(cls, tz=None):
                 return target_dt
 
         monkeypatch.setattr(deviation_module, "datetime", FixedDateTime)

@@ -54,6 +54,8 @@ class TestSkillsCommunication:
         # Signal executor should be able to read context
         ctx.signals = {"direction": "BUY", "entry_price": 1.0850, "strategy": "trend"}
         ctx.risk = {"stop_loss": 1.0820, "take_profit": 1.0910}
+        ctx.metadata["session_regime"] = "overlap"
+        ctx.metadata["macro_quality"] = "complete"
 
         executor = SignalExecutorSkill()
         result = await executor.safe_execute(ctx, "open_trade")
@@ -231,6 +233,8 @@ class TestDataFlowPipeline:
         ctx = SkillContext()
         ctx.signals = {"direction": "SELL", "entry_price": 1.0900, "strategy": "breakout"}
         ctx.risk = {"stop_loss": 1.0930, "take_profit": 1.0840}
+        ctx.metadata["session_regime"] = "overlap"
+        ctx.metadata["macro_quality"] = "complete"
 
         # Open
         r1 = await executor.safe_execute(ctx, "open_trade")

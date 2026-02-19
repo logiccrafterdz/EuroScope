@@ -159,8 +159,8 @@ class SmartAlerts:
         now = datetime.utcnow()
         now_ts = now.timestamp()
 
-        # Phase 3A: Asian Session Suppression (22:00 - 07:00 UTC)
-        is_asian_session = now.hour >= 22 or now.hour < 7
+        session_regime = str(data.get("session_regime", "")).lower()
+        is_asian_session = session_regime == "asian"
 
         for rule in self._rules.values():
             if not rule.enabled:
