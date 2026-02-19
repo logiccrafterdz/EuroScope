@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport"
         content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Zenith Terminal v3.1</title>
+    <title>Zenith Terminal v4.0</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
     <link
@@ -13,17 +13,18 @@
         rel="stylesheet">
     <style>
         :root {
-            --bg-color: #0d0f14;
-            --surface-color: #161a23;
+            --bg-color: #06080a;
+            --surface-color: #0f1218;
+            --surface-accent: #161b22;
             --accent-primary: #10b981;
             --accent-primary-dim: rgba(16, 185, 129, 0.1);
             --text-main: #f9fafb;
             --text-muted: #9ca3af;
-            --text-dim: #6b7280;
-            --border-color: #232936;
+            --text-dim: #4b5563;
+            --border-color: #1f2937;
             --up-color: #10b981;
             --down-color: #ef4444;
-            --glass-blur: blur(24px);
+            --warn-color: #f59e0b;
             --safe-bottom: env(safe-area-inset-bottom, 0px);
         }
 
@@ -46,7 +47,6 @@
             min-height: 100vh;
         }
 
-        /* Animations */
         @keyframes pulse {
             0% {
                 opacity: 0.4;
@@ -87,10 +87,14 @@
         }
 
         header {
+            margin-bottom: 24px;
+        }
+
+        .header-top {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 24px;
+            margin-bottom: 8px;
         }
 
         .logo {
@@ -100,6 +104,25 @@
             color: var(--accent-primary);
             font-family: 'Fira Code', monospace;
             text-transform: uppercase;
+        }
+
+        .session-info {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.6rem;
+            color: var(--text-muted);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .session-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--accent-primary);
+            box-shadow: 0 0 8px var(--accent-primary);
         }
 
         .market-badge {
@@ -145,17 +168,17 @@
         }
 
         .tab-btn {
-            padding: 10px 16px;
+            padding: 10px 14px;
             border: none;
             background: transparent;
             color: var(--text-muted);
-            font-size: 0.65rem;
+            font-size: 0.6rem;
             font-weight: 700;
             text-transform: uppercase;
-            letter-spacing: 1px;
+            letter-spacing: 0.5px;
             cursor: pointer;
             border-radius: 8px;
-            transition: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            transition: 0.2s;
         }
 
         .tab-btn.active {
@@ -175,34 +198,36 @@
         .card {
             background: var(--surface-color);
             border: 1px solid var(--border-color);
-            border-radius: 24px;
-            padding: 24px;
+            border-radius: 20px;
+            padding: 20px;
             margin-bottom: 16px;
         }
 
         .hero-price {
             text-align: center;
             padding: 32px 20px;
+            border: 1px solid var(--border-color);
         }
 
         .hero-price .label {
             color: var(--text-muted);
-            font-size: 0.65rem;
+            font-size: 0.6rem;
             letter-spacing: 3px;
             margin-bottom: 12px;
             font-weight: 600;
+            text-transform: uppercase;
         }
 
         .hero-price .value {
-            font-size: 3.8rem;
+            font-size: 3.5rem;
             font-weight: 700;
             font-family: 'Fira Code', monospace;
-            letter-spacing: -3px;
+            letter-spacing: -2px;
             margin-bottom: 4px;
         }
 
         .hero-price .change {
-            font-size: 1rem;
+            font-size: 0.9rem;
             font-weight: 600;
             font-family: 'Fira Code', monospace;
         }
@@ -215,21 +240,22 @@
         }
 
         .small-card {
-            padding: 16px;
-            border-radius: 20px;
+            padding: 14px;
+            border-radius: 16px;
+            background: var(--surface-accent);
         }
 
         .small-card .label {
-            font-size: 0.55rem;
+            font-size: 0.5rem;
             color: var(--text-dim);
-            margin-bottom: 8px;
+            margin-bottom: 6px;
             text-transform: uppercase;
             letter-spacing: 1px;
-            font-weight: 600;
+            font-weight: 700;
         }
 
         .small-card .value {
-            font-size: 0.95rem;
+            font-size: 0.85rem;
             font-weight: 700;
             font-family: 'Fira Code', monospace;
         }
@@ -237,10 +263,10 @@
         #chart-wrap {
             position: relative;
             width: 100%;
-            border-radius: 24px;
+            border-radius: 20px;
             overflow: hidden;
             border: 1px solid var(--border-color);
-            background: #0b0f14;
+            background: #000;
             margin-bottom: 16px;
         }
 
@@ -256,7 +282,7 @@
             display: flex;
             gap: 4px;
             z-index: 10;
-            background: rgba(13, 15, 20, 0.6);
+            background: rgba(0, 0, 0, 0.6);
             backdrop-filter: blur(8px);
             padding: 2px;
             border-radius: 8px;
@@ -283,7 +309,7 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 12px 0;
+            padding: 10px 0;
             border-bottom: 1px solid rgba(255, 255, 255, 0.03);
         }
 
@@ -292,19 +318,86 @@
         }
 
         .info-row .label {
-            font-size: 0.75rem;
+            font-size: 0.7rem;
             color: var(--text-muted);
         }
 
         .info-row .val {
-            font-size: 0.8rem;
+            font-size: 0.75rem;
             font-weight: 600;
             font-family: 'Fira Code', monospace;
         }
 
+        /* Forecast Styles */
+        .forecast-card {
+            text-align: center;
+            border: 1px solid var(--accent-primary-dim);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .forecast-card .direction {
+            font-size: 1.5rem;
+            font-weight: 800;
+            margin: 12px 0;
+            letter-spacing: 2px;
+        }
+
+        .forecast-card .confidence-bar {
+            height: 4px;
+            background: var(--border-color);
+            border-radius: 2px;
+            margin: 16px 0;
+            position: relative;
+        }
+
+        .forecast-card .confidence-fill {
+            height: 100%;
+            background: var(--accent-primary);
+            border-radius: 2px;
+            transition: 1s;
+        }
+
+        .forecast-reasoning {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            line-height: 1.5;
+            text-align: left;
+            background: var(--surface-accent);
+            padding: 16px;
+            border-radius: 12px;
+        }
+
+        /* Macro Styles */
+        .macro-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        .macro-stat {
+            background: var(--surface-accent);
+            padding: 12px;
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+        }
+
+        .macro-stat .label {
+            font-size: 0.55rem;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            margin-bottom: 4px;
+        }
+
+        .macro-stat .value {
+            font-family: 'Fira Code', monospace;
+            font-size: 0.9rem;
+            font-weight: 700;
+        }
+
         .primary-btn {
             background: var(--accent-primary);
-            color: #0d121b;
+            color: #000;
             width: 100%;
             border: none;
             padding: 18px;
@@ -314,7 +407,6 @@
             text-transform: uppercase;
             letter-spacing: 2px;
             margin-top: 12px;
-            box-shadow: 0 8px 24px rgba(16, 185, 129, 0.2);
         }
 
         .secondary-btn {
@@ -335,40 +427,6 @@
             padding: 60px 20px;
             color: var(--text-dim);
             font-size: 0.75rem;
-            letter-spacing: 1px;
-        }
-
-        /* Alert Item Styles */
-        .alert-item {
-            background: var(--surface-color);
-            border: 1px solid var(--border-color);
-            border-radius: 16px;
-            padding: 16px;
-            margin-bottom: 12px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .alert-info .level {
-            font-family: 'Fira Code', monospace;
-            font-weight: 700;
-            font-size: 1rem;
-            color: var(--text-main);
-        }
-
-        .alert-info .type {
-            font-size: 0.6rem;
-            color: var(--text-muted);
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            margin-top: 4px;
-        }
-
-        .alert-status {
-            font-size: 0.65rem;
-            font-weight: 700;
-            color: var(--accent-primary);
         }
     </style>
 </head>
@@ -376,17 +434,23 @@
 <body>
     <div class="container">
         <header>
-            <div class="brand">
-                <div class="logo">ZENITH/V3.1</div>
+            <div class="header-top">
+                <div class="logo">ZENITH/V4.0</div>
+                <div id="mkt-status" class="market-badge status-closed">OFFLINE</div>
             </div>
-            <div id="mkt-status" class="market-badge status-closed">OFFLINE</div>
+            <div class="session-info">
+                <div class="session-dot"></div>
+                <span id="current-session">DETECTING SESSION...</span>
+            </div>
         </header>
 
         <div class="nav-scroller">
             <nav class="nav-tabs">
                 <button class="tab-btn active" id="tab-terminal" onclick="switchTab('terminal')">Terminal</button>
+                <button class="tab-btn" id="tab-forecast" onclick="switchTab('forecast')">Forecast</button>
                 <button class="tab-btn" id="tab-signals" onclick="switchTab('signals')">Signals</button>
                 <button class="tab-btn" id="tab-analysis" onclick="switchTab('analysis')">Analysis</button>
+                <button class="tab-btn" id="tab-macro" onclick="switchTab('macro')">Macro</button>
                 <button class="tab-btn" id="tab-alerts" onclick="switchTab('alerts')">Alerts</button>
             </nav>
         </div>
@@ -394,22 +458,20 @@
         <!-- TERMINAL TAB -->
         <div id="terminal-view" class="tab-content active">
             <div class="card hero-price">
-                <div class="label">EUR/USD INSTITUTIONAL FEED</div>
+                <div class="label">EUR/USD Institutional Feed</div>
                 <div id="price" class="value">-.-----</div>
                 <div id="price-change" class="change">--.--- (---%)</div>
             </div>
-
             <div class="stats-grid">
                 <div class="card small-card">
-                    <div class="label">Daily Reach</div>
+                    <div class="label">Vol. Reach</div>
                     <div id="stat-range" class="value">--- pips</div>
                 </div>
                 <div class="card small-card">
                     <div class="label">Hi/Lo Range</div>
-                    <div id="stat-hilo" class="value" style="font-size: 0.75rem;">-.--- / -.---</div>
+                    <div id="stat-hilo" class="value">-.--- / -.---</div>
                 </div>
             </div>
-
             <div id="chart-wrap">
                 <div class="chart-tf-picker">
                     <button class="tf-btn" onclick="updateTimeframe('M15')">M15</button>
@@ -420,77 +482,119 @@
             </div>
         </div>
 
+        <!-- FORECAST TAB -->
+        <div id="forecast-view" class="tab-content">
+            <div class="card forecast-card">
+                <div class="label" style="font-size: 0.55rem; letter-spacing: 1px;">AI PROJECTION (H1)</div>
+                <div id="forecast-dir" class="direction">NEUTRAL</div>
+                <div class="confidence-bar">
+                    <div id="forecast-conf-bar" class="confidence-fill" style="width: 0%"></div>
+                </div>
+                <div
+                    style="display:flex; justify-content:space-between; font-size: 0.6rem; color: var(--text-muted); font-weight: 700;">
+                    <span>CONVICTION</span>
+                    <span id="forecast-conf-text">0%</span>
+                </div>
+            </div>
+            <div class="card forecast-reasoning">
+                <h4
+                    style="font-size: 0.6rem; color: var(--accent-primary); margin-bottom: 10px; text-transform: uppercase;">
+                    Strategic Reasoning</h4>
+                <p id="forecast-text" style="line-height: 1.6;">Aggregating multi-source signals for deployment...</p>
+            </div>
+        </div>
+
         <!-- ANALYSIS TAB -->
         <div id="analysis-view" class="tab-content">
             <div class="card">
                 <h3
-                    style="font-size: 0.65rem; color: var(--accent-primary); letter-spacing: 2px; margin-bottom: 20px; text-transform: uppercase;">
-                    Technical DNA (H1)</h3>
+                    style="font-size: 0.6rem; color: var(--accent-primary); letter-spacing: 2px; margin-bottom: 20px; text-transform: uppercase;">
+                    Neural Analysis (DNA)</h3>
                 <div id="node-analysis">
                     <div class="skeleton" style="margin-bottom: 12px;"></div>
                     <div class="skeleton" style="margin-bottom: 12px; width: 80%;"></div>
-                    <div class="skeleton" style="width: 60%;"></div>
                 </div>
             </div>
         </div>
 
-        <!-- SIGNALS TAB -->
+        <!-- MACRO TAB -->
+        <div id="macro-view" class="tab-content">
+            <div class="card">
+                <h3
+                    style="font-size: 0.6rem; color: var(--accent-primary); letter-spacing: 2px; margin-bottom: 20px; text-transform: uppercase;">
+                    Macro Ecosystem</h3>
+                <div class="macro-grid" id="macro-data-list">
+                    <div class="macro-stat">
+                        <div class="label">FED Rate</div>
+                        <div class="value">-.--%</div>
+                    </div>
+                    <div class="macro-stat">
+                        <div class="label">ECB Rate</div>
+                        <div class="value">-.--%</div>
+                    </div>
+                    <div class="macro-stat">
+                        <div class="label">CPI Trend</div>
+                        <div class="value">---</div>
+                    </div>
+                    <div class="macro-stat">
+                        <div class="label">Impact</div>
+                        <div class="value">NEUTRAL</div>
+                    </div>
+                </div>
+            </div>
+            <div class="card forecast-reasoning">
+                <h4
+                    style="font-size: 0.6rem; color: var(--accent-primary); margin-bottom: 10px; text-transform: uppercase;">
+                    Geopolitical Context</h4>
+                <p id="macro-context" style="line-height: 1.6;">Synchronizing FRED & ECB data nodes...</p>
+            </div>
+        </div>
+
+        <!-- SIGNALS & ALERTS (Consolidated for space) -->
         <div id="signals-view" class="tab-content">
             <div id="signal-list">
                 <div class="empty-state">SYNCING SIGNALS...</div>
             </div>
         </div>
-
-        <!-- ALERTS TAB -->
         <div id="alerts-view" class="tab-content">
             <div id="alert-list">
                 <div class="empty-state">COLLECTING LEVELS...</div>
             </div>
         </div>
 
-        <button class="primary-btn" onclick="manualSync()">REFRESH ENGINE</button>
-        <button class="secondary-btn" onclick="Telegram.WebApp.close()">EXIT INTERFACE</button>
+        <button class="primary-btn" onclick="manualSync()">REFRESH INTELLIGENCE</button>
+        <button class="secondary-btn" onclick="Telegram.WebApp.close()">EXIT TERMINAL</button>
     </div>
 
     <script>
         const tg = window.Telegram.WebApp;
         tg.expand();
-        tg.headerColor = '#0d0f14';
-        tg.backgroundColor = '#0d0f14';
+        tg.headerColor = '#06080a';
+        tg.backgroundColor = '#06080a';
 
         const API_BASE = "/api";
         let chart, candleSeries;
         let currentTF = 'H1';
-        let refreshTimer;
 
-        // Null-Safe Formatting
-        const f5 = (v) => (v !== undefined && v !== null && typeof v === 'number') ? v.toFixed(5) : '-.-----';
-        const f2 = (v) => (v !== undefined && v !== null && typeof v === 'number') ? v.toFixed(2) : '---';
-        const f1 = (v) => (v !== undefined && v !== null && typeof v === 'number') ? v.toFixed(1) : '---';
+        const f5 = (v) => (v != null && typeof v === 'number') ? v.toFixed(5) : '-.-----';
+        const f2 = (v) => (v != null && typeof v === 'number') ? v.toFixed(2) : '---';
+        const f0 = (v) => (v != null && typeof v === 'number') ? v.toFixed(0) : '0';
 
         function initChart() {
             const container = document.getElementById('chart-container');
             if (!container) return;
             chart = LightweightCharts.createChart(container, {
-                layout: { background: { type: 'solid', color: '#0d0f14' }, textColor: '#6b7280', fontSize: 10 },
-                grid: { vertLines: { color: '#1a1e27' }, horzLines: { color: '#1a1e27' } },
-                rightPriceScale: { borderColor: '#232936', scaleMargins: { top: 0.3, bottom: 0.2 } },
-                timeScale: { borderColor: '#232936', timeVisible: true },
-                crosshair: { mode: LightweightCharts.CrosshairMode.Normal }
+                layout: { background: { type: 'solid', color: '#000' }, textColor: '#4b5563', fontSize: 10 },
+                grid: { vertLines: { color: '#0f1218' }, horzLines: { color: '#0f1218' } },
+                rightPriceScale: { borderColor: '#1f2937' },
+                timeScale: { borderColor: '#1f2937' }
             });
-            candleSeries = chart.addCandlestickSeries({
-                upColor: '#10b981', downColor: '#ef4444', borderVisible: false,
-                wickUpColor: '#10b981', wickDownColor: '#ef4444'
-            });
+            candleSeries = chart.addCandlestickSeries({ upColor: '#10b981', downColor: '#ef4444', borderVisible: false, wickUpColor: '#10b981', wickDownColor: '#ef4444' });
             new ResizeObserver(() => chart.applyOptions({ width: container.clientWidth, height: container.clientHeight })).observe(container);
         }
 
-        async function apiRequest(endpoint) {
-            try {
-                const res = await fetch(`${API_BASE}${endpoint}`);
-                if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                return await res.json();
-            } catch (e) { console.error(`API Error (${endpoint}):`, e); return { success: false, error: e.message }; }
+        async function api(path) {
+            try { return await (await fetch(`${API_BASE}${path}`)).json(); } catch (e) { return { success: false }; }
         }
 
         function switchTab(viewId) {
@@ -505,97 +609,108 @@
         async function updateTimeframe(tf) {
             currentTF = tf;
             document.querySelectorAll('.tf-btn').forEach(b => b.classList.toggle('active', b.textContent === tf));
-            tg.HapticFeedback.selectionChanged();
-            const data = await apiRequest(`/candles?timeframe=${tf}`);
-            if (data.success && data.candles) { candleSeries.setData(data.candles); chart.timeScale().fitContent(); }
+            const data = await api(`/candles?timeframe=${tf}`);
+            if (data.success) candleSeries.setData(data.candles);
         }
 
-        async function sync(specificTab = null) {
-            try {
-                const activeTab = specificTab || document.querySelector('.tab-content.active').id.replace('-view', '');
+        async function sync(activeTab = null) {
+            if (!activeTab) activeTab = document.querySelector('.tab-content.active').id.replace('-view', '');
 
-                // 1. Core Summary (Always)
-                const [summary, mktStatus] = await Promise.all([apiRequest('/summary'), apiRequest('/status')]);
+            // Global Feed
+            const [sum, status] = await Promise.all([api('/summary'), api('/status')]);
 
-                if (mktStatus.success && mktStatus.data) {
-                    const s = mktStatus.data;
-                    const el = document.getElementById('mkt-status');
-                    el.textContent = s.status || 'OFFLINE';
-                    el.className = `market-badge status-${(s.status || 'closed').toLowerCase()}`;
+            if (status.success && status.data) {
+                const s = status.data;
+                const mkt = document.getElementById('mkt-status');
+                mkt.textContent = s.status; mkt.className = `market-badge status-${s.status.toLowerCase()}`;
+                document.getElementById('current-session').textContent = `${s.session} SESSION`;
+            }
+
+            if (sum.success) {
+                document.getElementById('price').textContent = f5(sum.price);
+                const el = document.getElementById('price-change');
+                const sign = sum.change >= 0 ? '+' : '';
+                el.textContent = `${sign}${f5(sum.change)} (${sign}${f2(sum.change_pct)}%)`;
+                el.style.color = sum.change >= 0 ? 'var(--up-color)' : 'var(--down-color)';
+                document.getElementById('stat-range').textContent = `${(sum.range_pips || 0).toFixed(1)} pips`;
+                document.getElementById('stat-hilo').textContent = `${f5(sum.low)} / ${f5(sum.high)}`;
+            }
+
+            if (activeTab === 'terminal') {
+                const data = await api(`/candles?timeframe=${currentTF}`);
+                if (data.success) candleSeries.setData(data.candles);
+            } else if (activeTab === 'forecast') {
+                const res = await api('/forecast');
+                if (res.success && res.data) {
+                    const d = res.data;
+                    const dirEl = document.getElementById('forecast-dir');
+                    dirEl.textContent = d.direction;
+                    dirEl.style.color = d.direction === 'BUY' ? 'var(--up-color)' : d.direction === 'SELL' ? 'var(--down-color)' : 'var(--text-muted)';
+                    document.getElementById('forecast-conf-bar').style.width = `${(d.confidence * 100)}%`;
+                    document.getElementById('forecast-conf-text').textContent = `${(d.confidence * 100).toFixed(0)}%`;
+                    document.getElementById('forecast-text').textContent = d.reasoning || "No reasoning provided by AI.";
                 }
-
-                if (summary.success) {
-                    document.getElementById('price').textContent = f5(summary.price);
-                    const chg = summary.change || 0;
-                    const sign = chg >= 0 ? '+' : '';
-                    const changeEl = document.getElementById('price-change');
-                    changeEl.textContent = `${sign}${f5(chg)} (${sign}${f2(summary.change_pct)}%)`;
-                    changeEl.style.color = chg >= 0 ? 'var(--up-color)' : 'var(--down-color)';
-                    document.getElementById('stat-range').textContent = `${f1(summary.range_pips)} pips`;
-                    document.getElementById('stat-hilo').textContent = `${f5(summary.low)} / ${f5(summary.high)}`;
+            } else if (activeTab === 'macro') {
+                const res = await api('/macro');
+                if (res.success && res.data) {
+                    const m = res.data;
+                    const pkg = m.macro_data || {};
+                    const eu = pkg.eu_data || {}; const us = pkg.us_data || {};
+                    document.getElementById('macro-data-list').innerHTML = `
+                        <div class="macro-stat"><div class="label">Fed Rate</div><div class="value">${f2(us.fed?.rate)}%</div></div>
+                        <div class="macro-stat"><div class="label">ECB Rate</div><div class="value">${f2(eu.ecb?.value)}%</div></div>
+                        <div class="macro-stat"><div class="label">US CPI</div><div class="value">${f2(us.cpi?.value)}%</div></div>
+                        <div class="macro-stat"><div class="label">EU CPI</div><div class="value">${f2(eu.cpi?.value)}%</div></div>
+                        <div class="macro-stat"><div class="label">Bias</div><div class="value" style="color:var(--accent-primary)">${m.macro_impact?.toUpperCase() || 'NEUTRAL'}</div></div>
+                        <div class="macro-stat"><div class="label">Quality</div><div class="value">${m.data_quality || 'unknown'}</div></div>
+                    `;
+                    document.getElementById('macro-context').textContent = res.formatted || "Awaiting geopolitical feed sync...";
                 }
-
-                // 2. Tab Specifics
-                if (activeTab === 'terminal') {
-                    const data = await apiRequest(`/candles?timeframe=${currentTF}`);
-                    if (data.success && data.candles) { candleSeries.setData(data.candles); chart.timeScale().fitContent(); }
-                } else if (activeTab === 'analysis') {
-                    const res = await apiRequest('/analysis');
-                    const box = document.getElementById('node-analysis');
-                    if (res.success && res.data) {
-                        const ta = res.data;
-                        const ind = ta.indicators || {};
-                        box.innerHTML = `
-                            <div class="info-row"><span class="label">Network Bias</span><span class="val" style="color:var(--accent-primary)">${(ta.overall_bias || 'NEUTRAL').toUpperCase()}</span></div>
-                            <div class="info-row"><span class="label">RSI (14)</span><span class="val">${f2(ind.RSI?.value)}</span></div>
-                            <div class="info-row"><span class="label">ATR Volatility</span><span class="val">${f1(ind.ATR?.pips)} pips</span></div>
-                            <div class="info-row"><span class="label">EMA 50 (Trend)</span><span class="val">${f5(ind.EMA?.ema50)}</span></div>
-                            <div class="info-row"><span class="label">EMA 200 (Base)</span><span class="val">${f5(ind.EMA?.ema200)}</span></div>
-                        `;
-                    }
-                } else if (activeTab === 'signals') {
-                    const res = await apiRequest('/signals');
-                    const list = document.getElementById('signal-list');
-                    if (res.success && res.signals?.length > 0) {
-                        list.innerHTML = res.signals.map(s => `
-                            <div class="card" style="padding: 16px; margin-bottom: 12px; border-radius: 12px;">
-                                <div style="display:flex; justify-content:space-between; margin-bottom:12px;">
-                                    <span style="font-weight:700; color: ${s.direction === 'BUY' ? 'var(--up-color)' : 'var(--down-color)'}; font-size: 0.7rem;">${s.direction} SIGNAL</span>
-                                    <span style="font-size: 0.6rem; color: var(--text-dim);">${new Date(s.timestamp || s.created_at).toLocaleTimeString()}</span>
-                                </div>
-                                <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; text-align:center;">
-                                    <div><small style="display:block; font-size:0.5rem; color:var(--text-dim); text-transform:uppercase;">Entry</small><b style="font-family:'Fira Code'; font-size:0.75rem;">${f5(s.entry_price)}</b></div>
-                                    <div><small style="display:block; font-size:0.5rem; color:var(--text-dim); text-transform:uppercase;">Stop</small><b style="font-family:'Fira Code'; font-size:0.75rem; color:var(--down-color)">${f5(s.stop_loss)}</b></div>
-                                    <div><small style="display:block; font-size:0.5rem; color:var(--text-dim); text-transform:uppercase;">Target</small><b style="font-family:'Fira Code'; font-size:0.75rem; color:var(--up-color)">${f5(s.take_profit)}</b></div>
-                                </div>
+            } else if (activeTab === 'analysis') {
+                const res = await api('/analysis');
+                if (res.success && res.data) {
+                    const ta = res.data; const ind = ta.indicators || {};
+                    document.getElementById('node-analysis').innerHTML = `
+                        <div class="info-row"><span class="label">Institutional Bias</span><span class="val" style="color:var(--accent-primary)">${(ta.overall_bias || 'NEUTRAL').toUpperCase()}</span></div>
+                        <div class="info-row"><span class="label">RSI Optimizer</span><span class="val">${f2(ind.RSI?.value)}</span></div>
+                        <div class="info-row"><span class="label">Trend Velocity (EMA50)</span><span class="val">${f5(ind.EMA?.ema50)}</span></div>
+                        <div class="info-row"><span class="label">Market Base (EMA200)</span><span class="val">${f5(ind.EMA?.ema200)}</span></div>
+                        <div class="info-row"><span class="label">ATR Volatility</span><span class="val">${f2(ind.ATR?.pips)} pips</span></div>
+                    `;
+                }
+            } else if (activeTab === 'signals') {
+                const res = await api('/signals');
+                const list = document.getElementById('signal-list');
+                if (res.success && res.signals?.length > 0) {
+                    list.innerHTML = res.signals.map(s => `
+                        <div class="card" style="padding: 16px;">
+                            <div style="display:flex; justify-content:space-between; margin-bottom:12px;">
+                                <span style="font-weight:700; color: ${s.direction === 'BUY' ? 'var(--up-color)' : 'var(--down-color)'}; font-size: 0.6rem;">${s.direction} SIGNAL</span>
+                                <span style="font-size: 0.55rem; color: var(--text-dim);">${new Date(s.timestamp || s.created_at).toLocaleTimeString()}</span>
                             </div>
-                        `).join('');
-                    } else { list.innerHTML = `<div class="empty-state">NO RECENT TRADE SIGNALS</div>`; }
-                } else if (activeTab === 'alerts') {
-                    const res = await apiRequest('/alerts');
-                    const list = document.getElementById('alert-list');
-                    if (res.success && res.alerts && res.alerts.length > 0) {
-                        list.innerHTML = res.alerts.map(a => `
-                            <div class="alert-item">
-                                <div class="alert-info">
-                                    <div class="level">${f5(a.level)}</div>
-                                    <div class="type">${a.direction || 'BOTH'} CROSSOVER</div>
-                                </div>
-                                <div class="alert-status">ACTIVE</div>
+                            <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; text-align:center;">
+                                <div><small style="display:block; font-size:0.5rem; color:var(--text-dim);">ENTRY</small><b style="font-family:'Fira Code'; font-size:0.75rem;">${f5(s.entry_price)}</b></div>
+                                <div><small style="display:block; font-size:0.5rem; color:var(--text-dim);">STOP</small><b style="font-family:'Fira Code'; font-size:0.75rem; color:var(--down-color)">${f5(s.stop_loss)}</b></div>
+                                <div><small style="display:block; font-size:0.5rem; color:var(--text-dim);">TARGET</small><b style="font-family:'Fira Code'; font-size:0.75rem; color:var(--up-color)">${f5(s.take_profit)}</b></div>
                             </div>
-                        `).join('');
-                    } else { list.innerHTML = `<div class="empty-state">NO ACTIVE PRICE ALERTS</div>`; }
-                }
-            } catch (err) { console.error("Sync Critical Error:", err); }
+                        </div>`).join('');
+                } else list.innerHTML = `<div class="empty-state">NO RECENT TRADE SIGNALS</div>`;
+            } else if (activeTab === 'alerts') {
+                const res = await api('/alerts');
+                const list = document.getElementById('alert-list');
+                if (res.success && res.alerts?.length > 0) {
+                    list.innerHTML = res.alerts.map(a => `
+                        <div class="card" style="padding: 14px; display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                            <div><div style="font-family:'Fira Code'; font-weight:700; font-size:0.9rem;">${f5(a.level)}</div><div style="font-size:0.55rem; color:var(--text-dim); text-transform:uppercase;">${a.direction || 'BOTH'} CROSSOVER</div></div>
+                            <div style="font-size:0.6rem; font-weight:700; color:var(--accent-primary);">ACTIVE</div>
+                        </div>`).join('');
+                } else list.innerHTML = `<div class="empty-state">NO ACTIVE PRICE ALERTS</div>`;
+            }
         }
 
         function manualSync() { tg.HapticFeedback.notificationOccurred('success'); sync(); }
 
-        window.onload = () => {
-            initChart();
-            sync('terminal');
-            setInterval(() => sync(), 10000); // Global 10s sync
-        };
+        window.onload = () => { initChart(); sync('terminal'); setInterval(() => sync(), 10000); };
     </script>
 </body>
 

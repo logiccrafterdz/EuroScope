@@ -1636,13 +1636,70 @@ class EuroScopeBot:
         return web.json_response(resp)
 
     async def _api_status(self, request):
-        """API endpoint for market status and trading hours."""
-        logger.debug("API: Fetching market status...")
-        result = await self.orchestrator.run_skill("market_data", "check_market_status")
+        """API endpoint for market status, sessions and trading hours."""
+        logger.debug("API: Fetching market status and session context...")
+        ctx = SkillContext()
+        
+        # 1. Get market hours status (Open/Closed)
+        result_mkt = await self.orchestrator.run_skill("market_data", "check_market_status")
+        mkt_data = result_mkt.data if result_mkt.success else {"status": "Closed"}
+        
+        # 2. Get live session context (London, New York, etc.)
+        res_session = await self.orchestrator.run_skill("session_context", "detect", context=ctx)
+        session_data = res_session.data if res_session.success else {"session_regime": "unknown"}
+        
         return web.json_response({
-            "success": result.success,
-            "data": result.data if result.success else None,
-            "error": result.error if not result.success else None
+            "success": True,
+            "data": {
+                "status": mkt_data.get("status", "Closed"),
+                "session": session_data.get("session_regime", "unknown").upper(),
+                "rules": session_data.get("session_rules", {}),
+                "timestamp": datetime.now().isoformat()
+            }
+        })
+
+    async def _api_forecast(self, request):
+        """API endpoint for deep AI forecasting and reasoning."""
+        logger.debug("API: Running deep AI forecast...")
+        ctx = SkillContext()
+        res = await self.orchestrator.run_skill("forecaster", "forecast", context=ctx)
+        
+        if not res.success:
+            return web.json_response({
+                "success": False,
+                "error": res.error,
+                "data": {"direction": "NEUTRAL", "confidence": 0, "reasoning": "Forecasting brain offline."}
+            })
+            
+        return web.json_response({
+            "success": True,
+            "data": {
+                "direction": res.data.get("direction", "NEUTRAL"),
+                "confidence": res.data.get("confidence", 0),
+                "reasoning": res.data.get("reasoning", ""),
+                "timeframe": res.data.get("timeframe", "H1"),
+                "timestamp": datetime.now().isoformat()
+            }
+        })
+
+    async def _api_macro(self, request):
+        """API endpoint for fundamental macro data (FRED/ECB)."""
+        logger.debug("API: Fetching fundamental macro overview...")
+        ctx = SkillContext()
+        res = await self.orchestrator.run_skill("fundamental_analysis", "get_macro", context=ctx)
+        
+        if not res.success:
+            return web.json_response({
+                "success": False,
+                "partial": True,
+                "error": res.error,
+                "data": {"macro_impact": "NEUTRAL", "macro_data": {}}
+            })
+            
+        return web.json_response({
+            "success": True,
+            "data": res.data,
+            "formatted": res.metadata.get("formatted", "")
         })
 
     async def _api_signals(self, request):
@@ -1727,6 +1784,8 @@ class EuroScopeBot:
                 web.get('/api/analysis', self._api_analysis),
                 web.get('/api/candles', self._api_candles),
                 web.get('/api/status', self._api_status),
+                web.get('/api/forecast', self._api_forecast),
+                web.get('/api/macro', self._api_macro),
             ])
             
             port = int(os.getenv("PORT", 8080))
