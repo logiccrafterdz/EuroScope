@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport"
         content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Zenith Terminal v4.0</title>
+    <title>Zenith Terminal v4.3</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
     <link
@@ -275,6 +275,22 @@
             height: 260px;
         }
 
+        #chart-status {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0, 0, 0, 0.8);
+            color: var(--text-dim);
+            font-size: 0.65rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            z-index: 5;
+            pointer-events: none;
+        }
+
         .chart-tf-picker {
             position: absolute;
             top: 12px;
@@ -435,7 +451,7 @@
     <div class="container">
         <header>
             <div class="header-top">
-                <div class="logo">ZENITH/V4.0</div>
+                <div class="logo">ZENITH/V4.3</div>
                 <div id="mkt-status" class="market-badge status-closed">OFFLINE</div>
             </div>
             <div class="session-info">
@@ -479,6 +495,7 @@
                     <button class="tf-btn" onclick="updateTimeframe('D1')">D1</button>
                 </div>
                 <div id="chart-container"></div>
+                <div id="chart-status">INITIALIZING NODES...</div>
             </div>
         </div>
 
@@ -550,7 +567,7 @@
             </div>
         </div>
 
-        <!-- SIGNALS & ALERTS (Consolidated for space) -->
+        <!-- SIGNALS & ALERTS -->
         <div id="signals-view" class="tab-content">
             <div id="signal-list">
                 <div class="empty-state">SYNCING SIGNALS...</div>
@@ -569,16 +586,12 @@
     <script>
         const tg = window.Telegram.WebApp;
         tg.expand();
-        tg.headerColor = '#06080a';
-        tg.backgroundColor = '#06080a';
-
         const API_BASE = "/api";
         let chart, candleSeries;
         let currentTF = 'H1';
 
         const f5 = (v) => (v != null && typeof v === 'number') ? v.toFixed(5) : '-.-----';
         const f2 = (v) => (v != null && typeof v === 'number') ? v.toFixed(2) : '---';
-        const f0 = (v) => (v != null && typeof v === 'number') ? v.toFixed(0) : '0';
 
         function initChart() {
             const container = document.getElementById('chart-container');
@@ -589,12 +602,12 @@
                 rightPriceScale: { borderColor: '#1f2937' },
                 timeScale: { borderColor: '#1f2937' }
             });
-            candleSeries = chart.addCandlestickSeries({ upColor: '#10b981', downColor: '#ef4444', borderVisible: false, wickUpColor: '#10b981', wickDownColor: '#ef4444' });
+            candleSeries = chart.addCandlestickSeries({ upColor: '#10b981', downColor: '#ef4444', borderVisible: false });
             new ResizeObserver(() => chart.applyOptions({ width: container.clientWidth, height: container.clientHeight })).observe(container);
         }
 
         async function api(path) {
-            try { return await (await fetch(`${API_BASE}${path}`)).json(); } catch (e) { return { success: false }; }
+            try { const r = await fetch(`${API_BASE}${path}`); return await r.json(); } catch (e) { return { success: false, error: e.message }; }
         }
 
         function switchTab(viewId) {
@@ -609,14 +622,12 @@
         async function updateTimeframe(tf) {
             currentTF = tf;
             document.querySelectorAll('.tf-btn').forEach(b => b.classList.toggle('active', b.textContent === tf));
-            const data = await api(`/candles?timeframe=${tf}`);
-            if (data.success) candleSeries.setData(data.candles);
+            sync('terminal');
         }
 
         async function sync(activeTab = null) {
             if (!activeTab) activeTab = document.querySelector('.tab-content.active').id.replace('-view', '');
 
-            // Global Feed
             const [sum, status] = await Promise.all([api('/summary'), api('/status')]);
 
             if (status.success && status.data) {
@@ -629,114 +640,46 @@
             if (sum.success) {
                 document.getElementById('price').textContent = f5(sum.price);
                 const el = document.getElementById('price-change');
-                const sign = sum.change >= 0 ? '+' : '';
+                const sign = (sum.change || 0) >= 0 ? '+' : '';
                 el.textContent = `${sign}${f5(sum.change)} (${sign}${f2(sum.change_pct)}%)`;
-                el.style.color = sum.change >= 0 ? 'var(--up-color)' : 'var(--down-color)';
+                el.style.color = (sum.change || 0) >= 0 ? 'var(--up-color)' : 'var(--down-color)';
                 document.getElementById('stat-range').textContent = `${(sum.range_pips || 0).toFixed(1)} pips`;
                 document.getElementById('stat-hilo').textContent = `${f5(sum.low)} / ${f5(sum.high)}`;
             }
 
             if (activeTab === 'terminal') {
+                const statusEl = document.getElementById('chart-status');
                 const data = await api(`/candles?timeframe=${currentTF}`);
-                if (data.success) candleSeries.setData(data.candles);
+                if (data.success && data.candles && data.candles.length > 0) {
+                    candleSeries.setData(data.candles);
+                    statusEl.style.display = 'none';
+                } else {
+                    statusEl.style.display = 'flex';
+                    statusEl.textContent = data.error || "NO DATA NODES DETECTED";
+                    statusEl.style.color = 'var(--down-color)';
+                }
             } else if (activeTab === 'forecast') {
                 const res = await api('/forecast');
                 if (res.success && res.data) {
                     const d = res.data;
-                    const dirEl = document.getElementById('forecast-dir');
-                    dirEl.textContent = d.direction;
-                    dirEl.style.color = d.direction === 'BUY' ? 'var(--up-color)' : d.direction === 'SELL' ? 'var(--down-color)' : 'var(--text-muted)';
+                    document.getElementById('forecast-dir').textContent = d.direction;
+                    document.getElementById('forecast-dir').style.color = d.direction === 'BUY' ? 'var(--up-color)' : d.direction === 'SELL' ? 'var(--down-color)' : 'var(--text-muted)';
                     document.getElementById('forecast-conf-bar').style.width = `${(d.confidence * 100)}%`;
                     document.getElementById('forecast-conf-text').textContent = `${(d.confidence * 100).toFixed(0)}%`;
-                    document.getElementById('forecast-text').textContent = d.reasoning || "No reasoning provided by AI.";
+                    document.getElementById('forecast-text').textContent = d.reasoning || "Analyzing data nodes...";
                 }
-            } else if (activeTab === 'macro') {
-                const res = await api('/macro');
-                if (res.success && res.data) {
-                    const m = res.data;
-                    const pkg = m.macro_data || {};
-                    const eu = pkg.eu_data || {}; const us = pkg.us_data || {};
-                    document.getElementById('macro-data-list').innerHTML = `
-                        <div class="macro-stat"><div class="label">Fed Rate</div><div class="value">${f2(us.fed?.rate)}%</div></div>
-                        <div class="macro-stat"><div class="label">ECB Rate</div><div class="value">${f2(eu.ecb?.value)}%</div></div>
-                        <div class="macro-stat"><div class="label">US CPI</div><div class="value">${f2(us.cpi?.value)}%</div></div>
-                        <div class="macro-stat"><div class="label">EU CPI</div><div class="value">${f2(eu.cpi?.value)}%</div></div>
-                        <div class="macro-stat"><div class="label">Bias</div><div class="value" style="color:var(--accent-primary)">${m.macro_impact?.toUpperCase() || 'NEUTRAL'}</div></div>
-                        <div class="macro-stat"><div class="label">Quality</div><div class="value">${m.data_quality || 'unknown'}</div></div>
-                    `;
-                    document.getElementById('macro-context').textContent = res.formatted || "Awaiting geopolitical feed sync...";
-                }
-            } else if (activeTab === 'analysis') {
-                const res = await api('/analysis');
-                if (res.success && res.data) {
-                    const ta = res.data; const ind = ta.indicators || {};
-                    document.getElementById('node-analysis').innerHTML = `
-                        <div class="info-row"><span class="label">Institutional Bias</span><span class="val" style="color:var(--accent-primary)">${(ta.overall_bias || 'NEUTRAL').toUpperCase()}</span></div>
-                        <div class="info-row"><span class="label">RSI Optimizer</span><span class="val">${f2(ind.RSI?.value)}</span></div>
-                        <div class="info-row"><span class="label">Trend Velocity (EMA50)</span><span class="val">${f5(ind.EMA?.ema50)}</span></div>
-                        <div class="info-row"><span class="label">Market Base (EMA200)</span><span class="val">${f5(ind.EMA?.ema200)}</span></div>
-                        <div class="info-row"><span class="label">ATR Volatility</span><span class="val">${f2(ind.ATR?.pips)} pips</span></div>
-                    `;
-                }
-            } else if (activeTab === 'signals') {
-                const res = await api('/signals');
-                const list = document.getElementById('signal-list');
-                if (res.success && res.signals?.length > 0) {
-                    list.innerHTML = res.signals.map(s => `
-                        <div class="card" style="padding: 16px;">
-                            <div style="display:flex; justify-content:space-between; margin-bottom:12px;">
-                                <span style="font-weight:700; color: ${s.direction === 'BUY' ? 'var(--up-color)' : 'var(--down-color)'}; font-size: 0.6rem;">${s.direction} SIGNAL</span>
-                                <span style="font-size: 0.55rem; color: var(--text-dim);">${new Date(s.timestamp || s.created_at).toLocaleTimeString()}</span>
-                            </div>
-                            <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; text-align:center;">
-                                <div><small style="display:block; font-size:0.5rem; color:var(--text-dim);">ENTRY</small><b style="font-family:'Fira Code'; font-size:0.75rem;">${f5(s.entry_price)}</b></div>
-                                <div><small style="display:block; font-size:0.5rem; color:var(--text-dim);">STOP</small><b style="font-family:'Fira Code'; font-size:0.75rem; color:var(--down-color)">${f5(s.stop_loss)}</b></div>
-                                <div><small style="display:block; font-size:0.5rem; color:var(--text-dim);">TARGET</small><b style="font-family:'Fira Code'; font-size:0.75rem; color:var(--up-color)">${f5(s.take_profit)}</b></div>
-                            </div>
-                        </div>`).join('');
-                } else list.innerHTML = `<div class="empty-state">NO RECENT TRADE SIGNALS</div>`;
-            } else if (activeTab === 'alerts') {
-                const res = await api('/alerts');
-                const list = document.getElementById('alert-list');
-                if (res.success && res.alerts?.length > 0) {
-                    list.innerHTML = res.alerts.map(a => `
-                        <div class="card" style="padding: 14px; display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                            <div><div style="font-family:'Fira Code'; font-weight:700; font-size:0.9rem;">${f5(a.level)}</div><div style="font-size:0.55rem; color:var(--text-dim); text-transform:uppercase;">${a.direction || 'BOTH'} CROSSOVER</div></div>
-                            <div style="font-size:0.6rem; font-weight:700; color:var(--accent-primary);">ACTIVE</div>
-                        </div>`).join('');
-                } else list.innerHTML = `<div class="empty-state">NO ACTIVE PRICE ALERTS</div>`;
             }
         }
 
         async function manualSync() {
             tg.HapticFeedback.notificationOccurred('success');
             await sync();
-            // Force candle refresh if on terminal
-            const activeTab = document.querySelector('.tab-content.active').id.replace('-view', '');
-            if (activeTab === 'terminal') {
-                const data = await api(`/candles?timeframe=${currentTF}`);
-                if (data.success && data.candles.length > 0) candleSeries.setData(data.candles);
-            }
         }
 
         window.onload = async () => {
             initChart();
-            // Initial load
-            await sync('terminal');
-            const data = await api(`/candles?timeframe=${currentTF}`);
-            if (data.success && data.candles.length > 0) candleSeries.setData(data.candles);
-
-            // High-frequency price sync
-            setInterval(() => sync(), 5000);
-
-            // Lower-frequency candle sync (to avoid rate limits)
-            setInterval(async () => {
-                const activeTab = document.querySelector('.tab-content.active').id.replace('-view', '');
-                if (activeTab === 'terminal') {
-                    const cData = await api(`/candles?timeframe=${currentTF}`);
-                    if (cData.success && cData.candles.length > 0) candleSeries.setData(cData.candles);
-                }
-            }, 20000);
+            await sync();
+            setInterval(() => sync(), 10000);
         };
     </script>
 </body>
