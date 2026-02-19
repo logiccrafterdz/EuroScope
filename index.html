@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport"
         content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Zenith Terminal v4.3</title>
+    <title>Zenith Terminal v4.4</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
     <link
@@ -24,7 +24,6 @@
             --border-color: #1f2937;
             --up-color: #10b981;
             --down-color: #ef4444;
-            --warn-color: #f59e0b;
             --safe-bottom: env(safe-area-inset-bottom, 0px);
         }
 
@@ -47,43 +46,32 @@
             min-height: 100vh;
         }
 
-        @keyframes pulse {
-            0% {
-                opacity: 0.4;
-            }
-
-            50% {
-                opacity: 0.8;
-            }
-
-            100% {
-                opacity: 0.4;
-            }
-        }
-
-        @keyframes slideUp {
-            from {
-                transform: translateY(12px);
-                opacity: 0;
-            }
-
-            to {
-                transform: translateY(0);
-                opacity: 1;
-            }
-        }
-
-        .skeleton {
-            background: var(--surface-color);
-            border-radius: 8px;
-            animation: pulse 1.5s infinite ease-in-out;
-            height: 20px;
-            width: 100%;
-        }
-
         .container {
             max-width: 480px;
             margin: 0 auto;
+        }
+
+        /* Debug Console */
+        #debug-console {
+            background: #000;
+            border: 1px solid #333;
+            border-radius: 8px;
+            font-family: 'Fira Code', monospace;
+            font-size: 0.55rem;
+            padding: 10px;
+            margin-bottom: 16px;
+            display: none;
+            max-height: 120px;
+            overflow-y: auto;
+            color: #aaa;
+        }
+
+        .log-error {
+            color: var(--down-color);
+        }
+
+        .log-warn {
+            color: #f59e0b;
         }
 
         header {
@@ -106,34 +94,13 @@
             text-transform: uppercase;
         }
 
-        .session-info {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            font-size: 0.6rem;
-            color: var(--text-muted);
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-
-        .session-dot {
-            width: 6px;
-            height: 6px;
-            border-radius: 50%;
-            background: var(--accent-primary);
-            box-shadow: 0 0 8px var(--accent-primary);
-        }
-
         .market-badge {
             font-size: 0.55rem;
             padding: 4px 10px;
             border-radius: 20px;
             font-weight: 700;
-            letter-spacing: 0.5px;
-            text-transform: uppercase;
             border: 1px solid currentColor;
-            opacity: 0.9;
+            text-transform: uppercase;
         }
 
         .status-open {
@@ -153,17 +120,12 @@
             padding: 0 16px;
         }
 
-        .nav-scroller::-webkit-scrollbar {
-            display: none;
-        }
-
         .nav-tabs {
             display: flex;
             background: var(--surface-color);
             border: 1px solid var(--border-color);
             border-radius: 12px;
             padding: 4px;
-            width: max-content;
             min-width: 100%;
         }
 
@@ -175,10 +137,8 @@
             font-size: 0.6rem;
             font-weight: 700;
             text-transform: uppercase;
-            letter-spacing: 0.5px;
             cursor: pointer;
             border-radius: 8px;
-            transition: 0.2s;
         }
 
         .tab-btn.active {
@@ -188,7 +148,6 @@
 
         .tab-content {
             display: none;
-            animation: slideUp 0.4s ease-out;
         }
 
         .tab-content.active {
@@ -206,23 +165,12 @@
         .hero-price {
             text-align: center;
             padding: 32px 20px;
-            border: 1px solid var(--border-color);
-        }
-
-        .hero-price .label {
-            color: var(--text-muted);
-            font-size: 0.6rem;
-            letter-spacing: 3px;
-            margin-bottom: 12px;
-            font-weight: 600;
-            text-transform: uppercase;
         }
 
         .hero-price .value {
             font-size: 3.5rem;
             font-weight: 700;
             font-family: 'Fira Code', monospace;
-            letter-spacing: -2px;
             margin-bottom: 4px;
         }
 
@@ -250,8 +198,6 @@
             color: var(--text-dim);
             margin-bottom: 6px;
             text-transform: uppercase;
-            letter-spacing: 1px;
-            font-weight: 700;
         }
 
         .small-card .value {
@@ -268,11 +214,12 @@
             border: 1px solid var(--border-color);
             background: #000;
             margin-bottom: 16px;
+            height: 260px;
         }
 
         #chart-container {
             width: 100%;
-            height: 260px;
+            height: 100%;
         }
 
         #chart-status {
@@ -286,9 +233,7 @@
             font-size: 0.65rem;
             font-weight: 600;
             text-transform: uppercase;
-            letter-spacing: 1px;
             z-index: 5;
-            pointer-events: none;
         }
 
         .chart-tf-picker {
@@ -299,7 +244,6 @@
             gap: 4px;
             z-index: 10;
             background: rgba(0, 0, 0, 0.6);
-            backdrop-filter: blur(8px);
             padding: 2px;
             border-radius: 8px;
             border: 1px solid var(--border-color);
@@ -313,102 +257,11 @@
             padding: 4px 8px;
             border-radius: 6px;
             font-weight: 700;
-            cursor: pointer;
         }
 
         .tf-btn.active {
             color: var(--accent-primary);
             background: rgba(16, 185, 129, 0.15);
-        }
-
-        .info-row {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 10px 0;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.03);
-        }
-
-        .info-row:last-child {
-            border-bottom: none;
-        }
-
-        .info-row .label {
-            font-size: 0.7rem;
-            color: var(--text-muted);
-        }
-
-        .info-row .val {
-            font-size: 0.75rem;
-            font-weight: 600;
-            font-family: 'Fira Code', monospace;
-        }
-
-        /* Forecast Styles */
-        .forecast-card {
-            text-align: center;
-            border: 1px solid var(--accent-primary-dim);
-            position: relative;
-            overflow: hidden;
-        }
-
-        .forecast-card .direction {
-            font-size: 1.5rem;
-            font-weight: 800;
-            margin: 12px 0;
-            letter-spacing: 2px;
-        }
-
-        .forecast-card .confidence-bar {
-            height: 4px;
-            background: var(--border-color);
-            border-radius: 2px;
-            margin: 16px 0;
-            position: relative;
-        }
-
-        .forecast-card .confidence-fill {
-            height: 100%;
-            background: var(--accent-primary);
-            border-radius: 2px;
-            transition: 1s;
-        }
-
-        .forecast-reasoning {
-            font-size: 0.75rem;
-            color: var(--text-muted);
-            line-height: 1.5;
-            text-align: left;
-            background: var(--surface-accent);
-            padding: 16px;
-            border-radius: 12px;
-        }
-
-        /* Macro Styles */
-        .macro-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 12px;
-        }
-
-        .macro-stat {
-            background: var(--surface-accent);
-            padding: 12px;
-            border-radius: 12px;
-            border: 1px solid var(--border-color);
-        }
-
-        .macro-stat .label {
-            font-size: 0.55rem;
-            color: var(--text-dim);
-            text-transform: uppercase;
-            margin-bottom: 4px;
-        }
-
-        .macro-stat .value {
-            font-family: 'Fira Code', monospace;
-            font-size: 0.9rem;
-            font-weight: 700;
         }
 
         .primary-btn {
@@ -421,7 +274,6 @@
             font-weight: 700;
             font-size: 0.85rem;
             text-transform: uppercase;
-            letter-spacing: 2px;
             margin-top: 12px;
         }
 
@@ -437,56 +289,36 @@
             margin-top: 12px;
             text-transform: uppercase;
         }
-
-        .empty-state {
-            text-align: center;
-            padding: 60px 20px;
-            color: var(--text-dim);
-            font-size: 0.75rem;
-        }
     </style>
 </head>
 
 <body>
     <div class="container">
+        <div id="debug-console"></div>
+
         <header>
             <div class="header-top">
-                <div class="logo">ZENITH/V4.3</div>
+                <div class="logo">ZENITH/V4.4</div>
                 <div id="mkt-status" class="market-badge status-closed">OFFLINE</div>
             </div>
-            <div class="session-info">
-                <div class="session-dot"></div>
-                <span id="current-session">DETECTING SESSION...</span>
-            </div>
+            <div id="current-session"
+                style="font-size: 0.6rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase;">
+                CONNECTING...</div>
         </header>
 
         <div class="nav-scroller">
             <nav class="nav-tabs">
                 <button class="tab-btn active" id="tab-terminal" onclick="switchTab('terminal')">Terminal</button>
                 <button class="tab-btn" id="tab-forecast" onclick="switchTab('forecast')">Forecast</button>
-                <button class="tab-btn" id="tab-signals" onclick="switchTab('signals')">Signals</button>
-                <button class="tab-btn" id="tab-analysis" onclick="switchTab('analysis')">Analysis</button>
                 <button class="tab-btn" id="tab-macro" onclick="switchTab('macro')">Macro</button>
-                <button class="tab-btn" id="tab-alerts" onclick="switchTab('alerts')">Alerts</button>
+                <button class="tab-btn" id="tab-settings" onclick="switchTab('settings')">Debug</button>
             </nav>
         </div>
 
-        <!-- TERMINAL TAB -->
         <div id="terminal-view" class="tab-content active">
             <div class="card hero-price">
-                <div class="label">EUR/USD Institutional Feed</div>
                 <div id="price" class="value">-.-----</div>
                 <div id="price-change" class="change">--.--- (---%)</div>
-            </div>
-            <div class="stats-grid">
-                <div class="card small-card">
-                    <div class="label">Vol. Reach</div>
-                    <div id="stat-range" class="value">--- pips</div>
-                </div>
-                <div class="card small-card">
-                    <div class="label">Hi/Lo Range</div>
-                    <div id="stat-hilo" class="value">-.--- / -.---</div>
-                </div>
             </div>
             <div id="chart-wrap">
                 <div class="chart-tf-picker">
@@ -495,119 +327,117 @@
                     <button class="tf-btn" onclick="updateTimeframe('D1')">D1</button>
                 </div>
                 <div id="chart-container"></div>
-                <div id="chart-status">INITIALIZING NODES...</div>
+                <div id="chart-status">SYSTEM INITIALIZING...</div>
+            </div>
+            <div class="stats-grid">
+                <div class="small-card">
+                    <div class="label">Range Pips</div>
+                    <div id="stat-range" class="value">---</div>
+                </div>
+                <div class="small-card">
+                    <div class="label">Day High/Low</div>
+                    <div id="stat-hilo" class="value">-.--- / -.---</div>
+                </div>
             </div>
         </div>
 
-        <!-- FORECAST TAB -->
         <div id="forecast-view" class="tab-content">
-            <div class="card forecast-card">
-                <div class="label" style="font-size: 0.55rem; letter-spacing: 1px;">AI PROJECTION (H1)</div>
-                <div id="forecast-dir" class="direction">NEUTRAL</div>
-                <div class="confidence-bar">
-                    <div id="forecast-conf-bar" class="confidence-fill" style="width: 0%"></div>
+            <div class="card" style="text-align: center;">
+                <div id="forecast-dir" style="font-size: 1.5rem; font-weight: 800; margin: 12px 0;">NEUTRAL</div>
+                <div style="height: 4px; background: var(--border-color); border-radius: 2px; margin-bottom: 8px;">
+                    <div id="forecast-conf-bar"
+                        style="height: 100%; background: var(--accent-primary); width: 0%; transition: 1s;"></div>
                 </div>
-                <div
-                    style="display:flex; justify-content:space-between; font-size: 0.6rem; color: var(--text-muted); font-weight: 700;">
-                    <span>CONVICTION</span>
-                    <span id="forecast-conf-text">0%</span>
-                </div>
+                <div style="font-size: 0.65rem; font-weight: 700; color: var(--text-muted);">AI CONVICTION: <span
+                        id="forecast-conf-text">0%</span></div>
             </div>
-            <div class="card forecast-reasoning">
-                <h4
-                    style="font-size: 0.6rem; color: var(--accent-primary); margin-bottom: 10px; text-transform: uppercase;">
-                    Strategic Reasoning</h4>
-                <p id="forecast-text" style="line-height: 1.6;">Aggregating multi-source signals for deployment...</p>
-            </div>
+            <div class="card" id="forecast-text"
+                style="font-size: 0.75rem; line-height: 1.6; color: var(--text-muted);">Awaiting brain
+                synchronization...</div>
         </div>
 
-        <!-- ANALYSIS TAB -->
-        <div id="analysis-view" class="tab-content">
-            <div class="card">
-                <h3
-                    style="font-size: 0.6rem; color: var(--accent-primary); letter-spacing: 2px; margin-bottom: 20px; text-transform: uppercase;">
-                    Neural Analysis (DNA)</h3>
-                <div id="node-analysis">
-                    <div class="skeleton" style="margin-bottom: 12px;"></div>
-                    <div class="skeleton" style="margin-bottom: 12px; width: 80%;"></div>
-                </div>
-            </div>
-        </div>
-
-        <!-- MACRO TAB -->
         <div id="macro-view" class="tab-content">
+            <div class="card" id="macro-list" style="font-size: 0.75rem;">Syncing geopolitical data...</div>
+        </div>
+
+        <div id="settings-view" class="tab-content">
             <div class="card">
-                <h3
-                    style="font-size: 0.6rem; color: var(--accent-primary); letter-spacing: 2px; margin-bottom: 20px; text-transform: uppercase;">
-                    Macro Ecosystem</h3>
-                <div class="macro-grid" id="macro-data-list">
-                    <div class="macro-stat">
-                        <div class="label">FED Rate</div>
-                        <div class="value">-.--%</div>
-                    </div>
-                    <div class="macro-stat">
-                        <div class="label">ECB Rate</div>
-                        <div class="value">-.--%</div>
-                    </div>
-                    <div class="macro-stat">
-                        <div class="label">CPI Trend</div>
-                        <div class="value">---</div>
-                    </div>
-                    <div class="macro-stat">
-                        <div class="label">Impact</div>
-                        <div class="value">NEUTRAL</div>
-                    </div>
-                </div>
+                <div style="font-size: 0.7rem; color: var(--accent-primary); margin-bottom: 12px; font-weight: 700;">
+                    CONNECTION OVERRIDE</div>
+                <input type="text" id="api-url-input" placeholder="https://your-bot.herokuapp.com"
+                    style="width: 100%; background: #000; border: 1px solid var(--border-color); color: #fff; padding: 12px; border-radius: 8px; font-size: 0.75rem; margin-bottom: 12px;">
+                <button class="primary-btn" style="padding: 12px; font-size: 0.7rem;" onclick="saveOverride()">APPLY
+                    OVERRIDE</button>
+                <div style="font-size: 0.55rem; color: #555; margin-top: 8px;">Leave empty to use automatic routing. Use
+                    this if the terminal stays stuck on "Initializing".</div>
             </div>
-            <div class="card forecast-reasoning">
-                <h4
-                    style="font-size: 0.6rem; color: var(--accent-primary); margin-bottom: 10px; text-transform: uppercase;">
-                    Geopolitical Context</h4>
-                <p id="macro-context" style="line-height: 1.6;">Synchronizing FRED & ECB data nodes...</p>
-            </div>
+            <button class="secondary-btn" onclick="toggleDebug()">TOGGLE DEBUG CONSOLE</button>
         </div>
 
-        <!-- SIGNALS & ALERTS -->
-        <div id="signals-view" class="tab-content">
-            <div id="signal-list">
-                <div class="empty-state">SYNCING SIGNALS...</div>
-            </div>
-        </div>
-        <div id="alerts-view" class="tab-content">
-            <div id="alert-list">
-                <div class="empty-state">COLLECTING LEVELS...</div>
-            </div>
-        </div>
-
-        <button class="primary-btn" onclick="manualSync()">REFRESH INTELLIGENCE</button>
-        <button class="secondary-btn" onclick="Telegram.WebApp.close()">EXIT TERMINAL</button>
+        <button class="primary-btn" onclick="sync()">REFRESH</button>
     </div>
 
     <script>
         const tg = window.Telegram.WebApp;
         tg.expand();
-        const API_BASE = "/api";
+
+        let API_ROOT = localStorage.getItem('ZENITH_API_OVERRIDE') || "";
         let chart, candleSeries;
         let currentTF = 'H1';
+
+        function log(msg, type = 'info') {
+            const consoleEl = document.getElementById('debug-console');
+            const div = document.createElement('div');
+            div.className = type === 'error' ? 'log-error' : type === 'warn' ? 'log-warn' : '';
+            div.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+            consoleEl.prepend(div);
+            console.log(`[ZENITH] ${msg}`);
+        }
+
+        function toggleDebug() {
+            const el = document.getElementById('debug-console');
+            el.style.display = el.style.display === 'none' ? 'block' : 'none';
+        }
+
+        function saveOverride() {
+            const val = document.getElementById('api-url-input').value.trim();
+            if (val) localStorage.setItem('ZENITH_API_OVERRIDE', val);
+            else localStorage.removeItem('ZENITH_API_OVERRIDE');
+            location.reload();
+        }
 
         const f5 = (v) => (v != null && typeof v === 'number') ? v.toFixed(5) : '-.-----';
         const f2 = (v) => (v != null && typeof v === 'number') ? v.toFixed(2) : '---';
 
-        function initChart() {
-            const container = document.getElementById('chart-container');
-            if (!container) return;
-            chart = LightweightCharts.createChart(container, {
-                layout: { background: { type: 'solid', color: '#000' }, textColor: '#4b5563', fontSize: 10 },
-                grid: { vertLines: { color: '#0f1218' }, horzLines: { color: '#0f1218' } },
-                rightPriceScale: { borderColor: '#1f2937' },
-                timeScale: { borderColor: '#1f2937' }
-            });
-            candleSeries = chart.addCandlestickSeries({ upColor: '#10b981', downColor: '#ef4444', borderVisible: false });
-            new ResizeObserver(() => chart.applyOptions({ width: container.clientWidth, height: container.clientHeight })).observe(container);
+        async function api(path) {
+            const url = `${API_ROOT}/api${path}`;
+            try {
+                log(`Fetching: ${path}...`);
+                const r = await fetch(url, { timeout: 8000 });
+                if (!r.ok) throw new Error(`HTTP ${r.status}`);
+                const data = await r.json();
+                return data;
+            } catch (e) {
+                log(`API Error (${path}): ${e.message}`, 'error');
+                return { success: false, error: e.message };
+            }
         }
 
-        async function api(path) {
-            try { const r = await fetch(`${API_BASE}${path}`); return await r.json(); } catch (e) { return { success: false, error: e.message }; }
+        function initChart() {
+            try {
+                const container = document.getElementById('chart-container');
+                chart = LightweightCharts.createChart(container, {
+                    layout: { background: { type: 'solid', color: '#000' }, textColor: '#4b5563', fontSize: 10 },
+                    grid: { vertLines: { color: '#0f1218' }, horzLines: { color: '#0f1218' } },
+                    rightPriceScale: { borderColor: '#1f2937' },
+                    timeScale: { borderColor: '#1f2937' }
+                });
+                candleSeries = chart.addCandlestickSeries({ upColor: '#10b981', downColor: '#ef4444', borderVisible: false });
+                new ResizeObserver(() => chart.applyOptions({ width: container.clientWidth, height: container.clientHeight })).observe(container);
+                log("Chart Engine Ready.");
+            } catch (e) {
+                log("Chart Init Failed: " + e.message, 'error');
+            }
         }
 
         function switchTab(viewId) {
@@ -615,18 +445,12 @@
             document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
             document.getElementById(viewId + '-view').classList.add('active');
             document.getElementById('tab-' + viewId).classList.add('active');
-            tg.HapticFeedback.impactOccurred('light');
             sync(viewId);
-        }
-
-        async function updateTimeframe(tf) {
-            currentTF = tf;
-            document.querySelectorAll('.tf-btn').forEach(b => b.classList.toggle('active', b.textContent === tf));
-            sync('terminal');
         }
 
         async function sync(activeTab = null) {
             if (!activeTab) activeTab = document.querySelector('.tab-content.active').id.replace('-view', '');
+            log(`Syncing ${activeTab}...`);
 
             const [sum, status] = await Promise.all([api('/summary'), api('/status')]);
 
@@ -634,7 +458,7 @@
                 const s = status.data;
                 const mkt = document.getElementById('mkt-status');
                 mkt.textContent = s.status; mkt.className = `market-badge status-${s.status.toLowerCase()}`;
-                document.getElementById('current-session').textContent = `${s.session} SESSION`;
+                document.getElementById('current-session').textContent = `${s.session} SESSION OPEN`;
             }
 
             if (sum.success) {
@@ -643,7 +467,7 @@
                 const sign = (sum.change || 0) >= 0 ? '+' : '';
                 el.textContent = `${sign}${f5(sum.change)} (${sign}${f2(sum.change_pct)}%)`;
                 el.style.color = (sum.change || 0) >= 0 ? 'var(--up-color)' : 'var(--down-color)';
-                document.getElementById('stat-range').textContent = `${(sum.range_pips || 0).toFixed(1)} pips`;
+                document.getElementById('stat-range').textContent = `${(sum.range_pips || 0).toFixed(1)} Pips`;
                 document.getElementById('stat-hilo').textContent = `${f5(sum.low)} / ${f5(sum.high)}`;
             }
 
@@ -655,8 +479,7 @@
                     statusEl.style.display = 'none';
                 } else {
                     statusEl.style.display = 'flex';
-                    statusEl.textContent = data.error || "NO DATA NODES DETECTED";
-                    statusEl.style.color = 'var(--down-color)';
+                    statusEl.textContent = data.error || "DATA LINK OFFLINE";
                 }
             } else if (activeTab === 'forecast') {
                 const res = await api('/forecast');
@@ -664,23 +487,28 @@
                     const d = res.data;
                     document.getElementById('forecast-dir').textContent = d.direction;
                     document.getElementById('forecast-dir').style.color = d.direction === 'BUY' ? 'var(--up-color)' : d.direction === 'SELL' ? 'var(--down-color)' : 'var(--text-muted)';
-                    document.getElementById('forecast-conf-bar').style.width = `${(d.confidence * 100)}%`;
-                    document.getElementById('forecast-conf-text').textContent = `${(d.confidence * 100).toFixed(0)}%`;
-                    document.getElementById('forecast-text').textContent = d.reasoning || "Analyzing data nodes...";
+                    document.getElementById('forecast-conf-bar').style.width = `${(d.confidence || 0) * 100}%`;
+                    document.getElementById('forecast-conf-text').textContent = `${((d.confidence || 0) * 100).toFixed(0)}%`;
+                    document.getElementById('forecast-text').textContent = d.reasoning || "Analyzing market topology...";
                 }
             }
         }
 
-        async function manualSync() {
-            tg.HapticFeedback.notificationOccurred('success');
-            await sync();
+        async function updateTimeframe(tf) {
+            currentTF = tf;
+            document.querySelectorAll('.tf-btn').forEach(b => b.classList.toggle('active', b.textContent === tf));
+            sync('terminal');
         }
 
         window.onload = async () => {
+            log("Zenith v4.4 Boot sequences started.");
+            document.getElementById('api-url-input').value = API_ROOT;
             initChart();
             await sync();
-            setInterval(() => sync(), 10000);
+            setInterval(() => sync(), 15000);
         };
+
+        window.onerror = (m, u, l) => log(`RUNTIME ERR: ${m} (Line ${l})`, 'error');
     </script>
 </body>
 
