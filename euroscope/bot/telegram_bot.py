@@ -1765,29 +1765,48 @@ class EuroScopeBot:
         })
 
     async def _api_candles(self, request):
-        """API endpoint for chart data (OHLC)."""
+        """API endpoint for chart data (OHLC) with strict time sorting."""
         timeframe = request.query.get("timeframe", "H1")
         logger.debug(f"API: Fetching {timeframe} candles for chart...")
-        result = await self.orchestrator.run_skill("market_data", "get_candles", timeframe=timeframe, count=100)
         
-        if not result.success:
-            return web.json_response({"success": False, "error": result.error}, status=500)
-        
-        df = result.data
-        candles = []
-        for idx, row in df.iterrows():
-            candles.append({
-                "time": int(idx.timestamp()),
-                "open": float(row["Open"]),
-                "high": float(row["High"]),
-                "low": float(row["Low"]),
-                "close": float(row["Close"])
+        try:
+            result = await self.orchestrator.run_skill("market_data", "get_candles", timeframe=timeframe, count=100)
+            
+            if not result.success:
+                logger.warning(f"API: Candle skill failed: {result.error}")
+                return web.json_response({"success": False, "candles": [], "error": result.error})
+            
+            df = result.data
+            if df is None or df.empty:
+                return web.json_response({"success": False, "candles": [], "error": "Empty data"})
+
+            # Ensure strict ascending sort by time (LWC requirement)
+            df = df.sort_index()
+            
+            candles = []
+            for idx, row in df.iterrows():
+                # Ensure we have numeric data
+                try:
+                    candles.append({
+                        "time": int(idx.timestamp()),
+                        "open": float(row["Open"]),
+                        "high": float(row["High"]),
+                        "low": float(row["Low"]),
+                        "close": float(row["Close"])
+                    })
+                except (ValueError, TypeError, AttributeError) as e:
+                    logger.debug(f"API: Skipping malformed candle at {idx}: {e}")
+                    continue
+            
+            logger.debug(f"API: Delivered {len(candles)} candles for {timeframe}")
+            return web.json_response({
+                "success": True,
+                "candles": candles,
+                "count": len(candles)
             })
-        
-        return web.json_response({
-            "success": True,
-            "candles": candles
-        })
+        except Exception as e:
+            logger.error(f"API: Critical error in _api_candles: {e}")
+            return web.json_response({"success": False, "error": str(e), "candles": []})
 
     async def _api_health(self, request):
         """Standard health check endpoint."""

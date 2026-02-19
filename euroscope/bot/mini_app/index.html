@@ -708,9 +708,36 @@
             }
         }
 
-        function manualSync() { tg.HapticFeedback.notificationOccurred('success'); sync(); }
+        async function manualSync() {
+            tg.HapticFeedback.notificationOccurred('success');
+            await sync();
+            // Force candle refresh if on terminal
+            const activeTab = document.querySelector('.tab-content.active').id.replace('-view', '');
+            if (activeTab === 'terminal') {
+                const data = await api(`/candles?timeframe=${currentTF}`);
+                if (data.success && data.candles.length > 0) candleSeries.setData(data.candles);
+            }
+        }
 
-        window.onload = () => { initChart(); sync('terminal'); setInterval(() => sync(), 10000); };
+        window.onload = async () => {
+            initChart();
+            // Initial load
+            await sync('terminal');
+            const data = await api(`/candles?timeframe=${currentTF}`);
+            if (data.success && data.candles.length > 0) candleSeries.setData(data.candles);
+
+            // High-frequency price sync
+            setInterval(() => sync(), 5000);
+
+            // Lower-frequency candle sync (to avoid rate limits)
+            setInterval(async () => {
+                const activeTab = document.querySelector('.tab-content.active').id.replace('-view', '');
+                if (activeTab === 'terminal') {
+                    const cData = await api(`/candles?timeframe=${currentTF}`);
+                    if (cData.success && cData.candles.length > 0) candleSeries.setData(cData.candles);
+                }
+            }, 20000);
+        };
     </script>
 </body>
 
