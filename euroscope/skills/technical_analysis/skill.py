@@ -43,7 +43,8 @@ class TechnicalAnalysisSkill(BaseSkill):
         # Auto-fetch if missing and provider available
         if (df is None or (hasattr(df, 'empty') and df.empty)) and self._provider:
             tf = params.get("timeframe", context.market_data.get("timeframe", "H1"))
-            df = await self._provider.get_candles(timeframe=tf)
+            # Fetch 300 candles to ensure indicators like EMA 200 and RSI have enough warm-up
+            df = await self._provider.get_candles(timeframe=tf, count=300)
             if df is not None:
                 context.market_data["candles"] = df
                 context.market_data["timeframe"] = tf

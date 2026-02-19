@@ -1613,9 +1613,20 @@ class EuroScopeBot:
             "change_pct": data["change_pct"],
             "high": data.get("high"),
             "low": data.get("low"),
+            "open": data.get("open"),
             "range_pips": data.get("spread_pips", 0),
             "sentiment": "bullish" if data["change"] >= 0 else "bearish",
             "timestamp": datetime.now().isoformat()
+        })
+
+    async def _api_status(self, request):
+        """API endpoint for market status and trading hours."""
+        logger.debug("API: Fetching market status...")
+        result = await self.orchestrator.run_skill("market_data", "check_market_status")
+        return web.json_response({
+            "success": result.success,
+            "data": result.data if result.success else None,
+            "error": result.error if not result.success else None
         })
 
     async def _api_signals(self, request):
@@ -1691,6 +1702,7 @@ class EuroScopeBot:
                 web.get('/api/alerts', self._api_alerts),
                 web.get('/api/analysis', self._api_analysis),
                 web.get('/api/candles', self._api_candles),
+                web.get('/api/status', self._api_status),
             ])
             
             port = int(os.getenv("PORT", 8080))

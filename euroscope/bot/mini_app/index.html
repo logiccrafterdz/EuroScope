@@ -5,24 +5,26 @@
     <meta charset="UTF-8">
     <meta name="viewport"
         content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Zenith Terminal</title>
+    <title>Zenith Terminal v3</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
     <link
-        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Fira+Code:wght@400;600&display=swap"
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fira+Code:wght@400;600&display=swap"
         rel="stylesheet">
     <style>
         :root {
-            --bg-color: #0b0f19;
-            --card-bg: rgba(17, 24, 39, 0.7);
-            --accent-emerald: #10b981;
-            --accent-emerald-dim: rgba(16, 185, 129, 0.1);
-            --text-main: #f3f4f6;
-            --text-dim: #9ca3af;
-            --border-color: rgba(31, 41, 55, 0.6);
+            --bg-color: #0d0f14;
+            --surface-color: #161a23;
+            --accent-primary: #10b981;
+            --accent-primary-dim: rgba(16, 185, 129, 0.1);
+            --text-main: #f9fafb;
+            --text-muted: #9ca3af;
+            --text-dim: #6b7280;
+            --border-color: #232936;
             --up-color: #10b981;
             --down-color: #ef4444;
-            --glass-blur: blur(20px);
+            --glass-blur: blur(24px);
+            --safe-bottom: env(safe-area-inset-bottom, 0px);
         }
 
         * {
@@ -30,22 +32,57 @@
             padding: 0;
             box-sizing: border-box;
             -webkit-tap-highlight-color: transparent;
+            font-feature-settings: "tnum";
+            font-variant-numeric: tabular-nums;
         }
 
         body {
             font-family: 'Inter', sans-serif;
             background-color: var(--bg-color);
-            background-image:
-                radial-gradient(circle at 50% -20%, rgba(16, 185, 129, 0.1), transparent 80%),
-                radial-gradient(circle at 0% 100%, rgba(17, 24, 39, 1), transparent 50%);
             color: var(--text-main);
             overflow-x: hidden;
             padding: 16px;
+            padding-bottom: calc(20px + var(--safe-bottom));
             min-height: 100vh;
         }
 
+        /* Animations */
+        @keyframes pulse {
+            0% {
+                opacity: 0.4;
+            }
+
+            50% {
+                opacity: 0.8;
+            }
+
+            100% {
+                opacity: 0.4;
+            }
+        }
+
+        @keyframes slideUp {
+            from {
+                transform: translateY(12px);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        .skeleton {
+            background: var(--surface-color);
+            border-radius: 8px;
+            animation: pulse 1.5s infinite ease-in-out;
+            height: 20px;
+            width: 100%;
+        }
+
         .container {
-            max-width: 500px;
+            max-width: 480px;
             margin: 0 auto;
         }
 
@@ -56,110 +93,124 @@
             margin-bottom: 24px;
         }
 
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
         .logo {
             font-weight: 700;
-            font-size: 0.8rem;
-            letter-spacing: 3px;
-            color: var(--accent-emerald);
+            font-size: 0.75rem;
+            letter-spacing: 4px;
+            color: var(--accent-primary);
             font-family: 'Fira Code', monospace;
-        }
-
-        .status-badge {
-            background: var(--accent-emerald-dim);
-            color: var(--accent-emerald);
-            padding: 4px 12px;
-            border-radius: 20px;
-            font-size: 0.6rem;
-            font-weight: 700;
-            border: 1px solid rgba(16, 185, 129, 0.2);
             text-transform: uppercase;
-            letter-spacing: 1px;
         }
 
-        /* Navigation Tabs */
+        .market-badge {
+            font-size: 0.55rem;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+            border: 1px solid currentColor;
+            opacity: 0.9;
+        }
+
+        .status-open {
+            color: var(--up-color);
+            background: rgba(16, 185, 129, 0.1);
+        }
+
+        .status-closed {
+            color: var(--text-muted);
+            background: rgba(156, 163, 175, 0.1);
+        }
+
+        /* Navigation */
+        .nav-scroller {
+            overflow-x: auto;
+            scrollbar-width: none;
+            margin: 0 -16px 20px -16px;
+            padding: 0 16px;
+        }
+
+        .nav-scroller::-webkit-scrollbar {
+            display: none;
+        }
+
         .nav-tabs {
             display: flex;
-            background: var(--card-bg);
-            backdrop-filter: var(--glass-blur);
+            background: var(--surface-color);
             border: 1px solid var(--border-color);
             border-radius: 12px;
-            margin-bottom: 20px;
             padding: 4px;
+            width: max-content;
+            min-width: 100%;
         }
 
         .tab-btn {
-            flex: 1;
-            padding: 10px 2px;
+            padding: 10px 16px;
             border: none;
             background: transparent;
-            color: var(--text-dim);
-            font-size: 0.6rem;
+            color: var(--text-muted);
+            font-size: 0.65rem;
             font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 1px;
             cursor: pointer;
-            transition: 0.2s ease;
             border-radius: 8px;
+            transition: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
         .tab-btn.active {
-            color: var(--accent-emerald);
-            background: rgba(16, 185, 129, 0.1);
+            color: var(--accent-primary);
+            background: rgba(16, 185, 129, 0.12);
         }
 
         .tab-content {
             display: none;
-            animation: fadeIn 0.3s ease-out;
+            animation: slideUp 0.4s ease-out;
         }
 
         .tab-content.active {
             display: block;
         }
 
-        @keyframes fadeIn {
-            from {
-                opacity: 0;
-                transform: translateY(4px);
-            }
-
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        .glass-card {
-            background: var(--card-bg);
-            backdrop-filter: var(--glass-blur);
+        /* Cards */
+        .card {
+            background: var(--surface-color);
             border: 1px solid var(--border-color);
-            border-radius: 20px;
-            margin-bottom: 16px;
+            border-radius: 24px;
+            padding: 24px;
+            margin-bottom: ١٦px;
         }
 
-        .price-card {
-            padding: 32px 20px;
+        .hero-price {
             text-align: center;
+            padding: 32px 20px;
         }
 
-        .price-label {
-            color: var(--text-dim);
-            font-size: 0.6rem;
+        .hero-price .label {
+            color: var(--text-muted);
+            font-size: 0.65rem;
+            letter-spacing: 3px;
             margin-bottom: 12px;
-            letter-spacing: 2.5px;
-            text-transform: uppercase;
             font-weight: 600;
         }
 
-        .price-value {
-            font-size: 3.4rem;
+        .hero-price .value {
+            font-size: 3.8rem;
             font-weight: 700;
-            margin-bottom: 4px;
             font-family: 'Fira Code', monospace;
-            letter-spacing: -2px;
+            letter-spacing: -3px;
+            margin-bottom: 4px;
         }
 
-        .price-change {
-            font-size: 0.95rem;
+        .hero-price .change {
+            font-size: 1rem;
             font-weight: 600;
             font-family: 'Fira Code', monospace;
         }
@@ -171,101 +222,123 @@
             margin-bottom: 16px;
         }
 
-        .stat-card {
+        .small-card {
             padding: 16px;
+            border-radius: 20px;
         }
 
-        .stat-label {
-            color: var(--text-dim);
+        .small-card .label {
             font-size: 0.55rem;
-            margin-bottom: 6px;
+            color: var(--text-dim);
+            margin-bottom: 8px;
             text-transform: uppercase;
-            letter-spacing: 1.5px;
+            letter-spacing: 1px;
             font-weight: 600;
         }
 
-        .stat-value {
+        .small-card .value {
+            font-size: 0.95rem;
             font-weight: 700;
-            font-size: 0.9rem;
             font-family: 'Fira Code', monospace;
+        }
+
+        /* Chart Controls */
+        #chart-wrap {
+            position: relative;
+            width: 100%;
+            border-radius: 24px;
+            overflow: hidden;
+            border: 1px solid var(--border-color);
+            background: #0b0f14;
+            margin-bottom: 16px;
         }
 
         #chart-container {
             width: 100%;
-            height: 240px;
-            margin-bottom: 16px;
-            border-radius: 20px;
-            overflow: hidden;
+            height: 260px;
+        }
+
+        .chart-tf-picker {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            display: flex;
+            gap: 4px;
+            z-index: 10;
+            background: rgba(13, 15, 20, 0.6);
+            backdrop-filter: blur(8px);
+            padding: 2px;
+            border-radius: 8px;
             border: 1px solid var(--border-color);
-            background: #0b0f19;
         }
 
-        .card-inner {
-            padding: 20px;
+        .tf-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-dim);
+            font-size: 0.6rem;
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-weight: 700;
+            cursor: pointer;
         }
 
-        /* Analysis List */
-        .ta-row {
+        .tf-btn.active {
+            color: var(--accent-primary);
+            background: rgba(16, 185, 129, 0.15);
+        }
+
+        /* Detail List */
+        .info-row {
             display: flex;
             justify-content: space-between;
+            align-items: center;
             padding: 12px 0;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-            font-size: 0.75rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.03);
         }
 
-        .ta-row:last-child {
+        .info-row:last-child {
             border-bottom: none;
         }
 
-        .ta-label {
-            color: var(--text-dim);
-            font-weight: 500;
+        .info-row .label {
+            font-size: 0.75rem;
+            color: var(--text-muted);
         }
 
-        .ta-value {
-            font-family: 'Fira Code', monospace;
+        .info-row .val {
+            font-size: 0.8rem;
             font-weight: 600;
-            color: var(--text-main);
+            font-family: 'Fira Code', monospace;
         }
 
-        .action-button {
-            background: var(--accent-emerald);
-            color: #064e3b;
-            border: none;
+        /* Buttons */
+        .primary-btn {
+            background: var(--accent-primary);
+            color: #0d121b;
             width: 100%;
+            border: none;
             padding: 18px;
             border-radius: 16px;
             font-weight: 700;
             font-size: 0.85rem;
-            margin-top: 8px;
-            cursor: pointer;
             text-transform: uppercase;
             letter-spacing: 2px;
-            box-shadow: 0 4px 20px rgba(16, 185, 129, 0.2);
+            margin-top: 12px;
+            box-shadow: 0 8px 24px rgba(16, 185, 129, 0.2);
         }
 
-        .secondary-button {
+        .secondary-btn {
             background: transparent;
-            color: var(--text-dim);
-            border: 1px solid var(--border-color);
+            color: var(--text-muted);
             width: 100%;
+            border: 1px solid var(--border-color);
             padding: 14px;
             border-radius: 16px;
             font-weight: 600;
             font-size: 0.75rem;
             margin-top: 12px;
-            cursor: pointer;
             text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-
-        .empty-state {
-            text-align: center;
-            color: var(--text-dim);
-            padding: 50px 20px;
-            font-size: 0.75rem;
-            letter-spacing: 1px;
-            font-weight: 500;
         }
     </style>
 </head>
@@ -273,83 +346,113 @@
 <body>
     <div class="container">
         <header>
-            <div class="logo">EURO/SC_ZENITH</div>
-            <div class="status-badge" id="api-status">CONNECTING</div>
+            <div class="brand">
+                <div class="logo">ZENITH/V3</div>
+            </div>
+            <div id="mkt-status" class="market-badge status-closed">SYNCING</div>
         </header>
 
-        <nav class="nav-tabs">
-            <button class="tab-btn active" id="btn-live" onclick="showTab('live')">Terminal</button>
-            <button class="tab-btn" id="btn-signals" onclick="showTab('signals')">Signals</button>
-            <button class="tab-btn" id="btn-analysis" onclick="showTab('analysis')">Analysis</button>
-            <button class="tab-btn" id="btn-alerts" onclick="showTab('alerts')">Alerts</button>
-        </nav>
+        <div class="nav-scroller">
+            <nav class="nav-tabs">
+                <button class="tab-btn active" id="tab-terminal" onclick="switchTab('terminal')">Terminal</button>
+                <button class="tab-btn" id="tab-signals" onclick="switchTab('signals')">Signals</button>
+                <button class="tab-btn" id="tab-analysis" onclick="switchTab('analysis')">Analysis</button>
+                <button class="tab-btn" id="tab-alerts" onclick="switchTab('alerts')">Alerts</button>
+            </nav>
+        </div>
 
-        <div id="live" class="tab-content active">
-            <div class="glass-card price-card">
-                <div class="price-label">EUR/USD PRO QUOTE</div>
-                <div class="price-value" id="price">-.-----</div>
-                <div class="price-change" id="change">--.--- (---%)</div>
+        <!-- TERMINAL TAB -->
+        <div id="terminal-view" class="tab-content active">
+            <div class="card hero-price">
+                <div class="label">EUR/USD INSTITUTIONAL FEED</div>
+                <div id="price" class="value">-.-----</div>
+                <div id="price-change" class="change">--.--- (---%)</div>
             </div>
 
             <div class="stats-grid">
-                <div class="glass-card stat-card">
-                    <div class="stat-label">Daily Reach</div>
-                    <div class="stat-value" id="range">--- pips</div>
+                <div class="card small-card">
+                    <div class="label">Vol. Range</div>
+                    <div id="stat-range" class="value">--- pips</div>
                 </div>
-                <div class="glass-card stat-card">
-                    <div class="stat-label">Hi/Lo Range</div>
-                    <div class="stat-value" id="hilo" style="font-size: 0.75rem;">-.--- / -.---</div>
+                <div class="card small-card">
+                    <div class="label">Day Low/High</div>
+                    <div id="stat-hilo" class="value" style="font-size: 0.75rem;">-.--- / -.---</div>
                 </div>
             </div>
 
-            <div id="chart-container"></div>
+            <div id="chart-wrap">
+                <div class="chart-tf-picker">
+                    <button class="tf-btn" onclick="updateTimeframe('M15')">M15</button>
+                    <button class="tf-btn active" onclick="updateTimeframe('H1')">H1</button>
+                    <button class="tf-btn" onclick="updateTimeframe('D1')">D1</button>
+                </div>
+                <div id="chart-container"></div>
+            </div>
         </div>
 
-        <div id="signals" class="tab-content">
+        <!-- ANALYSIS TAB -->
+        <div id="analysis-view" class="tab-content">
+            <div class="card">
+                <h3
+                    style="font-size: 0.65rem; color: var(--accent-primary); letter-spacing: 2px; margin-bottom: 20px; text-transform: uppercase;">
+                    Technical DNA (H1)</h3>
+                <div id="node-analysis">
+                    <div class="skeleton" style="margin-bottom: 12px;"></div>
+                    <div class="skeleton" style="margin-bottom: 12px; width: 80%;"></div>
+                    <div class="skeleton" style="width: 60%;"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SIGNALS TAB -->
+        <div id="signals-view" class="tab-content">
             <div id="signal-list">
-                <div class="empty-state">SYNCING SIGNALS...</div>
+                <div class="empty-state"
+                    style="text-align: center; padding: 40px; color: var(--text-dim); font-size: 0.8rem;">SYNCING
+                    SIGNALS...</div>
             </div>
         </div>
 
-        <div id="analysis" class="tab-content">
-            <div class="glass-card">
-                <div class="card-inner" id="analysis-content"></div>
-            </div>
-        </div>
-
-        <div id="alerts" class="tab-content">
+        <!-- ALERTS TAB -->
+        <div id="alerts-view" class="tab-content">
             <div id="alert-list">
-                <div class="empty-state">FETCHING ALERTS...</div>
+                <div class="empty-state"
+                    style="text-align: center; padding: 40px; color: var(--text-dim); font-size: 0.8rem;">MONITORING
+                    LEVELS...</div>
             </div>
         </div>
 
-        <button class="action-button" onclick="refreshData()">REFRESH SYSTEM</button>
-        <button class="secondary-button" onclick="Telegram.WebApp.close()">DISCONNECT</button>
+        <button class="primary-btn" onclick="manualSync()">REFRESH ENGINE</button>
+        <button class="secondary-btn" onclick="Telegram.WebApp.close()">EXIT INTERFACE</button>
     </div>
 
     <script>
         const tg = window.Telegram.WebApp;
         tg.expand();
-        tg.headerColor = '#0b0f19';
-        tg.backgroundColor = '#0b0f19';
+        tg.headerColor = '#0d0f14';
+        tg.backgroundColor = '#0d0f14';
 
         const API_BASE = "/api";
         let chart, candleSeries;
+        let currentTF = 'H1';
+        let refreshTimer;
 
+        // Initialize Chart
         function initChart() {
             const container = document.getElementById('chart-container');
             chart = LightweightCharts.createChart(container, {
                 layout: {
-                    background: { type: 'solid', color: '#0b0f19' },
-                    textColor: '#9ca3af',
+                    background: { type: 'solid', color: '#0d0f14' },
+                    textColor: '#6b7280',
                     fontSize: 10,
                 },
                 grid: {
-                    vertLines: { color: 'rgba(31, 41, 55, 0.3)' },
-                    horzLines: { color: 'rgba(31, 41, 55, 0.3)' },
+                    vertLines: { color: '#1a1e27' },
+                    horzLines: { color: '#1a1e27' },
                 },
-                rightPriceScale: { borderColor: 'rgba(31, 41, 55, 0.5)', scaleMargins: { top: 0.2, bottom: 0.2 } },
-                timeScale: { borderColor: 'rgba(31, 41, 55, 0.5)', timeVisible: true },
+                rightPriceScale: { borderColor: '#232936', scaleMargins: { top: 0.3, bottom: 0.2 } },
+                timeScale: { borderColor: '#232936', timeVisible: true },
+                crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
             });
             candleSeries = chart.addCandlestickSeries({
                 upColor: '#10b981',
@@ -364,67 +467,113 @@
             }).observe(container);
         }
 
-        async function fetchAPI(endpoint) {
+        async function apiRequest(endpoint) {
             try {
-                const response = await fetch(`${API_BASE}${endpoint}`);
-                if (!response.ok) return { success: false };
-                return await response.json();
+                const res = await fetch(`${API_BASE}${endpoint}`);
+                return await res.json();
             } catch (e) { return { success: false }; }
         }
 
-        function showTab(id) {
-            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
-            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
-            document.getElementById(id).classList.add('active');
-            document.getElementById('btn-' + id).classList.add('active');
+        function switchTab(viewId) {
+            document.querySelectorAll('.tab-content').forEach(v => v.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById(viewId + '-view').classList.add('active');
+            document.getElementById('tab-' + viewId).classList.add('active');
             tg.HapticFeedback.impactOccurred('light');
-            refreshData();
+            sync(viewId);
         }
 
-        async function refreshData() {
-            const activeTab = document.querySelector('.tab-content.active').id;
-            const status = document.getElementById('api-status');
+        async function updateTimeframe(tf) {
+            currentTF = tf;
+            document.querySelectorAll('.tf-btn').forEach(b => {
+                b.classList.toggle('active', b.textContent === tf);
+            });
+            tg.HapticFeedback.selectionChanged();
+            const data = await apiRequest(`/candles?timeframe=${tf}`);
+            if (data.success && data.candles) {
+                candleSeries.setData(data.candles);
+                chart.timeScale().fitContent();
+            }
+        }
 
-            if (activeTab === 'live') {
-                const [summary, candles] = await Promise.all([fetchAPI('/summary'), fetchAPI('/candles?timeframe=H1')]);
-                if (summary.success) {
-                    document.getElementById('price').textContent = (summary.price || 0).toFixed(5);
-                    const chg = summary.change || 0;
-                    const sign = chg >= 0 ? '+' : '';
-                    const changeEl = document.getElementById('change');
-                    changeEl.textContent = `${sign}${chg.toFixed(5)} (${sign}${(summary.change_pct || 0).toFixed(2)}%)`;
-                    changeEl.style.color = chg >= 0 ? 'var(--up-color)' : 'var(--down-color)';
+        async function sync(activeTab = null) {
+            if (!activeTab) activeTab = document.querySelector('.tab-content.active').id.replace('-view', '');
 
-                    document.getElementById('range').textContent = `${(summary.range_pips || 0).toFixed(1)} pips`;
-                    document.getElementById('hilo').textContent = `${(summary.high || 0).toFixed(5)} / ${(summary.low || 0).toFixed(5)}`;
+            // Global Status
+            const [summary, status] = await Promise.all([apiRequest('/summary'), apiRequest('/status')]);
 
-                    status.textContent = "● LIVE";
-                    status.style.color = "var(--up-color)";
-                }
-                if (candles.success && candles.candles?.length > 0) {
-                    candleSeries.setData(candles.candles);
+            if (status.success && status.data) {
+                const s = status.data;
+                const el = document.getElementById('mkt-status');
+                el.textContent = s.status;
+                el.className = `market-badge status-${s.status.toLowerCase()}`;
+            }
+
+            if (summary.success) {
+                document.getElementById('price').textContent = summary.price.toFixed(5);
+                const chg = summary.change || 0;
+                const sign = chg >= 0 ? '+' : '';
+                const changeEl = document.getElementById('price-change');
+                changeEl.textContent = `${sign}${chg.toFixed(5)} (${sign}${summary.change_pct.toFixed(2)}%)`;
+                changeEl.style.color = chg >= 0 ? 'var(--up-color)' : 'var(--down-color)';
+
+                document.getElementById('stat-range').textContent = `${(summary.range_pips || 0).toFixed(1)} pips`;
+                document.getElementById('stat-hilo').textContent = `${(summary.low || 0).toFixed(5)} / ${(summary.high || 0).toFixed(5)}`;
+            }
+
+            if (activeTab === 'terminal') {
+                const data = await apiRequest(`/candles?timeframe=${currentTF}`);
+                if (data.success && data.candles) {
+                    candleSeries.setData(data.candles);
                     chart.timeScale().fitContent();
                 }
             } else if (activeTab === 'analysis') {
-                const data = await fetchAPI('/analysis');
-                const content = document.getElementById('analysis-content');
-                if (data.success && data.data) {
-                    const ta = data.data;
+                const res = await apiRequest('/analysis');
+                const box = document.getElementById('node-analysis');
+                if (res.success && res.data) {
+                    const ta = res.data;
                     const ind = ta.indicators || {};
-                    content.innerHTML = `
-                        <p style="font-size: 0.6rem; font-weight: 700; color: var(--accent-emerald); margin-bottom: 12px; letter-spacing: 2px;">NEURAL ARCHITECTURE (H1)</p>
-                        <div class="ta-row"><span class="ta-label">Market Bias</span><span class="ta-value">${ta.overall_bias || 'NEUTRAL'}</span></div>
-                        <div class="ta-row"><span class="ta-label">RSI (14)</span><span class="ta-value">${ind.RSI?.value?.toFixed(1) || 'N/A'}</span></div>
-                        <div class="ta-row"><span class="ta-label">EMA 50</span><span class="ta-value">${ind.EMA?.ema50?.toFixed(5) || 'N/A'}</span></div>
-                        <div class="ta-row"><span class="ta-label">EMA 200</span><span class="ta-value">${ind.EMA?.ema200?.toFixed(5) || 'N/A'}</span></div>
-                        <div class="ta-row"><span class="ta-label">ATR Volatility</span><span class="ta-value">${ind.ATR?.pips?.toFixed(1) || '0.0'} pips</span></div>
+                    box.innerHTML = `
+                        <div class="info-row"><span class="label">Network Bias</span><span class="val" style="color:var(--accent-primary)">${ta.overall_bias?.toUpperCase() || 'NEUTRAL'}</span></div>
+                        <div class="info-row"><span class="label">RSI (14)</span><span class="val">${ind.RSI?.value?.toFixed(2) || '---'}</span></div>
+                        <div class="info-row"><span class="label">ATR Volatility</span><span class="val">${ind.ATR?.pips?.toFixed(1) || '0.0'} pips</span></div>
+                        <div class="info-row"><span class="label">EMA 50 (Trend)</span><span class="val">${ind.EMA?.ema50?.toFixed(5) || '---'}</span></div>
+                        <div class="info-row"><span class="label">EMA 200 (Bass)</span><span class="val">${ind.EMA?.ema200?.toFixed(5) || '---'}</span></div>
                     `;
+                }
+            } else if (activeTab === 'signals') {
+                const res = await apiRequest('/signals');
+                const list = document.getElementById('signal-list');
+                if (res.success && res.signals?.length > 0) {
+                    list.innerHTML = res.signals.map(s => `
+                        <div class="card" style="padding: 16px; margin-bottom: 12px; border-radius: 12px;">
+                            <div style="display:flex; justify-content:space-between; margin-bottom:12px;">
+                                <span style="font-weight:700; color: ${s.direction === 'BUY' ? 'var(--up-color)' : 'var(--down-color)'}; font-size: 0.7rem;">${s.direction} SIGNAL</span>
+                                <span style="font-size: 0.6rem; color: var(--text-dim);">${new Date(s.timestamp || s.created_at).toLocaleTimeString()}</span>
+                            </div>
+                            <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; text-align:center;">
+                                <div><small style="display:block; font-size:0.5rem; color:var(--text-dim); text-transform:uppercase;">Entry</small><b style="font-family:'Fira Code'; font-size:0.75rem;">${s.entry_price.toFixed(5)}</b></div>
+                                <div><small style="display:block; font-size:0.5rem; color:var(--text-dim); text-transform:uppercase;">Stop</small><b style="font-family:'Fira Code'; font-size:0.75rem; color:var(--down-color)">${s.stop_loss.toFixed(5)}</b></div>
+                                <div><small style="display:block; font-size:0.5rem; color:var(--text-dim); text-transform:uppercase;">Target</small><b style="font-family:'Fira Code'; font-size:0.75rem; color:var(--up-color)">${s.take_profit.toFixed(5)}</b></div>
+                            </div>
+                        </div>
+                    `).join('');
+                } else {
+                    list.innerHTML = `<div class="empty-state">NO RECENT TRADE CLASSIFICATIONS</div>`;
                 }
             }
         }
 
-        window.onload = () => { initChart(); refreshData(); };
-        setInterval(() => { if (document.querySelector('.tab-content.active').id === 'live') refreshData(); }, 30000);
+        function manualSync() {
+            tg.HapticFeedback.notificationOccurred('success');
+            sync();
+        }
+
+        window.onload = () => {
+            initChart();
+            sync('terminal');
+            setInterval(() => sync(), 10000); // 10s auto-refresh
+        };
     </script>
 </body>
 
