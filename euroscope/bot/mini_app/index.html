@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport"
         content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Zenith Terminal v4.5</title>
+    <title>Zenith Terminal v5.0</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
     <link
@@ -52,7 +52,7 @@
             margin: 0 auto;
         }
 
-        /* Debug Console - Non-intrusive */
+        /* Debug Console */
         #debug-console {
             background: #000;
             border: 1px solid #333;
@@ -94,6 +94,9 @@
             color: var(--accent-primary);
             font-family: 'Fira Code', monospace;
             text-transform: uppercase;
+            cursor: pointer;
+            user-select: none;
+            -webkit-user-select: none;
         }
 
         .session-info {
@@ -143,6 +146,10 @@
             padding: 0 16px;
         }
 
+        .nav-scroller::-webkit-scrollbar {
+            display: none;
+        }
+
         .nav-tabs {
             display: flex;
             background: var(--surface-color);
@@ -165,6 +172,7 @@
             cursor: pointer;
             border-radius: 8px;
             transition: 0.2s;
+            white-space: nowrap;
         }
 
         .tab-btn.active {
@@ -380,6 +388,37 @@
             font-size: 0.75rem;
             margin-bottom: 12px;
         }
+
+        .section-divider {
+            height: 1px;
+            background: var(--border-color);
+            margin: 20px 0;
+        }
+
+        .sub-section-title {
+            font-size: 0.55rem;
+            color: var(--accent-primary);
+            letter-spacing: 2px;
+            margin-bottom: 14px;
+            text-transform: uppercase;
+            font-weight: 700;
+        }
+
+        /* System overlay */
+        #system-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.85);
+            z-index: 100;
+            padding: 20px;
+            overflow-y: auto;
+        }
+
+        #system-overlay.active {
+            display: flex;
+            flex-direction: column;
+        }
     </style>
 </head>
 
@@ -389,7 +428,7 @@
 
         <header>
             <div class="header-top">
-                <div class="logo">ZENITH/V4.5</div>
+                <div class="logo" id="logo-btn">ZENITH/V5</div>
                 <div id="mkt-status" class="market-badge status-closed">OFFLINE</div>
             </div>
             <div class="session-info">
@@ -405,10 +444,8 @@
                 <button class="tab-btn" id="tab-signals" onclick="switchTab('signals')">Signals</button>
                 <button class="tab-btn" id="tab-analysis" onclick="switchTab('analysis')">Analysis</button>
                 <button class="tab-btn" id="tab-macro" onclick="switchTab('macro')">Macro</button>
-                <button class="tab-btn" id="tab-backtest" onclick="switchTab('backtest')">Backtest</button>
-                <button class="tab-btn" id="tab-performance" onclick="switchTab('performance')">Perf</button>
+                <button class="tab-btn" id="tab-stats" onclick="switchTab('stats')">Stats</button>
                 <button class="tab-btn" id="tab-briefing" onclick="switchTab('briefing')">Briefing</button>
-                <button class="tab-btn" id="tab-alerts" onclick="switchTab('alerts')">System</button>
             </nav>
         </div>
 
@@ -459,16 +496,14 @@
                 <h4
                     style="font-size: 0.6rem; color: var(--accent-primary); margin-bottom: 10px; text-transform: uppercase;">
                     Strategic Reasoning</h4>
-                <p id="forecast-text">Syncing brain nodes for deployment...</p>
+                <p id="forecast-text">Awaiting AI analysis...</p>
             </div>
         </div>
 
         <!-- ANALYSIS TAB -->
         <div id="analysis-view" class="tab-content">
             <div class="card">
-                <h3
-                    style="font-size: 0.6rem; color: var(--accent-primary); letter-spacing: 2px; margin-bottom: 20px; text-transform: uppercase;">
-                    Neural Indicators</h3>
+                <h3 class="sub-section-title">Neural Indicators</h3>
                 <div id="node-analysis">
                     <div class="empty-state">SYNCING ANALYTICS...</div>
                 </div>
@@ -478,16 +513,14 @@
         <!-- MACRO TAB -->
         <div id="macro-view" class="tab-content">
             <div class="card">
-                <h3
-                    style="font-size: 0.6rem; color: var(--accent-primary); letter-spacing: 2px; margin-bottom: 20px; text-transform: uppercase;">
-                    Geopolitical Ecosystem</h3>
+                <h3 class="sub-section-title">Geopolitical Ecosystem</h3>
                 <div id="macro-data-list" style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;"></div>
             </div>
             <div class="card" style="font-size: 0.75rem; color: var(--text-muted); line-height: 1.6;">
                 <h4
                     style="font-size: 0.6rem; color: var(--accent-primary); margin-bottom: 10px; text-transform: uppercase;">
                     Contextual Bias</h4>
-                <p id="macro-context">Awaiting central bank pulse...</p>
+                <p id="macro-context">Loading macro data...</p>
             </div>
         </div>
 
@@ -498,43 +531,25 @@
             </div>
         </div>
 
-        <!-- SYSTEM/ALERTS TAB -->
-        <div id="alerts-view" class="tab-content">
+        <!-- STATS TAB (merged Backtest + Performance) -->
+        <div id="stats-view" class="tab-content">
+            <!-- Backtest Section -->
             <div class="card">
-                <h3
-                    style="font-size: 0.6rem; color: var(--accent-primary); margin-bottom: 16px; text-transform: uppercase;">
-                    Network Health</h3>
-                <div id="alert-list" style="margin-bottom: 16px;"></div>
-                <div style="font-size: 0.6rem; color: var(--text-muted); font-weight: 700; margin-bottom: 8px;">API
-                    OVERRIDE (CORS FIX)</div>
-                <input type="text" id="api-url-input" placeholder="https://your-bot.herokuapp.com">
-                <button class="primary-btn" style="padding: 12px; font-size: 0.7rem;" onclick="saveOverride()">APPLY
-                    OVERRIDE</button>
-                <button class="secondary-btn" style="margin-top: 10px;" onclick="toggleDebug()">TOGGLE DEBUG
-                    CONSOLE</button>
-            </div>
-        </div>
-
-        <!-- BACKTEST DASHBOARD TAB -->
-        <div id="backtest-view" class="tab-content">
-            <div class="card">
-                <h3
-                    style="font-size: 0.6rem; color: var(--accent-primary); letter-spacing: 2px; margin-bottom: 16px; text-transform: uppercase;">
-                    Backtest Engine</h3>
-                <div style="display: flex; gap: 8px; margin-bottom: 16px;">
+                <h3 class="sub-section-title">Backtest Engine</h3>
+                <div style="display: flex; gap: 6px; margin-bottom: 14px;">
                     <button class="tf-btn active" onclick="runBacktest(null)" style="flex:1">All</button>
                     <button class="tf-btn" onclick="runBacktest('trend_following')" style="flex:1">Trend</button>
                     <button class="tf-btn" onclick="runBacktest('mean_reversion')" style="flex:1">MR</button>
-                    <button class="tf-btn" onclick="runBacktest('breakout')" style="flex:1">Breakout</button>
+                    <button class="tf-btn" onclick="runBacktest('breakout')" style="flex:1">Brkout</button>
                 </div>
-                <div id="bt-stats" style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
+                <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:10px;">
                     <div class="small-card">
                         <div class="label">Win Rate</div>
                         <div id="bt-wr" class="value">--%</div>
                     </div>
                     <div class="small-card">
                         <div class="label">Total P/L</div>
-                        <div id="bt-pnl" class="value">-- pips</div>
+                        <div id="bt-pnl" class="value">--</div>
                     </div>
                     <div class="small-card">
                         <div class="label">Trades</div>
@@ -555,20 +570,16 @@
                 </div>
             </div>
             <div class="card">
-                <h4
-                    style="font-size: 0.55rem; color: var(--accent-primary); margin-bottom: 12px; text-transform: uppercase;">
-                    Equity Curve</h4>
-                <div id="bt-equity" style="height: 120px; display: flex; align-items: flex-end; gap: 1px;"></div>
+                <h4 class="sub-section-title">Equity Curve</h4>
+                <div id="bt-equity" style="height: 100px; display: flex; align-items: flex-end; gap: 1px;"></div>
             </div>
-        </div>
 
-        <!-- PERFORMANCE DASHBOARD TAB -->
-        <div id="performance-view" class="tab-content">
+            <div class="section-divider"></div>
+
+            <!-- Performance Section -->
             <div class="card">
-                <h3
-                    style="font-size: 0.6rem; color: var(--accent-primary); letter-spacing: 2px; margin-bottom: 16px; text-transform: uppercase;">
-                    Trading Performance</h3>
-                <div id="perf-stats" style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
+                <h3 class="sub-section-title">Live Performance</h3>
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
                     <div class="small-card">
                         <div class="label">Total Trades</div>
                         <div id="perf-total" class="value">--</div>
@@ -588,16 +599,14 @@
                 </div>
             </div>
             <div class="card">
-                <h4
-                    style="font-size: 0.55rem; color: var(--accent-primary); margin-bottom: 12px; text-transform: uppercase;">
-                    Tuning Recommendations</h4>
+                <h4 class="sub-section-title">Tuning Recommendations</h4>
                 <div id="perf-recommendations">
-                    <div class="empty-state">ANALYZING PERFORMANCE...</div>
+                    <div class="empty-state" style="padding:30px 20px;">ANALYZING PERFORMANCE...</div>
                 </div>
             </div>
         </div>
 
-        <!-- VOICE BRIEFING TAB -->
+        <!-- BRIEFING TAB -->
         <div id="briefing-view" class="tab-content">
             <div class="card" style="text-align: center;">
                 <div style="font-size: 2rem; margin-bottom: 8px;">🎙️</div>
@@ -608,8 +617,8 @@
                 </div>
             </div>
             <div class="card">
-                <p id="briefing-summary" style="font-size: 0.75rem; color: var(--text-muted); line-height: 1.6;">
-                    Generating briefing...</p>
+                <p id="briefing-summary" style="font-size: 0.75rem; color: var(--text-muted); line-height: 1.6;">Loading
+                    briefing...</p>
             </div>
             <div id="briefing-sections"></div>
         </div>
@@ -618,11 +627,27 @@
         <button class="secondary-btn" onclick="Telegram.WebApp.close()">EXIT</button>
     </div>
 
+    <!-- SYSTEM OVERLAY (hidden, accessible via long-press on logo) -->
+    <div id="system-overlay">
+        <div class="card" style="margin-top: 40px;">
+            <h3 class="sub-section-title">System Diagnostics</h3>
+            <div id="alert-list" style="margin-bottom: 16px;"></div>
+            <div style="font-size: 0.6rem; color: var(--text-muted); font-weight: 700; margin-bottom: 8px;">API ENDPOINT
+            </div>
+            <input type="text" id="api-url-input" placeholder="https://your-bot-server.com">
+            <button class="primary-btn" style="padding: 12px; font-size: 0.7rem;" onclick="saveOverride()">APPLY
+                OVERRIDE</button>
+            <button class="secondary-btn" style="margin-top: 10px;" onclick="toggleDebug()">TOGGLE DEBUG
+                CONSOLE</button>
+            <button class="secondary-btn" style="margin-top: 10px;" onclick="closeSystem()">CLOSE</button>
+        </div>
+    </div>
+
     <script>
         const tg = window.Telegram.WebApp;
         tg.expand();
 
-        // Auto-detect API root: use override if set, else detect if served from VPS
+        // Auto-detect API root: override > same-origin (VPS) > hardcoded VPS URL (Vercel)
         const VPS_URL = "https://site--euroscope--zyn6vtt48jxf.code.run";
         let API_ROOT = localStorage.getItem('ZENITH_API_OVERRIDE')
             || (location.origin.includes('code.run') ? '' : VPS_URL);
@@ -635,13 +660,29 @@
             div.className = type === 'error' ? 'log-error' : type === 'warn' ? 'log-warn' : '';
             div.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
             consoleEl.prepend(div);
-            // Limit logs
             if (consoleEl.children.length > 50) consoleEl.removeChild(consoleEl.lastChild);
         }
 
         function toggleDebug() {
             const el = document.getElementById('debug-console');
             el.style.display = el.style.display === 'none' ? 'block' : 'none';
+        }
+
+        // System overlay — accessible via long-press on logo
+        let logoTimer = null;
+        const logoEl = document.getElementById('logo-btn');
+        logoEl.addEventListener('pointerdown', () => {
+            logoTimer = setTimeout(() => {
+                document.getElementById('system-overlay').classList.add('active');
+                document.getElementById('api-url-input').value = API_ROOT;
+                try { tg.HapticFeedback.impactOccurred('heavy'); } catch (e) { }
+            }, 800);
+        });
+        logoEl.addEventListener('pointerup', () => clearTimeout(logoTimer));
+        logoEl.addEventListener('pointerleave', () => clearTimeout(logoTimer));
+
+        function closeSystem() {
+            document.getElementById('system-overlay').classList.remove('active');
         }
 
         function saveOverride() {
@@ -657,7 +698,7 @@
         async function api(path) {
             const url = `${API_ROOT}/api${path}`;
             try {
-                const r = await fetch(url, { signal: AbortSignal.timeout(10000) });
+                const r = await fetch(url, { signal: AbortSignal.timeout(12000) });
                 if (!r.ok) throw new Error(`HTTP ${r.status}`);
                 return await r.json();
             } catch (e) {
@@ -685,7 +726,7 @@
             document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
             document.getElementById(viewId + '-view').classList.add('active');
             document.getElementById('tab-' + viewId).classList.add('active');
-            tg.HapticFeedback.impactOccurred('light');
+            try { tg.HapticFeedback.impactOccurred('light'); } catch (e) { }
             sync(viewId);
         }
 
@@ -694,6 +735,7 @@
             document.querySelectorAll('.tf-btn').forEach(b => b.classList.toggle('active', b.textContent === tf));
             sync('terminal');
         }
+
         async function runBacktest(strategy) {
             const q = strategy ? `?strategy=${strategy}` : '';
             const res = await api(`/backtest${q}`);
@@ -707,22 +749,49 @@
                 document.getElementById('bt-pf').textContent = d.profit_factor;
                 document.getElementById('bt-sharpe').textContent = d.sharpe_ratio;
                 document.getElementById('bt-dd').textContent = `${d.max_drawdown}p`;
-                // Equity curve rendering
                 const eqEl = document.getElementById('bt-equity');
                 const curve = d.equity_curve || [];
                 if (curve.length > 0) {
                     const maxEq = Math.max(...curve.map(Math.abs)) || 1;
                     eqEl.innerHTML = curve.map(v => {
-                        const h = Math.max(2, Math.abs(v) / maxEq * 100);
+                        const h = Math.max(4, Math.abs(v) / maxEq * 100);
                         const c = v >= 0 ? 'var(--up-color)' : 'var(--down-color)';
                         return `<div style="flex:1; height:${h}%; background:${c}; border-radius:2px 2px 0 0; min-width:2px; opacity:0.8;"></div>`;
                     }).join('');
                 } else {
-                    eqEl.innerHTML = '<div class="empty-state" style="width:100%">NO EQUITY DATA</div>';
+                    eqEl.innerHTML = '<div class="empty-state" style="width:100%;padding:20px">NO EQUITY DATA</div>';
                 }
             } else {
                 document.getElementById('bt-wr').textContent = '--';
-                document.getElementById('bt-equity').innerHTML = `<div class="empty-state" style="width:100%">${res.error || 'BACKTEST UNAVAILABLE'}</div>`;
+                document.getElementById('bt-equity').innerHTML = `<div class="empty-state" style="width:100%;padding:20px">${res.error || 'BACKTEST UNAVAILABLE'}</div>`;
+            }
+        }
+
+        async function loadPerformance() {
+            const res = await api('/performance');
+            if (res.success && res.data) {
+                const s = res.data.stats || {};
+                document.getElementById('perf-total').textContent = s.total || 0;
+                document.getElementById('perf-wr').textContent = `${(s.win_rate || 0).toFixed(0)}%`;
+                document.getElementById('perf-pnl').textContent = `${(s.total_pnl || 0).toFixed(1)}p`;
+                document.getElementById('perf-avg').textContent = `${(s.avg_pnl || 0).toFixed(1)}p`;
+                const t = res.data.tuning || {};
+                const recs = t.recommendations || [];
+                const recEl = document.getElementById('perf-recommendations');
+                if (recs.length > 0) {
+                    recEl.innerHTML = recs.map(r => `
+                        <div class="info-row">
+                            <span class="label">${r.param}</span>
+                            <span class="val" style="font-size:0.65rem;">${r.action} (${r.suggested_change})</span>
+                        </div>
+                        <div style="font-size:0.55rem; color:var(--text-dim); padding:0 0 8px;">${r.reason}</div>
+                    `).join('');
+                } else {
+                    recEl.innerHTML = '<div class="empty-state" style="padding:20px">ALL PARAMETERS OPTIMAL ✅</div>';
+                }
+            } else {
+                document.getElementById('perf-recommendations').innerHTML =
+                    `<div class="empty-state" style="padding:20px">${res.error || 'PERFORMANCE DATA UNAVAILABLE'}</div>`;
             }
         }
 
@@ -736,7 +805,7 @@
                     const s = res.data;
                     const mkt = document.getElementById('mkt-status');
                     mkt.textContent = s.status; mkt.className = `market-badge status-${s.status.toLowerCase()}`;
-                    document.getElementById('current-session').textContent = `${s.session} SESSION OPEN`;
+                    document.getElementById('current-session').textContent = `${s.session} SESSION`;
                 }
             });
 
@@ -752,7 +821,7 @@
                 }
             });
 
-            // Tab-specific heavy sync
+            // Tab-specific sync
             if (activeTab === 'terminal') {
                 const statusEl = document.getElementById('chart-status');
                 const data = await api(`/candles?timeframe=${currentTF}`);
@@ -772,6 +841,8 @@
                     document.getElementById('forecast-conf-bar').style.width = `${(d.confidence || 0) * 100}%`;
                     document.getElementById('forecast-conf-text').textContent = `${((d.confidence || 0) * 100).toFixed(0)}%`;
                     document.getElementById('forecast-text').textContent = d.reasoning || "Awaiting reasoning...";
+                } else {
+                    document.getElementById('forecast-text').textContent = res.error || "Forecast engine offline";
                 }
             } else if (activeTab === 'analysis') {
                 const res = await api('/analysis');
@@ -780,9 +851,12 @@
                     document.getElementById('node-analysis').innerHTML = `
                         <div class="info-row"><span class="label">Bias</span><span class="val" style="color:var(--accent-primary)">${(ta.overall_bias || 'NEUTRAL').toUpperCase()}</span></div>
                         <div class="info-row"><span class="label">RSI</span><span class="val">${f2(ind.RSI?.value)}</span></div>
+                        <div class="info-row"><span class="label">MACD</span><span class="val">${ind.MACD?.signal_text || '---'}</span></div>
+                        <div class="info-row"><span class="label">ADX</span><span class="val">${f2(ind.ADX?.value)} (${ind.ADX?.strength || '---'})</span></div>
                         <div class="info-row"><span class="label">EMA 50</span><span class="val">${f5(ind.EMA?.ema50)}</span></div>
                         <div class="info-row"><span class="label">EMA 200</span><span class="val">${f5(ind.EMA?.ema200)}</span></div>
                         <div class="info-row"><span class="label">ATR</span><span class="val">${f2(ind.ATR?.pips)} Pips</span></div>
+                        <div class="info-row"><span class="label">Stochastic</span><span class="val">K:${f2(ind.Stochastic?.k)} D:${f2(ind.Stochastic?.d)}</span></div>
                     `;
                 }
             } else if (activeTab === 'macro') {
@@ -793,10 +867,19 @@
                     document.getElementById('macro-data-list').innerHTML = `
                         <div class="small-card"><div class="label">Fed Rate</div><div class="value">${f2(us.fed?.rate)}%</div></div>
                         <div class="small-card"><div class="label">ECB Rate</div><div class="value">${f2(eu.ecb?.value)}%</div></div>
-                        <div class="small-card"><div class="label">US CPI</div><div class="value">${f2(us.cpi?.value)}%</div></div>
-                        <div class="small-card"><div class="label">EU CPI</div><div class="value">${f2(eu.cpi?.value)}%</div></div>
+                        <div class="small-card"><div class="label">US CPI</div><div class="value">${f2(us.cpi?.value)}</div></div>
+                        <div class="small-card"><div class="label">EU CPI</div><div class="value">${f2(eu.cpi?.value)}</div></div>
+                        <div class="small-card"><div class="label">Yield Spread</div><div class="value">${f2(eu.yield_spread?.spread)}%</div></div>
+                        <div class="small-card"><div class="label">Macro Bias</div><div class="value" style="color:${m.macro_impact === 'bullish' ? 'var(--up-color)' : m.macro_impact === 'bearish' ? 'var(--down-color)' : 'var(--text-muted)'}">${(m.macro_impact || '---').toUpperCase()}</div></div>
                     `;
-                    document.getElementById('macro-context').textContent = res.formatted || "Watching yields...";
+                    // Build a cleaner context text from the data
+                    const spread = eu.yield_spread;
+                    const ctx = spread
+                        ? `US 10Y ${f2(spread.us_10y)}% vs DE 10Y ${f2(spread.german_10y)}% → Spread ${f2(spread.spread)}%. Fed ${f2(us.fed?.rate)}% vs ECB ${f2(eu.ecb?.value)}%.`
+                        : "Macro data loaded.";
+                    document.getElementById('macro-context').textContent = ctx;
+                } else {
+                    document.getElementById('macro-context').textContent = res.error || "Macro data unavailable";
                 }
             } else if (activeTab === 'signals') {
                 const res = await api('/signals');
@@ -815,31 +898,10 @@
                             </div>
                         </div>`).join('');
                 } else list.innerHTML = `<div class="empty-state">NO RECENT SIGNALS</div>`;
-            } else if (activeTab === 'backtest') {
+            } else if (activeTab === 'stats') {
+                // Load both backtest and performance in parallel
                 runBacktest(null);
-            } else if (activeTab === 'performance') {
-                const res = await api('/performance');
-                if (res.success && res.data) {
-                    const s = res.data.stats || {};
-                    document.getElementById('perf-total').textContent = s.total || 0;
-                    document.getElementById('perf-wr').textContent = `${(s.win_rate || 0).toFixed(0)}%`;
-                    document.getElementById('perf-pnl').textContent = `${(s.total_pnl || 0).toFixed(1)}p`;
-                    document.getElementById('perf-avg').textContent = `${(s.avg_pnl || 0).toFixed(1)}p`;
-                    const t = res.data.tuning || {};
-                    const recs = t.recommendations || [];
-                    const recEl = document.getElementById('perf-recommendations');
-                    if (recs.length > 0) {
-                        recEl.innerHTML = recs.map(r => `
-                            <div class="info-row">
-                                <span class="label">${r.param}</span>
-                                <span class="val" style="font-size:0.65rem;">${r.action} (${r.suggested_change})</span>
-                            </div>
-                            <div style="font-size:0.55rem; color:var(--text-dim); padding:0 0 8px;">${r.reason}</div>
-                        `).join('');
-                    } else {
-                        recEl.innerHTML = '<div class="empty-state">ALL PARAMETERS OPTIMAL</div>';
-                    }
-                }
+                loadPerformance();
             } else if (activeTab === 'briefing') {
                 const res = await api('/briefing');
                 if (res.success && res.data) {
@@ -855,13 +917,15 @@
                             <p style="font-size:0.7rem; color:var(--text-muted); line-height:1.5;">${s.content}</p>
                         </div>
                     `).join('');
+                } else {
+                    document.getElementById('briefing-summary').textContent = res.error || "Briefing engine offline";
                 }
             }
         }
 
         window.onload = async () => {
-            log("Zenith Terminal v4.5 Initializing...");
-            document.getElementById('api-url-input').value = API_ROOT;
+            log("Zenith Terminal v5.0 Initializing...");
+            log(`API Root: ${API_ROOT || '(same-origin)'}`);
             initChart();
             await sync();
             setInterval(() => sync(), 15000);
