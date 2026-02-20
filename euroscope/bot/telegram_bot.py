@@ -1683,26 +1683,28 @@ class EuroScopeBot:
     async def _api_forecast(self, request):
         """API endpoint for deep AI forecasting and reasoning."""
         logger.debug("API: Running deep AI forecast...")
-        ctx = SkillContext()
-        res = await self.orchestrator.run_skill("forecaster", "forecast", context=ctx)
-        
-        if not res.success:
+        try:
+            tf = request.query.get("timeframe", "24 hours")
+            result = await self.forecaster.generate_forecast(tf)
+            
+            return web.json_response({
+                "success": True,
+                "data": {
+                    "direction": result.get("direction", "NEUTRAL"),
+                    "confidence": result.get("confidence", 0) / 100,  # normalize to 0-1 for UI
+                    "reasoning": result.get("text", ""),
+                    "timeframe": tf,
+                    "price": result.get("price"),
+                    "timestamp": datetime.now().isoformat()
+                }
+            })
+        except Exception as e:
+            logger.error(f"API forecast error: {e}")
             return web.json_response({
                 "success": False,
-                "error": res.error,
-                "data": {"direction": "NEUTRAL", "confidence": 0, "reasoning": "Forecasting brain offline."}
+                "error": str(e),
+                "data": {"direction": "NEUTRAL", "confidence": 0, "reasoning": "Forecasting engine error."}
             })
-            
-        return web.json_response({
-            "success": True,
-            "data": {
-                "direction": res.data.get("direction", "NEUTRAL"),
-                "confidence": res.data.get("confidence", 0),
-                "reasoning": res.data.get("reasoning", ""),
-                "timeframe": res.data.get("timeframe", "H1"),
-                "timestamp": datetime.now().isoformat()
-            }
-        })
 
     async def _api_macro(self, request):
         """API endpoint for fundamental macro data (FRED/ECB)."""
