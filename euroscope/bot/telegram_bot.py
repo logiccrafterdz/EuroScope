@@ -1808,6 +1808,111 @@ class EuroScopeBot:
             logger.error(f"API: Critical error in _api_candles: {e}")
             return web.json_response({"success": False, "error": str(e), "candles": []})
 
+    async def _api_backtest(self, request):
+        """API endpoint for backtesting dashboard data."""
+        logger.debug("API: Running backtest...")
+        strategy = request.query.get("strategy", None)
+        timeframe = request.query.get("timeframe", "H1")
+        try:
+            from .telegram_bot import SkillContext
+        except ImportError:
+            from ..skills.base import SkillContext
+        try:
+            ctx = SkillContext()
+            result = await self.orchestrator.run_skill(
+                "market_data", "get_candles", context=ctx,
+                timeframe=timeframe, count=500
+            )
+            if not result.success or result.data is None or result.data.empty:
+                return web.json_response({
+                    "success": False, "error": "No candle data available"
+                })
+
+            df = result.data
+            candles = []
+            for _, row in df.iterrows():
+                try:
+                    candles.append({
+                        "open": float(row["Open"]),
+                        "high": float(row["High"]),
+                        "low": float(row["Low"]),
+                        "close": float(row["Close"]),
+                        "volume": float(row.get("Volume", 0)),
+                    })
+                except (ValueError, TypeError):
+                    continue
+
+            if len(candles) < 60:
+                return web.json_response({
+                    "success": False, "error": f"Need 60+ candles, have {len(candles)}"
+                })
+
+            from ..analytics.backtest_engine import BacktestEngine
+            engine = BacktestEngine()
+            bt_result = engine.run(candles, strategy_filter=strategy)
+
+            return web.json_response({
+                "success": True,
+                "data": {
+                    "strategy": bt_result.strategy,
+                    "total_trades": bt_result.total_trades,
+                    "wins": bt_result.wins,
+                    "losses": bt_result.losses,
+                    "win_rate": round(bt_result.win_rate, 1),
+                    "total_pnl": round(bt_result.total_pnl, 1),
+                    "avg_pnl": round(bt_result.avg_pnl, 1),
+                    "max_drawdown": round(bt_result.max_drawdown, 1),
+                    "profit_factor": round(bt_result.profit_factor, 2),
+                    "sharpe_ratio": round(bt_result.sharpe_ratio, 2),
+                    "best_trade": round(bt_result.best_trade, 1),
+                    "worst_trade": round(bt_result.worst_trade, 1),
+                    "equity_curve": bt_result.equity_curve[-50:],
+                    "bars_tested": bt_result.bars_tested,
+                }
+            })
+        except Exception as e:
+            logger.error(f"API: Backtest error: {e}")
+            return web.json_response({"success": False, "error": str(e)})
+
+    async def _api_performance(self, request):
+        """API endpoint for trading performance dashboard."""
+        logger.debug("API: Fetching performance data...")
+        try:
+            stats = self.storage.get_trade_journal_stats()
+            
+            from ..learning.adaptive_tuner import AdaptiveTuner
+            tuner = AdaptiveTuner(storage=self.storage)
+            tuning = tuner.analyze()
+
+            return web.json_response({
+                "success": True,
+                "data": {
+                    "stats": stats,
+                    "tuning": tuning,
+                }
+            })
+        except Exception as e:
+            logger.error(f"API: Performance error: {e}")
+            return web.json_response({"success": False, "error": str(e)})
+
+    async def _api_briefing(self, request):
+        """API endpoint for voice briefing."""
+        logger.debug("API: Generating market briefing...")
+        try:
+            from ..analytics.voice_briefing import VoiceBriefingEngine
+            engine = VoiceBriefingEngine(
+                orchestrator=self.orchestrator,
+                storage=self.storage,
+            )
+            briefing = await engine.generate_briefing()
+            return web.json_response({
+                "success": True,
+                "data": engine.format_for_api(briefing),
+            })
+        except Exception as e:
+            logger.error(f"API: Briefing error: {e}")
+            return web.json_response({"success": False, "error": str(e)})
+
     async def _api_health(self, request):
         """Standard health check endpoint."""
         return web.Response(text="OK", content_type="text/plain")
@@ -1835,6 +1940,9 @@ class EuroScopeBot:
                 web.get('/api/status', self._api_status),
                 web.get('/api/forecast', self._api_forecast),
                 web.get('/api/macro', self._api_macro),
+                web.get('/api/backtest', self._api_backtest),
+                web.get('/api/performance', self._api_performance),
+                web.get('/api/briefing', self._api_briefing),
             ])
             
             port = int(os.getenv("PORT", 8080))
