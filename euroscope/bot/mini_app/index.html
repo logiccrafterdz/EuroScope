@@ -9,23 +9,24 @@
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
     <link
-        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fira+Code:wght@400;600&display=swap"
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Fira+Code:wght@400;600;700&display=swap"
         rel="stylesheet">
     <style>
         :root {
-            --bg-color: #06080a;
-            --surface-color: #0f1218;
-            --surface-accent: #161b22;
-            --accent-primary: #10b981;
-            --accent-primary-dim: rgba(16, 185, 129, 0.1);
-            --text-main: #f9fafb;
-            --text-muted: #9ca3af;
+            --bg-color: #040507;
+            --surface-color: rgba(15, 18, 24, 0.4);
+            --surface-solid: #0A0D14;
+            --surface-accent: rgba(255, 255, 255, 0.03);
+            --accent-primary: #00ff9d;
+            --accent-glow: rgba(0, 255, 157, 0.3);
+            --text-main: #ffffff;
+            --text-muted: #8b949e;
             --text-dim: #4b5563;
-            --border-color: #1f2937;
-            --up-color: #10b981;
-            --down-color: #ef4444;
-            --warn-color: #f59e0b;
-            --safe-bottom: env(safe-area-inset-bottom, 0px);
+            --border-color: rgba(255, 255, 255, 0.08);
+            --up-color: #00ff9d;
+            --down-color: #ff3366;
+            --warn-color: #f5a623;
+            --safe-bottom: env(safe-area-inset-bottom, 20px);
         }
 
         * {
@@ -33,17 +34,21 @@
             padding: 0;
             box-sizing: border-box;
             -webkit-tap-highlight-color: transparent;
-            font-feature-settings: "tnum";
-            font-variant-numeric: tabular-nums;
         }
 
         body {
             font-family: 'Inter', sans-serif;
             background-color: var(--bg-color);
+            background-image:
+                radial-gradient(circle at 50% -20%, #111a22, transparent 70%),
+                linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+            background-size: 100% 100%, 20px 20px, 20px 20px;
+            background-position: center top, center center, center center;
             color: var(--text-main);
             overflow-x: hidden;
             padding: 16px;
-            padding-bottom: calc(20px + var(--safe-bottom));
+            padding-bottom: calc(90px + var(--safe-bottom));
             min-height: 100vh;
         }
 
@@ -54,13 +59,14 @@
 
         /* Debug Console */
         #debug-console {
-            background: #000;
-            border: 1px solid #333;
-            border-radius: 12px;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
             font-family: 'Fira Code', monospace;
             font-size: 0.55rem;
             padding: 12px;
-            margin-bottom: 16px;
+            margin-bottom: 20px;
             display: none;
             max-height: 150px;
             overflow-y: auto;
@@ -78,204 +84,240 @@
 
         header {
             margin-bottom: 24px;
-        }
-
-        .header-top {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 8px;
+        }
+
+        .logo-wrap {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
         }
 
         .logo {
-            font-weight: 700;
-            font-size: 0.75rem;
+            font-weight: 800;
+            font-size: 0.85rem;
             letter-spacing: 4px;
-            color: var(--accent-primary);
+            color: var(--text-main);
             font-family: 'Fira Code', monospace;
             text-transform: uppercase;
             cursor: pointer;
             user-select: none;
-            -webkit-user-select: none;
-        }
-
-        .session-info {
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.2);
             display: flex;
             align-items: center;
             gap: 8px;
-            font-size: 0.6rem;
+        }
+
+        .logo-dot {
+            width: 8px;
+            height: 8px;
+            background: var(--accent-primary);
+            border-radius: 4px;
+            box-shadow: 0 0 12px var(--accent-primary);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% {
+                transform: scale(0.95);
+                box-shadow: 0 0 0 0 rgba(0, 255, 157, 0.7);
+            }
+
+            70% {
+                transform: scale(1);
+                box-shadow: 0 0 0 6px rgba(0, 255, 157, 0);
+            }
+
+            100% {
+                transform: scale(0.95);
+                box-shadow: 0 0 0 0 rgba(0, 255, 157, 0);
+            }
+        }
+
+        .session-info {
+            font-size: 0.55rem;
             color: var(--text-muted);
             font-weight: 600;
             text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-
-        .session-dot {
-            width: 6px;
-            height: 6px;
-            border-radius: 50%;
-            background: var(--accent-primary);
-            box-shadow: 0 0 8px var(--accent-primary);
+            letter-spacing: 1.5px;
         }
 
         .market-badge {
             font-size: 0.55rem;
-            padding: 4px 10px;
+            padding: 6px 12px;
             border-radius: 20px;
             font-weight: 700;
-            letter-spacing: 0.5px;
+            letter-spacing: 1px;
             text-transform: uppercase;
-            border: 1px solid currentColor;
-            opacity: 0.9;
+            backdrop-filter: blur(10px);
+            display: flex;
+            align-items: center;
+            gap: 6px;
         }
 
         .status-open {
             color: var(--up-color);
-            background: rgba(16, 185, 129, 0.1);
+            background: rgba(0, 255, 157, 0.1);
+            border: 1px solid rgba(0, 255, 157, 0.2);
         }
 
         .status-closed {
             color: var(--text-muted);
-            background: rgba(156, 163, 175, 0.1);
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border-color);
         }
 
-        .nav-scroller {
+        /* Glassmorphism Bento Grid */
+        .bento {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        .bento-full {
+            grid-column: span 2;
+        }
+
+        .glass-card {
+            background: var(--surface-color);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--border-color);
+            border-radius: 24px;
+            padding: 20px;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .glass-card:active {
+            transform: scale(0.98);
+        }
+
+        /* Floating Dock */
+        .dock {
+            position: fixed;
+            bottom: calc(20px + var(--safe-bottom));
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 6px;
+            padding: 8px 10px;
+            background: rgba(10, 13, 20, 0.85);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 40px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+            z-index: 1000;
+            width: max-content;
+            max-width: calc(100% - 32px);
             overflow-x: auto;
             scrollbar-width: none;
-            margin: 0 -16px 20px -16px;
-            padding: 0 16px;
         }
 
-        .nav-scroller::-webkit-scrollbar {
+        .dock::-webkit-scrollbar {
             display: none;
         }
 
-        .nav-tabs {
-            display: flex;
-            background: var(--surface-color);
-            border: 1px solid var(--border-color);
-            border-radius: 12px;
-            padding: 4px;
-            width: max-content;
-            min-width: 100%;
-        }
-
-        .tab-btn {
-            padding: 10px 14px;
-            border: none;
+        .dock-btn {
             background: transparent;
+            border: none;
             color: var(--text-muted);
-            font-size: 0.6rem;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
+            width: 44px;
+            height: 44px;
+            border-radius: 22px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
             cursor: pointer;
-            border-radius: 8px;
-            transition: 0.2s;
-            white-space: nowrap;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            flex-shrink: 0;
         }
 
-        .tab-btn.active {
-            color: var(--accent-primary);
-            background: rgba(16, 185, 129, 0.12);
+        .dock-btn svg {
+            width: 22px;
+            height: 22px;
+            transition: transform 0.3s ease;
+        }
+
+        .dock-btn.active {
+            color: var(--text-main);
+            background: rgba(255, 255, 255, 0.1);
+            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.2), 0 0 15px rgba(255, 255, 255, 0.05);
+        }
+
+        .dock-btn.active svg {
+            transform: scale(1.15);
+            stroke: var(--accent-primary);
+        }
+
+        /* Typography & Data */
+        .label-sm {
+            font-size: 0.55rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .val-lg {
+            font-size: 1.5rem;
+            font-weight: 700;
+            font-family: 'Fira Code', monospace;
+            letter-spacing: -1px;
+        }
+
+        .val-md {
+            font-size: 1rem;
+            font-weight: 600;
+            font-family: 'Fira Code', monospace;
+        }
+
+        .text-glow {
+            text-shadow: 0 0 20px var(--accent-glow);
         }
 
         .tab-content {
             display: none;
-            animation: slideUp 0.4s ease-out;
+            animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
         }
 
         .tab-content.active {
             display: block;
         }
 
-        @keyframes slideUp {
+        @keyframes fadeIn {
             from {
-                transform: translateY(12px);
                 opacity: 0;
+                transform: translateY(10px) scale(0.98);
             }
 
             to {
-                transform: translateY(0);
                 opacity: 1;
+                transform: translateY(0) scale(1);
             }
         }
 
-        .card {
-            background: var(--surface-color);
-            border: 1px solid var(--border-color);
-            border-radius: 20px;
-            padding: 20px;
-            margin-bottom: 16px;
-        }
-
-        .hero-price {
-            text-align: center;
-            padding: 32px 20px;
-        }
-
-        .hero-price .label {
-            color: var(--text-muted);
-            font-size: 0.6rem;
-            letter-spacing: 3px;
-            margin-bottom: 12px;
-            text-transform: uppercase;
-        }
-
-        .hero-price .value {
-            font-size: 3.5rem;
-            font-weight: 700;
-            font-family: 'Fira Code', monospace;
-            letter-spacing: -2px;
-            margin-bottom: 4px;
-        }
-
-        .hero-price .change {
-            font-size: 0.9rem;
-            font-weight: 600;
-            font-family: 'Fira Code', monospace;
-        }
-
-        .stats-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 12px;
-            margin-bottom: 16px;
-        }
-
-        .small-card {
-            padding: 14px;
-            border-radius: 16px;
-            background: var(--surface-accent);
-        }
-
-        .small-card .label {
-            font-size: 0.5rem;
-            color: var(--text-dim);
-            margin-bottom: 6px;
-            text-transform: uppercase;
-            font-weight: 700;
-        }
-
-        .small-card .value {
-            font-size: 0.85rem;
-            font-weight: 700;
-            font-family: 'Fira Code', monospace;
-        }
-
+        /* Chart */
         #chart-wrap {
             position: relative;
             width: 100%;
-            border-radius: 20px;
+            border-radius: 24px;
             overflow: hidden;
+            background: var(--surface-solid);
             border: 1px solid var(--border-color);
-            background: #000;
-            margin-bottom: 16px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
         }
 
         #chart-container {
             width: 100%;
-            height: 260px;
+            height: 280px;
         }
 
         #chart-status {
@@ -285,55 +327,65 @@
             align-items: center;
             justify-content: center;
             background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(4px);
             color: var(--text-dim);
             font-size: 0.65rem;
-            font-weight: 600;
+            font-weight: 700;
             text-transform: uppercase;
             z-index: 5;
-            pointer-events: none;
+            letter-spacing: 2px;
         }
 
-        .chart-tf-picker {
+        .tf-dock {
             position: absolute;
             top: 12px;
             right: 12px;
             display: flex;
             gap: 4px;
             z-index: 10;
-            background: rgba(0, 0, 0, 0.6);
-            backdrop-filter: blur(8px);
-            padding: 2px;
-            border-radius: 8px;
+            background: rgba(10, 13, 20, 0.6);
+            backdrop-filter: blur(12px);
+            padding: 4px;
+            border-radius: 12px;
             border: 1px solid var(--border-color);
         }
 
         .tf-btn {
             background: transparent;
             border: none;
-            color: var(--text-dim);
+            color: var(--text-muted);
             font-size: 0.6rem;
-            padding: 4px 8px;
-            border-radius: 6px;
+            padding: 6px 10px;
+            border-radius: 8px;
             font-weight: 700;
             cursor: pointer;
+            transition: 0.2s;
+            font-family: 'Inter';
         }
 
         .tf-btn.active {
-            color: var(--accent-primary);
-            background: rgba(16, 185, 129, 0.15);
+            color: #000;
+            background: var(--accent-primary);
+            box-shadow: 0 0 10px var(--accent-glow);
         }
 
         .info-row {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 10px 0;
+            padding: 12px 0;
             border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+        }
+
+        .info-row:last-child {
+            border-bottom: none;
+            padding-bottom: 0;
         }
 
         .info-row .label {
             font-size: 0.7rem;
             color: var(--text-muted);
+            font-weight: 500;
         }
 
         .info-row .val {
@@ -342,75 +394,29 @@
             font-family: 'Fira Code', monospace;
         }
 
-        .primary-btn {
-            background: var(--accent-primary);
-            color: #000;
-            width: 100%;
-            border: none;
-            padding: 18px;
-            border-radius: 16px;
-            font-weight: 700;
-            font-size: 0.85rem;
-            text-transform: uppercase;
-            letter-spacing: 2px;
-            margin-top: 12px;
-            cursor: pointer;
+        .glow-bar-container {
+            height: 4px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 2px;
+            margin: 16px 0;
+            overflow: hidden;
         }
 
-        .secondary-btn {
-            background: transparent;
-            color: var(--text-muted);
-            width: 100%;
-            border: 1px solid var(--border-color);
-            padding: 14px;
-            border-radius: 16px;
-            font-weight: 600;
-            font-size: 0.75rem;
-            margin-top: 12px;
-            text-transform: uppercase;
-            cursor: pointer;
+        .glow-bar {
+            height: 100%;
+            width: 0%;
+            transition: width 1s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 0 10px currentColor;
         }
 
-        .empty-state {
-            text-align: center;
-            padding: 60px 20px;
-            color: var(--text-dim);
-            font-size: 0.75rem;
-        }
-
-        input {
-            width: 100%;
-            background: #000;
-            border: 1px solid var(--border-color);
-            color: #fff;
-            padding: 12px;
-            border-radius: 12px;
-            font-size: 0.75rem;
-            margin-bottom: 12px;
-        }
-
-        .section-divider {
-            height: 1px;
-            background: var(--border-color);
-            margin: 20px 0;
-        }
-
-        .sub-section-title {
-            font-size: 0.55rem;
-            color: var(--accent-primary);
-            letter-spacing: 2px;
-            margin-bottom: 14px;
-            text-transform: uppercase;
-            font-weight: 700;
-        }
-
-        /* System overlay */
+        /* Overview System */
         #system-overlay {
             display: none;
             position: fixed;
             inset: 0;
-            background: rgba(0, 0, 0, 0.85);
-            z-index: 100;
+            background: rgba(4, 5, 7, 0.95);
+            backdrop-filter: blur(20px);
+            z-index: 2000;
             padding: 20px;
             overflow-y: auto;
         }
@@ -418,6 +424,54 @@
         #system-overlay.active {
             display: flex;
             flex-direction: column;
+        }
+
+        button.action-btn {
+            background: var(--text-main);
+            color: #000;
+            width: 100%;
+            border: none;
+            padding: 16px;
+            border-radius: 16px;
+            font-weight: 700;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-top: 12px;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+        button.action-btn:active {
+            transform: scale(0.96);
+        }
+
+        button.action-outline {
+            background: transparent;
+            color: var(--text-muted);
+            border: 1px solid var(--border-color);
+        }
+
+        input.action-in {
+            width: 100%;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border-color);
+            color: #fff;
+            padding: 16px;
+            border-radius: 16px;
+            font-size: 0.75rem;
+            margin-bottom: 12px;
+            font-family: 'Fira Code';
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--text-dim);
+            font-size: 0.7rem;
+            font-weight: 600;
+            letter-spacing: 1px;
+            text-transform: uppercase;
         }
     </style>
 </head>
@@ -427,83 +481,81 @@
         <div id="debug-console"></div>
 
         <header>
-            <div class="header-top">
-                <div class="logo" id="logo-btn">ZENITH/V5</div>
-                <div id="mkt-status" class="market-badge status-closed">OFFLINE</div>
+            <div class="logo-wrap">
+                <div class="logo" id="logo-btn">
+                    <div class="logo-dot"></div> ZENITH
+                </div>
+                <div class="session-info" id="current-session">DETECTING SESSION...</div>
             </div>
-            <div class="session-info">
-                <div class="session-dot"></div>
-                <span id="current-session">DETECTING SESSION...</span>
-            </div>
+            <div id="mkt-status" class="market-badge status-closed">OFFLINE</div>
         </header>
-
-        <div class="nav-scroller">
-            <nav class="nav-tabs">
-                <button class="tab-btn active" id="tab-terminal" onclick="switchTab('terminal')">Terminal</button>
-                <button class="tab-btn" id="tab-forecast" onclick="switchTab('forecast')">Forecast</button>
-                <button class="tab-btn" id="tab-signals" onclick="switchTab('signals')">Signals</button>
-                <button class="tab-btn" id="tab-analysis" onclick="switchTab('analysis')">Analysis</button>
-                <button class="tab-btn" id="tab-macro" onclick="switchTab('macro')">Macro</button>
-                <button class="tab-btn" id="tab-stats" onclick="switchTab('stats')">Stats</button>
-                <button class="tab-btn" id="tab-briefing" onclick="switchTab('briefing')">Briefing</button>
-            </nav>
-        </div>
 
         <!-- TERMINAL TAB -->
         <div id="terminal-view" class="tab-content active">
-            <div class="card hero-price">
-                <div class="label">EUR/USD Live Feed</div>
-                <div id="price" class="value">-.-----</div>
-                <div id="price-change" class="change">--.--- (---%)</div>
+            <!-- Hero Price -->
+            <div class="glass-card bento-full"
+                style="text-align: center; padding: 36px 20px; border-color: rgba(255,255,255,0.15);">
+                <div
+                    style="position:absolute; top:-60px; left:50%; transform:translateX(-50%); width:120px; height:120px; background:var(--accent-glow); filter:blur(60px); border-radius:50%; pointer-events:none;">
+                </div>
+                <div class="label-sm">EUR/USD Live</div>
+                <div id="price"
+                    style="font-size:3.5rem; font-weight:800; font-family:'Fira Code'; letter-spacing:-2px; margin-bottom:4px; color:#fff;"
+                    class="text-glow">-.-----</div>
+                <div id="price-change" style="font-size:0.95rem; font-weight:600; font-family:'Fira Code';">--.---
+                    (---%)</div>
             </div>
-            <div id="chart-wrap">
-                <div class="chart-tf-picker">
+
+            <div class="bento">
+                <div class="glass-card" style="padding:16px;">
+                    <div class="label-sm">Vol. Reach</div>
+                    <div id="stat-range" class="val-md">--- pips</div>
+                </div>
+                <div class="glass-card" style="padding:16px;">
+                    <div class="label-sm">Day Range</div>
+                    <div id="stat-hilo" class="val-md" style="font-size: 0.8rem;">-.--- / -.---</div>
+                </div>
+            </div>
+
+            <div class="bento-full" id="chart-wrap" style="margin-bottom: 16px;">
+                <div class="tf-dock">
                     <button class="tf-btn" onclick="updateTimeframe('M15')">M15</button>
                     <button class="tf-btn active" onclick="updateTimeframe('H1')">H1</button>
                     <button class="tf-btn" onclick="updateTimeframe('D1')">D1</button>
                 </div>
                 <div id="chart-container"></div>
-                <div id="chart-status">INITIALIZING NODES...</div>
+                <div id="chart-status">INITIALIZING...</div>
             </div>
-            <div class="stats-grid">
-                <div class="card small-card">
-                    <div class="label">Vol. Reach</div>
-                    <div id="stat-range" class="value">--- pips</div>
-                </div>
-                <div class="card small-card">
-                    <div class="label">Day Range</div>
-                    <div id="stat-hilo" class="value">-.--- / -.---</div>
-                </div>
-            </div>
+
+            <button class="action-btn" onclick="sync('terminal')">SYNC TERMINAL</button>
         </div>
 
         <!-- FORECAST TAB -->
         <div id="forecast-view" class="tab-content">
-            <div class="card" style="text-align: center;">
-                <div class="label" style="font-size: 0.55rem; letter-spacing: 1px; color: var(--text-dim);">AI
-                    DIRECTIONAL BIAS</div>
-                <div id="forecast-dir" style="font-size: 1.5rem; font-weight: 800; margin: 12px 0;">NEUTRAL</div>
-                <div style="height: 4px; background: var(--border-color); border-radius: 2px; margin: 12px 0;">
-                    <div id="forecast-conf-bar"
-                        style="height: 100%; background: var(--accent-primary); width: 0%; transition: 1s;"></div>
+            <div class="glass-card bento-full" style="text-align: center;">
+                <div class="label-sm">AI Directional Bias</div>
+                <div id="forecast-dir" style="font-size: 2rem; font-weight: 800; margin: 16px 0; letter-spacing: 2px;">
+                    NEUTRAL</div>
+                <div class="glow-bar-container">
+                    <div id="forecast-conf-bar" class="glow-bar" style="background: var(--text-muted); width: 0%;">
+                    </div>
                 </div>
                 <div
-                    style="display:flex; justify-content:space-between; font-size: 0.6rem; color: var(--text-muted); font-weight: 700;">
+                    style="display:flex; justify-content:space-between; font-size: 0.65rem; color: var(--text-muted); font-weight: 700; letter-spacing:1px;">
                     <span>CONVICTION</span><span id="forecast-conf-text">0%</span>
                 </div>
             </div>
-            <div class="card" style="font-size: 0.75rem; color: var(--text-muted); line-height: 1.6;">
-                <h4
-                    style="font-size: 0.6rem; color: var(--accent-primary); margin-bottom: 10px; text-transform: uppercase;">
-                    Strategic Reasoning</h4>
-                <p id="forecast-text">Awaiting AI analysis...</p>
+            <div class="glass-card bento-full" style="margin-top: 12px;">
+                <div class="label-sm" style="color:var(--text-main);">Strategic Reasoning</div>
+                <p id="forecast-text" style="font-size: 0.8rem; color: var(--text-muted); line-height: 1.6;">Awaiting AI
+                    analysis...</p>
             </div>
         </div>
 
         <!-- ANALYSIS TAB -->
         <div id="analysis-view" class="tab-content">
-            <div class="card">
-                <h3 class="sub-section-title">Neural Indicators</h3>
+            <div class="glass-card bento-full">
+                <div class="label-sm" style="margin-bottom: 16px;">Neural Indicators</div>
                 <div id="node-analysis">
                     <div class="empty-state">SYNCING ANALYTICS...</div>
                 </div>
@@ -512,145 +564,172 @@
 
         <!-- MACRO TAB -->
         <div id="macro-view" class="tab-content">
-            <div class="card">
-                <h3 class="sub-section-title">Geopolitical Ecosystem</h3>
-                <div id="macro-data-list" style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;"></div>
-            </div>
-            <div class="card" style="font-size: 0.75rem; color: var(--text-muted); line-height: 1.6;">
-                <h4
-                    style="font-size: 0.6rem; color: var(--accent-primary); margin-bottom: 10px; text-transform: uppercase;">
-                    Contextual Bias</h4>
-                <p id="macro-context">Loading macro data...</p>
+            <div class="bento" id="macro-data-list"></div>
+            <div class="glass-card bento-full" style="margin-top: 0px;">
+                <div class="label-sm" style="color:var(--text-main);">Contextual Bias</div>
+                <p id="macro-context" style="font-size: 0.8rem; color: var(--text-muted); line-height: 1.6;">Loading
+                    macro data...</p>
             </div>
         </div>
 
         <!-- SIGNALS TAB -->
         <div id="signals-view" class="tab-content">
             <div id="signal-list">
-                <div class="empty-state">NO RECENT SIGNALS</div>
+                <div class="glass-card bento-full empty-state">NO RECENT SIGNALS</div>
             </div>
         </div>
 
-        <!-- STATS TAB (merged Backtest + Performance) -->
+        <!-- STATS TAB -->
         <div id="stats-view" class="tab-content">
             <!-- Backtest Section -->
-            <div class="card">
-                <h3 class="sub-section-title">Backtest Engine</h3>
-                <div style="display: flex; gap: 6px; margin-bottom: 14px;">
-                    <button class="tf-btn active" onclick="runBacktest(null)" style="flex:1">All</button>
-                    <button class="tf-btn" onclick="runBacktest('trend_following')" style="flex:1">Trend</button>
-                    <button class="tf-btn" onclick="runBacktest('mean_reversion')" style="flex:1">MR</button>
-                    <button class="tf-btn" onclick="runBacktest('breakout')" style="flex:1">Brkout</button>
+            <div class="glass-card bento-full" style="margin-bottom: 12px; padding-bottom:12px;">
+                <div class="label-sm" style="margin-bottom: 12px;">Backtest Engine</div>
+                <div style="display: flex; gap: 6px; margin-bottom: 16px;">
+                    <button class="action-btn action-outline" onclick="runBacktest(null)"
+                        style="margin:0; padding:8px; font-size:0.6rem;">All</button>
+                    <button class="action-btn action-outline" onclick="runBacktest('trend_following')"
+                        style="margin:0; padding:8px; font-size:0.6rem;">Trend</button>
+                    <button class="action-btn action-outline" onclick="runBacktest('mean_reversion')"
+                        style="margin:0; padding:8px; font-size:0.6rem;">MR</button>
                 </div>
-                <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:10px;">
-                    <div class="small-card">
-                        <div class="label">Win Rate</div>
-                        <div id="bt-wr" class="value">--%</div>
+                <div class="bento" style="margin-bottom: 12px;">
+                    <div style="padding:10px 0;">
+                        <div class="label-sm" style="margin-bottom:4px;">Win Rate</div>
+                        <div id="bt-wr" class="val-md">--%</div>
                     </div>
-                    <div class="small-card">
-                        <div class="label">Total P/L</div>
-                        <div id="bt-pnl" class="value">--</div>
+                    <div style="padding:10px 0;">
+                        <div class="label-sm" style="margin-bottom:4px;">Net P/L</div>
+                        <div id="bt-pnl" class="val-md">--</div>
                     </div>
-                    <div class="small-card">
-                        <div class="label">Trades</div>
-                        <div id="bt-trades" class="value">--</div>
+                    <div style="padding:10px 0;">
+                        <div class="label-sm" style="margin-bottom:4px;">Trades</div>
+                        <div id="bt-trades" class="val-md">--</div>
                     </div>
-                    <div class="small-card">
-                        <div class="label">Profit Factor</div>
-                        <div id="bt-pf" class="value">--</div>
-                    </div>
-                    <div class="small-card">
-                        <div class="label">Sharpe</div>
-                        <div id="bt-sharpe" class="value">--</div>
-                    </div>
-                    <div class="small-card">
-                        <div class="label">Max DD</div>
-                        <div id="bt-dd" class="value">--</div>
+                    <div style="padding:10px 0;">
+                        <div class="label-sm" style="margin-bottom:4px;">Max DD</div>
+                        <div id="bt-dd" class="val-md">--</div>
                     </div>
                 </div>
+                <div class="label-sm" style="margin-top: 10px;">Equity Curve</div>
+                <div id="bt-equity" style="height: 60px; display: flex; align-items: flex-end; gap: 2px;"></div>
             </div>
-            <div class="card">
-                <h4 class="sub-section-title">Equity Curve</h4>
-                <div id="bt-equity" style="height: 100px; display: flex; align-items: flex-end; gap: 1px;"></div>
-            </div>
-
-            <div class="section-divider"></div>
 
             <!-- Performance Section -->
-            <div class="card">
-                <h3 class="sub-section-title">Live Performance</h3>
-                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
-                    <div class="small-card">
-                        <div class="label">Total Trades</div>
-                        <div id="perf-total" class="value">--</div>
+            <div class="glass-card bento-full">
+                <div class="label-sm" style="margin-bottom: 16px;">Live Performance</div>
+                <div class="bento" style="margin-bottom:0;">
+                    <div style="padding:10px 0;">
+                        <div class="label-sm" style="margin-bottom:4px;">Win Rate</div>
+                        <div id="perf-wr" class="val-md">--%</div>
                     </div>
-                    <div class="small-card">
-                        <div class="label">Win Rate</div>
-                        <div id="perf-wr" class="value">--%</div>
-                    </div>
-                    <div class="small-card">
-                        <div class="label">Total P/L</div>
-                        <div id="perf-pnl" class="value">--</div>
-                    </div>
-                    <div class="small-card">
-                        <div class="label">Avg P/L</div>
-                        <div id="perf-avg" class="value">--</div>
+                    <div style="padding:10px 0;">
+                        <div class="label-sm" style="margin-bottom:4px;">Total P/L</div>
+                        <div id="perf-pnl" class="val-md">--</div>
                     </div>
                 </div>
-            </div>
-            <div class="card">
-                <h4 class="sub-section-title">Tuning Recommendations</h4>
-                <div id="perf-recommendations">
-                    <div class="empty-state" style="padding:30px 20px;">ANALYZING PERFORMANCE...</div>
+                <div id="perf-recommendations"
+                    style="margin-top:12px; padding-top:12px; border-top:1px solid var(--border-color);">
+                    <div class="empty-state" style="padding:20px 0;">ANALYZING...</div>
                 </div>
             </div>
         </div>
 
         <!-- BRIEFING TAB -->
         <div id="briefing-view" class="tab-content">
-            <div class="card" style="text-align: center;">
-                <div style="font-size: 2rem; margin-bottom: 8px;">🎙️</div>
-                <div class="label" style="font-size: 0.55rem; letter-spacing: 1px; color: var(--text-dim);">MARKET
-                    BRIEFING</div>
+            <div class="glass-card bento-full" style="text-align: center;">
+                <div style="font-size: 2.5rem; margin-bottom: 12px;">🎙️</div>
+                <div class="label-sm" style="margin-bottom: 6px;">Market Briefing</div>
                 <div id="briefing-urgency"
-                    style="font-size: 0.65rem; font-weight: 700; margin: 8px 0; color: var(--accent-primary);">NORMAL
-                </div>
+                    style="font-size: 0.75rem; font-weight: 800; letter-spacing:2px; color: var(--accent-primary);">
+                    NORMAL</div>
             </div>
-            <div class="card">
-                <p id="briefing-summary" style="font-size: 0.75rem; color: var(--text-muted); line-height: 1.6;">Loading
+            <div class="glass-card bento-full" style="margin-top: 12px;">
+                <p id="briefing-summary"
+                    style="font-size: 0.8rem; color: var(--text-main); line-height: 1.6; font-weight:500;">Loading
                     briefing...</p>
             </div>
-            <div id="briefing-sections"></div>
+            <div id="briefing-sections" style="display:flex; flex-direction:column; gap:12px; margin-top:12px;"></div>
         </div>
-
-        <button class="primary-btn" onclick="sync()">REFRESH TERMINAL</button>
-        <button class="secondary-btn" onclick="Telegram.WebApp.close()">EXIT</button>
     </div>
 
-    <!-- SYSTEM OVERLAY (hidden, accessible via long-press on logo) -->
+    <!-- DOCK NAVIGATION -->
+    <div class="dock">
+        <button class="dock-btn active" id="tab-terminal" onclick="switchTab('terminal')">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="4"></rect>
+                <line x1="3" y1="9" x2="21" y2="9"></line>
+                <line x1="9" y1="21" x2="9" y2="9"></line>
+            </svg>
+        </button>
+        <button class="dock-btn" id="tab-forecast" onclick="switchTab('forecast')">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <circle cx="12" cy="12" r="6"></circle>
+                <circle cx="12" cy="12" r="2"></circle>
+            </svg>
+        </button>
+        <button class="dock-btn" id="tab-signals" onclick="switchTab('signals')">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+            </svg>
+        </button>
+        <button class="dock-btn" id="tab-analysis" onclick="switchTab('analysis')">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+            </svg>
+        </button>
+        <button class="dock-btn" id="tab-macro" onclick="switchTab('macro')">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="2" y1="12" x2="22" y2="12"></line>
+                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z">
+                </path>
+            </svg>
+        </button>
+        <button class="dock-btn" id="tab-stats" onclick="switchTab('stats')">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="18" y1="20" x2="18" y2="10"></line>
+                <line x1="12" y1="20" x2="12" y2="4"></line>
+                <line x1="6" y1="20" x2="6" y2="14"></line>
+            </svg>
+        </button>
+        <button class="dock-btn" id="tab-briefing" onclick="switchTab('briefing')">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path>
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                <line x1="12" y1="19" x2="12" y2="22"></line>
+            </svg>
+        </button>
+    </div>
+
+    <!-- SYSTEM OVERLAY -->
     <div id="system-overlay">
-        <div class="card" style="margin-top: 40px;">
-            <h3 class="sub-section-title">System Diagnostics</h3>
+        <div class="glass-card" style="margin-top: 40px;">
+            <div class="label-sm" style="font-size:0.75rem; color:#fff;">System Diagnostics</div>
             <div id="alert-list" style="margin-bottom: 16px;"></div>
-            <div style="font-size: 0.6rem; color: var(--text-muted); font-weight: 700; margin-bottom: 8px;">API ENDPOINT
-            </div>
-            <input type="text" id="api-url-input" placeholder="https://your-bot-server.com">
-            <button class="primary-btn" style="padding: 12px; font-size: 0.7rem;" onclick="saveOverride()">APPLY
-                OVERRIDE</button>
-            <button class="secondary-btn" style="margin-top: 10px;" onclick="toggleDebug()">TOGGLE DEBUG
-                CONSOLE</button>
-            <button class="secondary-btn" style="margin-top: 10px;" onclick="closeSystem()">CLOSE</button>
+            <div class="label-sm">API ENDPOINT</div>
+            <input type="text" id="api-url-input" class="action-in" placeholder="https://your-bot-server.com">
+            <button class="action-btn" onclick="saveOverride()">APPLY OVERRIDE</button>
+            <button class="action-btn action-outline" onclick="toggleDebug()">TOGGLE DEBUG CONSOLE</button>
+            <button class="action-btn action-outline" style="border:none; color:var(--text-main);"
+                onclick="closeSystem()">CLOSE</button>
         </div>
     </div>
 
     <script>
         const tg = window.Telegram.WebApp;
         tg.expand();
+        tg.ready();
 
-        // Auto-detect API root: override > same-origin (VPS) > hardcoded VPS URL (Vercel)
         const VPS_URL = "https://site--euroscope--zyn6vtt48jxf.code.run";
-        let API_ROOT = localStorage.getItem('ZENITH_API_OVERRIDE')
-            || (location.origin.includes('code.run') ? '' : VPS_URL);
+        let API_ROOT = localStorage.getItem('ZENITH_API_OVERRIDE') || (location.origin.includes('code.run') ? '' : VPS_URL);
         let chart, candleSeries;
         let currentTF = 'H1';
 
@@ -668,7 +747,6 @@
             el.style.display = el.style.display === 'none' ? 'block' : 'none';
         }
 
-        // System overlay — accessible via long-press on logo
         let logoTimer = null;
         const logoEl = document.getElementById('logo-btn');
         logoEl.addEventListener('pointerdown', () => {
@@ -681,10 +759,7 @@
         logoEl.addEventListener('pointerup', () => clearTimeout(logoTimer));
         logoEl.addEventListener('pointerleave', () => clearTimeout(logoTimer));
 
-        function closeSystem() {
-            document.getElementById('system-overlay').classList.remove('active');
-        }
-
+        function closeSystem() { document.getElementById('system-overlay').classList.remove('active'); }
         function saveOverride() {
             const val = document.getElementById('api-url-input').value.trim();
             if (val) localStorage.setItem('ZENITH_API_OVERRIDE', val);
@@ -701,29 +776,26 @@
                 const r = await fetch(url, { signal: AbortSignal.timeout(12000) });
                 if (!r.ok) throw new Error(`HTTP ${r.status}`);
                 return await r.json();
-            } catch (e) {
-                log(`API Error (${path}): ${e.message}`, 'error');
-                return { success: false, error: e.message };
-            }
+            } catch (e) { return { success: false, error: e.message }; }
         }
 
         function initChart() {
             try {
                 const container = document.getElementById('chart-container');
                 chart = LightweightCharts.createChart(container, {
-                    layout: { background: { type: 'solid', color: '#000' }, textColor: '#4b5563', fontSize: 10 },
-                    grid: { vertLines: { color: '#0f1218' }, horzLines: { color: '#0f1218' } },
-                    rightPriceScale: { borderColor: '#1f2937' },
-                    timeScale: { borderColor: '#1f2937' }
+                    layout: { background: { type: 'solid', color: 'transparent' }, textColor: '#8b949e', fontSize: 10 },
+                    grid: { vertLines: { color: 'rgba(255,255,255,0.03)' }, horzLines: { color: 'rgba(255,255,255,0.03)' } },
+                    rightPriceScale: { borderColor: 'rgba(255,255,255,0.1)' },
+                    timeScale: { borderColor: 'rgba(255,255,255,0.1)' }
                 });
-                candleSeries = chart.addCandlestickSeries({ upColor: '#10b981', downColor: '#ef4444', borderVisible: false });
+                candleSeries = chart.addCandlestickSeries({ upColor: '#00ff9d', downColor: '#ff3366', borderVisible: false, wickUpColor: '#00ff9d', wickDownColor: '#ff3366' });
                 new ResizeObserver(() => chart.applyOptions({ width: container.clientWidth, height: container.clientHeight })).observe(container);
-            } catch (e) { log("Chart Error: " + e.message, 'error'); }
+            } catch (e) { log("Chart initialization failed", 'error'); }
         }
 
         function switchTab(viewId) {
             document.querySelectorAll('.tab-content').forEach(v => v.classList.remove('active'));
-            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.dock-btn').forEach(b => b.classList.remove('active'));
             document.getElementById(viewId + '-view').classList.add('active');
             document.getElementById('tab-' + viewId).classList.add('active');
             try { tg.HapticFeedback.impactOccurred('light'); } catch (e) { }
@@ -746,8 +818,6 @@
                 document.getElementById('bt-pnl').textContent = `${d.total_pnl > 0 ? '+' : ''}${d.total_pnl}p`;
                 document.getElementById('bt-pnl').style.color = d.total_pnl >= 0 ? 'var(--up-color)' : 'var(--down-color)';
                 document.getElementById('bt-trades').textContent = d.total_trades;
-                document.getElementById('bt-pf').textContent = d.profit_factor;
-                document.getElementById('bt-sharpe').textContent = d.sharpe_ratio;
                 document.getElementById('bt-dd').textContent = `${d.max_drawdown}p`;
                 const eqEl = document.getElementById('bt-equity');
                 const curve = d.equity_curve || [];
@@ -756,14 +826,9 @@
                     eqEl.innerHTML = curve.map(v => {
                         const h = Math.max(4, Math.abs(v) / maxEq * 100);
                         const c = v >= 0 ? 'var(--up-color)' : 'var(--down-color)';
-                        return `<div style="flex:1; height:${h}%; background:${c}; border-radius:2px 2px 0 0; min-width:2px; opacity:0.8;"></div>`;
+                        return `<div style="flex:1; height:${h}%; background:${c}; border-radius:2px 2px 0 0; min-width:2px; opacity:0.8; box-shadow:0 0 4px ${c};"></div>`;
                     }).join('');
-                } else {
-                    eqEl.innerHTML = '<div class="empty-state" style="width:100%;padding:20px">NO EQUITY DATA</div>';
-                }
-            } else {
-                document.getElementById('bt-wr').textContent = '--';
-                document.getElementById('bt-equity').innerHTML = `<div class="empty-state" style="width:100%;padding:20px">${res.error || 'BACKTEST UNAVAILABLE'}</div>`;
+                } else eqEl.innerHTML = '<div class="empty-state" style="width:100%">NO DATA</div>';
             }
         }
 
@@ -771,40 +836,28 @@
             const res = await api('/performance');
             if (res.success && res.data) {
                 const s = res.data.stats || {};
-                document.getElementById('perf-total').textContent = s.total || 0;
                 document.getElementById('perf-wr').textContent = `${(s.win_rate || 0).toFixed(0)}%`;
                 document.getElementById('perf-pnl').textContent = `${(s.total_pnl || 0).toFixed(1)}p`;
-                document.getElementById('perf-avg').textContent = `${(s.avg_pnl || 0).toFixed(1)}p`;
-                const t = res.data.tuning || {};
-                const recs = t.recommendations || [];
+                const t = res.data.tuning || {}; const recs = t.recommendations || [];
                 const recEl = document.getElementById('perf-recommendations');
                 if (recs.length > 0) {
                     recEl.innerHTML = recs.map(r => `
-                        <div class="info-row">
-                            <span class="label">${r.param}</span>
-                            <span class="val" style="font-size:0.65rem;">${r.action} (${r.suggested_change})</span>
-                        </div>
-                        <div style="font-size:0.55rem; color:var(--text-dim); padding:0 0 8px;">${r.reason}</div>
+                        <div class="info-row"><span class="label">${r.param}</span><span class="val" style="font-size:0.65rem; color:var(--text-main);">${r.action}</span></div>
+                        <div style="font-size:0.6rem; color:var(--text-dim); padding-bottom:8px;">${r.reason}</div>
                     `).join('');
-                } else {
-                    recEl.innerHTML = '<div class="empty-state" style="padding:20px">ALL PARAMETERS OPTIMAL ✅</div>';
-                }
-            } else {
-                document.getElementById('perf-recommendations').innerHTML =
-                    `<div class="empty-state" style="padding:20px">${res.error || 'PERFORMANCE DATA UNAVAILABLE'}</div>`;
+                } else recEl.innerHTML = '<div class="empty-state">ALL OPTIMAL ✅</div>';
             }
         }
 
         async function sync(activeTab = null) {
             if (!activeTab) activeTab = document.querySelector('.tab-content.active').id.replace('-view', '');
-            log(`Sync: ${activeTab}`);
 
-            // Parallel background tasks (non-blocking)
             api('/status').then(res => {
                 if (res.success && res.data) {
-                    const s = res.data;
-                    const mkt = document.getElementById('mkt-status');
+                    const s = res.data; const mkt = document.getElementById('mkt-status');
                     mkt.textContent = s.status; mkt.className = `market-badge status-${s.status.toLowerCase()}`;
+                    if (s.status === 'OPEN') mkt.style.boxShadow = '0 0 15px rgba(0, 255, 157, 0.4)';
+                    else mkt.style.boxShadow = 'none';
                     document.getElementById('current-session').textContent = `${s.session} SESSION`;
                 }
             });
@@ -816,92 +869,79 @@
                     const sign = (sum.change || 0) >= 0 ? '+' : '';
                     el.textContent = `${sign}${f5(sum.change)} (${sign}${f2(sum.change_pct)}%)`;
                     el.style.color = (sum.change || 0) >= 0 ? 'var(--up-color)' : 'var(--down-color)';
-                    document.getElementById('stat-range').textContent = `${(sum.range_pips || 0).toFixed(1)} Pips`;
+                    document.getElementById('stat-range').textContent = `${(sum.range_pips || 0).toFixed(1)} P`;
                     document.getElementById('stat-hilo').textContent = `${f5(sum.low)} / ${f5(sum.high)}`;
                 }
             });
 
-            // Tab-specific sync
             if (activeTab === 'terminal') {
                 const statusEl = document.getElementById('chart-status');
                 const data = await api(`/candles?timeframe=${currentTF}`);
-                if (data.success && data.candles && data.candles.length > 0) {
-                    candleSeries.setData(data.candles);
-                    statusEl.style.display = 'none';
-                } else {
-                    statusEl.style.display = 'flex';
-                    statusEl.textContent = data.error || "DATA SYNC PENDING";
-                }
+                if (data.success && data.candles?.length > 0) {
+                    candleSeries.setData(data.candles); statusEl.style.display = 'none';
+                } else { statusEl.style.display = 'flex'; statusEl.textContent = "SYNC PENDING"; }
             } else if (activeTab === 'forecast') {
                 const res = await api('/forecast');
                 if (res.success && res.data) {
                     const d = res.data;
                     document.getElementById('forecast-dir').textContent = d.direction;
                     document.getElementById('forecast-dir').style.color = d.direction === 'BUY' ? 'var(--up-color)' : d.direction === 'SELL' ? 'var(--down-color)' : 'var(--text-muted)';
+                    document.getElementById('forecast-dir').style.textShadow = `0 0 20px ${d.direction === 'BUY' ? 'var(--up-color)' : d.direction === 'SELL' ? 'var(--down-color)' : 'transparent'}`;
                     document.getElementById('forecast-conf-bar').style.width = `${(d.confidence || 0) * 100}%`;
+                    document.getElementById('forecast-conf-bar').style.backgroundColor = document.getElementById('forecast-dir').style.color;
+                    document.getElementById('forecast-conf-bar').style.color = document.getElementById('forecast-dir').style.color;
                     document.getElementById('forecast-conf-text').textContent = `${((d.confidence || 0) * 100).toFixed(0)}%`;
-                    document.getElementById('forecast-text').textContent = d.reasoning || "Awaiting reasoning...";
-                } else {
-                    document.getElementById('forecast-text').textContent = res.error || "Forecast engine offline";
+                    document.getElementById('forecast-text').textContent = d.reasoning || "...";
                 }
             } else if (activeTab === 'analysis') {
                 const res = await api('/analysis');
                 if (res.success && res.data) {
                     const ta = res.data; const ind = ta.indicators || {};
+                    const b = (ta.overall_bias || 'NEUTRAL').toUpperCase();
                     document.getElementById('node-analysis').innerHTML = `
-                        <div class="info-row"><span class="label">Bias</span><span class="val" style="color:var(--accent-primary)">${(ta.overall_bias || 'NEUTRAL').toUpperCase()}</span></div>
+                        <div class="info-row"><span class="label">Bias</span><span class="val" style="color:${b === 'BUY' ? 'var(--up-color)' : b === 'SELL' ? 'var(--down-color)' : 'var(--accent-primary)'};text-shadow:0 0 10px currentColor;">${b}</span></div>
                         <div class="info-row"><span class="label">RSI</span><span class="val">${f2(ind.RSI?.value)}</span></div>
                         <div class="info-row"><span class="label">MACD</span><span class="val">${ind.MACD?.signal_text || '---'}</span></div>
-                        <div class="info-row"><span class="label">ADX</span><span class="val">${f2(ind.ADX?.value)} (${ind.ADX?.strength || '---'})</span></div>
+                        <div class="info-row"><span class="label">ADX</span><span class="val">${f2(ind.ADX?.value)} (${ind.ADX?.strength || '-'})</span></div>
                         <div class="info-row"><span class="label">EMA 50</span><span class="val">${f5(ind.EMA?.ema50)}</span></div>
                         <div class="info-row"><span class="label">EMA 200</span><span class="val">${f5(ind.EMA?.ema200)}</span></div>
                         <div class="info-row"><span class="label">ATR</span><span class="val">${f2(ind.ATR?.pips)} Pips</span></div>
-                        <div class="info-row"><span class="label">Stochastic</span><span class="val">K:${f2(ind.Stochastic?.k)} D:${f2(ind.Stochastic?.d)}</span></div>
                     `;
                 }
             } else if (activeTab === 'macro') {
                 const res = await api('/macro');
                 if (res.success && res.data) {
-                    const m = res.data; const pkg = m.macro_data || {};
-                    const eu = pkg.eu_data || {}; const us = pkg.us_data || {};
+                    const m = res.data; const eu = m.macro_data?.eu_data || {}; const us = m.macro_data?.us_data || {};
                     document.getElementById('macro-data-list').innerHTML = `
-                        <div class="small-card"><div class="label">Fed Rate</div><div class="value">${f2(us.fed?.rate)}%</div></div>
-                        <div class="small-card"><div class="label">ECB Rate</div><div class="value">${f2(eu.ecb?.value)}%</div></div>
-                        <div class="small-card"><div class="label">US CPI</div><div class="value">${f2(us.cpi?.value)}</div></div>
-                        <div class="small-card"><div class="label">EU CPI</div><div class="value">${f2(eu.cpi?.value)}</div></div>
-                        <div class="small-card"><div class="label">Yield Spread</div><div class="value">${f2(eu.yield_spread?.spread)}%</div></div>
-                        <div class="small-card"><div class="label">Macro Bias</div><div class="value" style="color:${m.macro_impact === 'bullish' ? 'var(--up-color)' : m.macro_impact === 'bearish' ? 'var(--down-color)' : 'var(--text-muted)'}">${(m.macro_impact || '---').toUpperCase()}</div></div>
+                        <div class="glass-card" style="padding:16px"><div class="label-sm">Fed Rate</div><div class="val-md">${f2(us.fed?.rate)}%</div></div>
+                        <div class="glass-card" style="padding:16px"><div class="label-sm">ECB Rate</div><div class="val-md">${f2(eu.ecb?.value)}%</div></div>
+                        <div class="glass-card" style="padding:16px"><div class="label-sm">US CPI</div><div class="val-md">${f2(us.cpi?.value)}</div></div>
+                        <div class="glass-card" style="padding:16px"><div class="label-sm">EU CPI</div><div class="val-md">${f2(eu.cpi?.value)}</div></div>
+                        <div class="glass-card" style="padding:16px"><div class="label-sm">Spread</div><div class="val-md">${f2(eu.yield_spread?.spread)}%</div></div>
+                        <div class="glass-card" style="padding:16px"><div class="label-sm">Bias</div><div class="val-md" style="color:${m.macro_impact === 'bullish' ? 'var(--up-color)' : m.macro_impact === 'bearish' ? 'var(--down-color)' : 'var(--text-main)'}; text-shadow:0 0 10px currentColor;">${(m.macro_impact || '---').toUpperCase()}</div></div>
                     `;
-                    // Build a cleaner context text from the data
                     const spread = eu.yield_spread;
-                    const ctx = spread
-                        ? `US 10Y ${f2(spread.us_10y)}% vs DE 10Y ${f2(spread.german_10y)}% → Spread ${f2(spread.spread)}%. Fed ${f2(us.fed?.rate)}% vs ECB ${f2(eu.ecb?.value)}%.`
-                        : "Macro data loaded.";
-                    document.getElementById('macro-context').textContent = ctx;
-                } else {
-                    document.getElementById('macro-context').textContent = res.error || "Macro data unavailable";
+                    document.getElementById('macro-context').textContent = spread ? `US 10Y ${f2(spread.us_10y)}% vs DE 10Y ${f2(spread.german_10y)}% → Spread ${f2(spread.spread)}%.` : "Data loaded.";
                 }
             } else if (activeTab === 'signals') {
                 const res = await api('/signals');
                 const list = document.getElementById('signal-list');
                 if (res.success && res.signals?.length > 0) {
                     list.innerHTML = res.signals.map(s => `
-                        <div class="card" style="padding: 16px;">
-                            <div style="display:flex; justify-content:space-between; margin-bottom:12px;">
-                                <span style="font-weight:700; color: ${s.direction === 'BUY' ? 'var(--up-color)' : 'var(--down-color)'}; font-size: 0.6rem;">${s.direction} SIGNAL</span>
-                                <span style="font-size: 0.55rem; color: var(--text-dim);">${new Date(s.timestamp || s.created_at).toLocaleTimeString()}</span>
+                        <div class="glass-card bento-full" style="padding: 20px;">
+                            <div style="display:flex; justify-content:space-between; margin-bottom:16px;">
+                                <span style="font-weight:800; color: ${s.direction === 'BUY' ? 'var(--up-color)' : 'var(--down-color)'}; font-size: 0.75rem; letter-spacing:2px; text-shadow: 0 0 10px currentColor;">${s.direction} SIGNAL</span>
+                                <span style="font-size: 0.6rem; color: var(--text-dim);">${new Date(s.timestamp || s.created_at).toLocaleTimeString()}</span>
                             </div>
                             <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; text-align:center;">
-                                <div><small style="display:block; font-size:0.5rem; color:var(--text-dim);">ENTRY</small><b style="font-family:'Fira Code'; font-size:0.75rem;">${f5(s.entry_price)}</b></div>
-                                <div><small style="display:block; font-size:0.5rem; color:var(--text-dim);">STOP</small><b style="font-family:'Fira Code'; font-size:0.75rem; color:var(--down-color)">${f5(s.stop_loss)}</b></div>
-                                <div><small style="display:block; font-size:0.5rem; color:var(--text-dim);">TARGET</small><b style="font-family:'Fira Code'; font-size:0.75rem; color:var(--up-color)">${f5(s.take_profit)}</b></div>
+                                <div><div class="label-sm">ENTRY</div><div class="val-md">${f5(s.entry_price)}</div></div>
+                                <div><div class="label-sm">STOP</div><div class="val-md" style="color:var(--down-color)">${f5(s.stop_loss)}</div></div>
+                                <div><div class="label-sm">TARGET</div><div class="val-md" style="color:var(--up-color)">${f5(s.take_profit)}</div></div>
                             </div>
                         </div>`).join('');
-                } else list.innerHTML = `<div class="empty-state">NO RECENT SIGNALS</div>`;
+                } else list.innerHTML = `<div class="glass-card bento-full empty-state">NO ACTIVE SIGNALS</div>`;
             } else if (activeTab === 'stats') {
-                // Load both backtest and performance in parallel
-                runBacktest(null);
-                loadPerformance();
+                runBacktest(null); loadPerformance();
             } else if (activeTab === 'briefing') {
                 const res = await api('/briefing');
                 if (res.success && res.data) {
@@ -910,28 +950,17 @@
                     document.getElementById('briefing-urgency').textContent = (b.urgency || 'normal').toUpperCase();
                     document.getElementById('briefing-urgency').style.color = urgColors[b.urgency] || 'var(--accent-primary)';
                     document.getElementById('briefing-summary').textContent = b.summary || 'No data';
-                    const secEl = document.getElementById('briefing-sections');
-                    secEl.innerHTML = (b.sections || []).map(s => `
-                        <div class="card" style="margin-top: 12px;">
-                            <h4 style="font-size:0.55rem; color:var(--accent-primary); margin-bottom:8px; text-transform:uppercase;">${s.title}</h4>
-                            <p style="font-size:0.7rem; color:var(--text-muted); line-height:1.5;">${s.content}</p>
+                    document.getElementById('briefing-sections').innerHTML = (b.sections || []).map(s => `
+                        <div class="glass-card bento-full">
+                            <h4 style="font-size:0.6rem; color:var(--text-main); margin-bottom:8px; text-transform:uppercase; letter-spacing:1px;">${s.title}</h4>
+                            <p style="font-size:0.75rem; color:var(--text-muted); line-height:1.6;">${s.content}</p>
                         </div>
                     `).join('');
-                } else {
-                    document.getElementById('briefing-summary').textContent = res.error || "Briefing engine offline";
                 }
             }
         }
 
-        window.onload = async () => {
-            log("Zenith Terminal v5.0 Initializing...");
-            log(`API Root: ${API_ROOT || '(same-origin)'}`);
-            initChart();
-            await sync();
-            setInterval(() => sync(), 15000);
-        };
-
-        window.onerror = (m, u, l) => log(`RUNTIME ERR: ${m} (Line ${l})`, 'error');
+        window.onload = async () => { initChart(); await sync(); setInterval(() => sync(), 15000); };
     </script>
 </body>
 
