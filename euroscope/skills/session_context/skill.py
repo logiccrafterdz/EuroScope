@@ -1,6 +1,6 @@
 import logging
 import time
-from datetime import datetime, date
+from datetime import datetime, date, UTC
 from enum import Enum
 
 from ..base import BaseSkill, SkillCategory, SkillContext, SkillResult
@@ -38,7 +38,7 @@ class SessionContextSkill(BaseSkill):
         try:
             regime, rules = self._get_cached_context()
             if not regime:
-                now = datetime.utcnow()
+                now = datetime.now(UTC)
                 detected = self._detect_session(now)
                 regime = detected.value
                 rules = self._get_session_rules(regime)

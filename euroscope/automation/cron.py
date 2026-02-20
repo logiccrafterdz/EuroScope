@@ -9,7 +9,7 @@ import asyncio
 import logging
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 from typing import Callable, Optional
 from enum import Enum
 
@@ -58,7 +58,7 @@ class ProactiveAlertCache:
         self.user_alerts: dict[int, list[datetime]] = {}
 
     def _prune(self) -> None:
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         self.alerts = {
             (uid, h, ts) for uid, h, ts in self.alerts
             if now - ts < self.cache_duration
@@ -79,8 +79,8 @@ class ProactiveAlertCache:
     def record_alert(self, chat_id: int, message: str) -> None:
         self._prune()
         message_hash = hash(message.lower().strip()[:50])
-        self.alerts.add((chat_id, message_hash, datetime.utcnow()))
-        self.user_alerts.setdefault(chat_id, []).append(datetime.utcnow())
+        self.alerts.add((chat_id, message_hash, datetime.now(UTC)))
+        self.user_alerts.setdefault(chat_id, []).append(datetime.now(UTC))
 
     def within_user_limit(self, chat_id: int) -> bool:
         self._prune()
@@ -191,7 +191,7 @@ class CronScheduler:
             return False
 
     def _seconds_until(self, hour: int, minute: int) -> int:
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         target = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
         if target <= now:
             target += timedelta(days=1)
@@ -216,7 +216,7 @@ class CronScheduler:
         self.bot = bot
 
     def _is_quiet_time(self) -> bool:
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         quiet_hours = getattr(self.config, "proactive_quiet_hours", None)
         if quiet_hours:
             start, end = quiet_hours
@@ -459,7 +459,7 @@ class CronScheduler:
                     "task": task.name,
                     "status": "success",
                     "elapsed_ms": elapsed,
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "timestamp": datetime.now(UTC).isoformat(),
                 })
 
                 if task.max_runs and task.run_count >= task.max_runs:
@@ -472,7 +472,7 @@ class CronScheduler:
                     "task": task.name,
                     "status": "error",
                     "error": str(e)[:200],
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "timestamp": datetime.now(UTC).isoformat(),
                 })
 
         # Cap history to prevent unbounded growth

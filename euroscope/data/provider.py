@@ -7,7 +7,7 @@ using yfinance with local caching.
 
 import asyncio
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 from typing import Optional
 
 import pandas as pd
@@ -69,7 +69,7 @@ class PriceProvider:
                 "change_pct": round(change_pct, 3),
                 "direction": "🟢" if change >= 0 else "🔴",
                 "spread_pips": round(abs(day_high - day_low) * 10000, 1),
-                "timestamp": datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC"),
+                "timestamp": datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC"),
             }
         except Exception as e:
             logger.error(f"Error fetching price: {e}")
@@ -96,7 +96,7 @@ class PriceProvider:
         cache_key = f"candles_{tf}"
         if cache_key in self._cache:
             df, cached_at = self._cache[cache_key]
-            if datetime.utcnow() - cached_at < self._cache_ttl:
+            if datetime.now(UTC) - cached_at < self._cache_ttl:
                 return df.tail(count).copy()
 
         try:
@@ -123,7 +123,7 @@ class PriceProvider:
                 }).dropna()
 
             # Cache it
-            self._cache[cache_key] = (df, datetime.utcnow())
+            self._cache[cache_key] = (df, datetime.now(UTC))
 
             logger.info(f"Fetched {len(df)} candles for {tf}")
             return df.tail(count).copy()

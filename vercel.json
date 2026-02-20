@@ -1,8 +1,8 @@
 {
   "rewrites": [
     {
-      "source": "/api/:path*",
-      "destination": "https://site--euroscope--zyn6vtt48jxf.code.run/api/:path*"
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
   ]
 }

@@ -50,8 +50,8 @@ def generate_chart(df: pd.DataFrame, timeframe: str = "H1",
     try:
         out_path = Path(output_dir)
         out_path.mkdir(parents=True, exist_ok=True)
-        from datetime import datetime
-        ts = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+        from datetime import datetime, UTC, UTC
+        ts = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
         filename = out_path / f"eurusd_{timeframe.lower()}_{ts}.png"
 
         # Build EMA overlays

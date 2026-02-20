@@ -7,7 +7,7 @@ Free tier: 5 API calls per minute, 500 per day.
 
 import logging
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 from typing import Optional
 
 import httpx
@@ -97,7 +97,7 @@ class AlphaVantageProvider:
         cache_key = f"av_candles_{tf}"
         if cache_key in self._cache:
             df, cached_at = self._cache[cache_key]
-            if datetime.utcnow() - cached_at < self._cache_ttl:
+            if datetime.now(UTC) - cached_at < self._cache_ttl:
                 return df.tail(count).copy()
 
         try:
@@ -156,7 +156,7 @@ class AlphaVantageProvider:
                 }).dropna()
 
             # Cache
-            self._cache[cache_key] = (df, datetime.utcnow())
+            self._cache[cache_key] = (df, datetime.now(UTC))
             logger.info(f"Alpha Vantage: fetched {len(df)} candles for {tf}")
             return df.tail(count).copy()
 

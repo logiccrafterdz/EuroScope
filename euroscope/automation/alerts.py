@@ -6,7 +6,7 @@ Monitors skill results and triggers alerts based on configurable rules.
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, UTC
 from enum import Enum, IntEnum
 from typing import Callable, Optional, Any
 
@@ -70,7 +70,7 @@ class Alert:
 
     def __post_init__(self):
         if not self.timestamp:
-            self.timestamp = datetime.utcnow().isoformat()
+            self.timestamp = datetime.now(UTC).isoformat()
 
 
 @dataclass
@@ -156,7 +156,7 @@ class SmartAlerts:
         Check all rules against data and return triggered alerts.
         """
         triggered = []
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         now_ts = now.timestamp()
 
         session_regime = str(data.get("session_regime", "")).lower()

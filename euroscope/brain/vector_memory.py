@@ -7,7 +7,7 @@ for semantic search and context retrieval.
 
 import logging
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 from typing import Optional
 
 logger = logging.getLogger("euroscope.brain.vector_memory")
@@ -85,10 +85,10 @@ class VectorMemory:
         if not self._available:
             return None
 
-        doc_id = f"analysis_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"
+        doc_id = f"analysis_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}"
         meta = metadata or {}
-        meta["stored_at"] = datetime.utcnow().isoformat()
-        meta.setdefault("timestamp", datetime.utcnow().isoformat())
+        meta["stored_at"] = datetime.now(UTC).isoformat()
+        meta.setdefault("timestamp", datetime.now(UTC).isoformat())
         meta["type"] = "analysis"
 
         # ChromaDB metadata values must be str, int, float, or bool
@@ -152,10 +152,10 @@ class VectorMemory:
         if not self._available:
             return None
 
-        doc_id = f"insight_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"
+        doc_id = f"insight_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}"
         meta = {
-            "stored_at": datetime.utcnow().isoformat(),
-            "timestamp": datetime.utcnow().isoformat(),
+            "stored_at": datetime.now(UTC).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "type": "insight",
             "tags": ",".join(tags) if tags else "",
         }
@@ -177,11 +177,11 @@ class VectorMemory:
         if not self._available:
             return None
 
-        doc_id = f"event_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"
+        doc_id = f"event_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}"
         meta = metadata or {}
         meta.update({
-            "stored_at": datetime.utcnow().isoformat(),
-            "timestamp": datetime.utcnow().isoformat(),
+            "stored_at": datetime.now(UTC).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "type": "market_event",
             "impact": impact,
         })
@@ -245,7 +245,7 @@ class VectorMemory:
         if not self._available:
             return 0
 
-        cutoff_date = datetime.utcnow() - timedelta(days=ttl_days)
+        cutoff_date = datetime.now(UTC) - timedelta(days=ttl_days)
         cutoff_iso = cutoff_date.isoformat()
         total_deleted = 0
 

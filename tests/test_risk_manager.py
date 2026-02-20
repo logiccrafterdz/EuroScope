@@ -2,7 +2,7 @@
 Tests for risk manager: position sizing, stop loss, drawdown control.
 """
 
-from datetime import datetime
+from datetime import datetime, UTC
 
 import pytest
 
@@ -136,7 +136,7 @@ class TestAssessTrade:
     def test_drawdown_blocks_trade(self):
         rm = RiskManager(RiskConfig(max_daily_drawdown=3.0))
         rm._daily_pnl = -350  # > 3% of 10000
-        rm._daily_pnl_date = __import__("datetime").datetime.utcnow().strftime("%Y-%m-%d")
+        rm._daily_pnl_date = __import__("datetime").datetime.now(UTC).strftime("%Y-%m-%d")
         trade = rm.assess_trade("BUY", 1.0900, atr=0.0050)
         assert trade.approved is False
         assert any("drawdown" in w.lower() for w in trade.warnings)
@@ -262,7 +262,7 @@ class TestAdaptiveRiskManagement:
     async def test_reject_high_drawdown(self):
         skill = RiskManagementSkill()
         skill.manager._daily_pnl = -600.0
-        skill.manager._daily_pnl_date = datetime.utcnow().strftime("%Y-%m-%d")
+        skill.manager._daily_pnl_date = datetime.now(UTC).strftime("%Y-%m-%d")
         ctx = SkillContext()
         ctx.metadata["session_regime"] = "london"
         ctx.metadata["market_intent"] = {"confidence": 0.9}

@@ -7,7 +7,7 @@ to learn from past mistakes.
 
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, UTC
 from typing import Optional
 
 from ..data.storage import Storage
@@ -107,7 +107,7 @@ class Memory:
         existing = self.storage.get_memory("learning_insights") or ""
         # Keep last 5 insights
         entries = existing.split("\n") if existing else []
-        entries.append(f"[{datetime.utcnow().strftime('%Y-%m-%d')}] {insight}")
+        entries.append(f"[{datetime.now(UTC).strftime('%Y-%m-%d')}] {insight}")
         entries = entries[-5:]
         self.storage.set_memory("learning_insights", "\n".join(entries))
 

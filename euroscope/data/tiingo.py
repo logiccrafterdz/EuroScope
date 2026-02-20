@@ -7,7 +7,7 @@ Free tier: 1,000 requests per day, 50 per hour.
 
 import logging
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 from typing import Optional
 
 import httpx
@@ -92,7 +92,7 @@ class TiingoProvider:
         if not start_date and not end_date:
             if cache_key in self._cache:
                 df, cached_at = self._cache[cache_key]
-                if datetime.utcnow() - cached_at < self._cache_ttl:
+                if datetime.now(UTC) - cached_at < self._cache_ttl:
                     return df.tail(count).copy()
 
         try:
@@ -143,7 +143,7 @@ class TiingoProvider:
                 df.index = df.index.tz_localize(None)
 
             if not start_date and not end_date:
-                self._cache[cache_key] = (df, datetime.utcnow())
+                self._cache[cache_key] = (df, datetime.now(UTC))
                 return df.tail(count).copy()
             
             return df.copy()

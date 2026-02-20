@@ -1,7 +1,7 @@
 import csv
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, UTC
 from pathlib import Path
 from typing import Any, Callable, Optional
 
@@ -21,7 +21,7 @@ class DailyTracker:
         else:
             base = Path(__file__).resolve().parents[1]
             self._log_path = base / "workspace" / "paper_trading_log.csv"
-        self._now_fn = now_fn or datetime.utcnow
+        self._now_fn = now_fn or (lambda: datetime.now(UTC))
 
     def set_storage(self, storage):
         self._storage = storage

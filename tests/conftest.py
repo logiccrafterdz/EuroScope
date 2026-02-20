@@ -4,7 +4,7 @@ Shared pytest fixtures for EuroScope tests.
 
 import os
 import tempfile
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 
 import numpy as np
 import pandas as pd
@@ -44,7 +44,7 @@ def sample_ohlcv():
     open_prices = close + np.random.normal(0, 0.0002, n)
     volume = np.random.randint(1000, 50000, n).astype(float)
 
-    dates = pd.date_range(end=datetime.utcnow(), periods=n, freq="1h")
+    dates = pd.date_range(end=datetime.now(UTC), periods=n, freq="1h")
 
     df = pd.DataFrame({
         "Open": open_prices,
@@ -71,7 +71,7 @@ def small_ohlcv():
     open_prices = close + np.random.normal(0, 0.0001, n)
     volume = np.random.randint(100, 5000, n).astype(float)
 
-    dates = pd.date_range(end=datetime.utcnow(), periods=n, freq="1h")
+    dates = pd.date_range(end=datetime.now(UTC), periods=n, freq="1h")
 
     return pd.DataFrame({
         "Open": open_prices,
@@ -93,7 +93,7 @@ def uptrend_ohlcv():
     open_prices = close - 0.0002
     volume = np.full(n, 10000.0)
 
-    dates = pd.date_range(end=datetime.utcnow(), periods=n, freq="1h")
+    dates = pd.date_range(end=datetime.now(UTC), periods=n, freq="1h")
 
     return pd.DataFrame({
         "Open": open_prices,
@@ -115,7 +115,7 @@ def downtrend_ohlcv():
     open_prices = close + 0.0002
     volume = np.full(n, 10000.0)
 
-    dates = pd.date_range(end=datetime.utcnow(), periods=n, freq="1h")
+    dates = pd.date_range(end=datetime.now(UTC), periods=n, freq="1h")
 
     return pd.DataFrame({
         "Open": open_prices,

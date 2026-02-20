@@ -6,7 +6,7 @@ performance metrics, and user preferences.
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, UTC
 from typing import Optional
 
 
@@ -30,7 +30,7 @@ class TradingSignal:
 
     def __post_init__(self):
         if not self.created_at:
-            self.created_at = datetime.utcnow().isoformat()
+            self.created_at = datetime.now(UTC).isoformat()
         if self.stop_loss and self.entry_price and self.take_profit:
             risk = abs(self.entry_price - self.stop_loss)
             reward = abs(self.take_profit - self.entry_price)
@@ -54,7 +54,7 @@ class NewsEvent:
 
     def __post_init__(self):
         if not self.fetched_at:
-            self.fetched_at = datetime.utcnow().isoformat()
+            self.fetched_at = datetime.now(UTC).isoformat()
 
 
 @dataclass
@@ -79,7 +79,7 @@ class PerformanceMetric:
 
     def __post_init__(self):
         if not self.calculated_at:
-            self.calculated_at = datetime.utcnow().isoformat()
+            self.calculated_at = datetime.now(UTC).isoformat()
         if self.total_signals > 0:
             self.win_rate = round(self.winning_signals / self.total_signals * 100, 1)
 
@@ -104,7 +104,7 @@ class UserPreference:
     id: Optional[int] = None
 
     def __post_init__(self):
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(UTC).isoformat()
         if not self.created_at:
             self.created_at = now
         if not self.updated_at:

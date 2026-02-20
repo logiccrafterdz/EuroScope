@@ -26,6 +26,7 @@ class TestMainMenu:
         config = MagicMock()
         config.telegram.token = "fake"
         config.telegram.allowed_users = []
+        config.telegram.web_app_url = ""  # Disable WebApp row for deterministic test
         config.data.brave_api_key = ""
         config.data.alphavantage_key = ""
         config.data.tiingo_key = ""
@@ -67,6 +68,7 @@ class TestMainMenu:
         config = MagicMock()
         config.telegram.token = "fake"
         config.telegram.allowed_users = []
+        config.telegram.web_app_url = ""  # Disable WebApp row for deterministic test
         config.data.brave_api_key = ""
         config.llm = MagicMock()
         config.data.alphavantage_key = ""
@@ -97,7 +99,9 @@ class TestMainMenu:
 
         for row in kb.inline_keyboard:
             for button in row:
-                assert button.callback_data.startswith(("cmd:", "settings:"))
+                # WebApp buttons have web_app instead of callback_data
+                if button.callback_data:
+                    assert button.callback_data.startswith(("cmd:", "settings:"))
 
     def test_build_app_registers_callback_handler(self):
         """Verify CallbackQueryHandler is registered."""

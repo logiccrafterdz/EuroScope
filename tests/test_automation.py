@@ -4,7 +4,7 @@ Tests for Phase 5 — Heartbeat, Cron, EventBus, SmartAlerts.
 
 import asyncio
 import time
-from datetime import datetime
+from datetime import datetime, UTC
 from unittest.mock import MagicMock, AsyncMock
 
 import pandas as pd
@@ -171,7 +171,7 @@ class TestDailyTracker:
     def test_daily_summary_counts(self):
         storage = Storage(":memory:")
         tracker = DailyTracker(storage=storage)
-        date_value = datetime.utcnow().strftime("%Y-%m-%d")
+        date_value = datetime.now(UTC).strftime("%Y-%m-%d")
 
         storage.save_trade_journal(
             direction="BUY",

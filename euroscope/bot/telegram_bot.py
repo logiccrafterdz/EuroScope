@@ -1812,12 +1812,20 @@ class EuroScopeBot:
         """Standard health check endpoint."""
         return web.Response(text="OK", content_type="text/plain")
 
+    async def _serve_mini_app(self, request):
+        """Serve the Zenith Terminal Mini App directly from the bot server."""
+        mini_app_path = os.path.join(os.path.dirname(__file__), "mini_app", "index.html")
+        if os.path.exists(mini_app_path):
+            return web.FileResponse(mini_app_path, headers={"Content-Type": "text/html; charset=utf-8"})
+        return web.Response(text="Mini App not found", status=404)
+
     async def start_api_server(self):
         """Run the AIOHTTP server as a background task with robust error handling."""
         try:
             app = web.Application(middlewares=[self._cors_middleware])
             app.add_routes([
-                web.get('/', self._api_health),
+                web.get('/', self._serve_mini_app),
+                web.get('/app', self._serve_mini_app),
                 web.get('/healthz', self._api_health),
                 web.get('/api/summary', self._api_summary),
                 web.get('/api/signals', self._api_signals),
@@ -1833,7 +1841,8 @@ class EuroScopeBot:
             runner = web.AppRunner(app)
             await runner.setup()
             site = web.TCPSite(runner, '0.0.0.0', port)
-            logger.info(f"📡 Zenith API established at: http://0.0.0.0:{port}")
+            logger.info(f"📡 Zenith API + Mini App at: http://0.0.0.0:{port}")
+            logger.info(f"📱 Mini App URL: http://0.0.0.0:{port}/app")
             await site.start()
         except Exception as e:
             logger.error(f"❌ API Server CRASH: {e}")

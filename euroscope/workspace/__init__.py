@@ -6,7 +6,7 @@ and user preferences as structured context for the brain.
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, UTC
 from pathlib import Path
 from typing import Optional
 
@@ -91,7 +91,7 @@ class WorkspaceManager:
         """
         lines = [
             "# Heartbeat\n",
-            f"Last updated: {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}\n",
+            f"Last updated: {datetime.now(UTC).strftime('%Y-%m-%d %H:%M UTC')}\n",
             "| Component | Status | Last Check |",
             "|-----------|--------|------------|",
         ]
@@ -104,7 +104,7 @@ class WorkspaceManager:
     def append_memory(self, entry: str):
         """Append a new entry to MEMORY.md under Recent Analyses."""
         current = self._read("MEMORY.md")
-        timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
+        timestamp = datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
         new_entry = f"\n- [{timestamp}] {entry}"
         if "## Recent Analyses" in current:
             current = current.replace(
@@ -142,7 +142,7 @@ class WorkspaceManager:
 
         lines = [
             "# Memory\n",
-            f"> Auto-refreshed: {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}\n",
+            f"> Auto-refreshed: {datetime.now(UTC).strftime('%Y-%m-%d %H:%M UTC')}\n",
         ]
 
         # 1. Prediction accuracy

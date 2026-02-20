@@ -8,7 +8,7 @@ multiplier for each pattern/timeframe combination.
 import json
 import logging
 import re
-from datetime import datetime
+from datetime import datetime, UTC
 from typing import Optional, List, Dict, Any
 
 from ..data.storage import Storage
@@ -243,7 +243,7 @@ class PatternTracker:
 
     def get_current_session(self, timestamp: Optional[datetime] = None) -> str:
         """Determines the trading session based on UTC time."""
-        now = timestamp or datetime.utcnow()
+        now = timestamp or datetime.now(UTC)
         hour = now.hour
         
         if 8 <= hour < 12:

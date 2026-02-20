@@ -8,7 +8,7 @@ database, price API, news API, LLM, and tracks errors.
 import logging
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 from typing import Optional
 
 from ..data.storage import Storage
@@ -63,7 +63,7 @@ class HealthMonitor:
             severity: "warning", "error", or "critical"
         """
         entry = {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "component": component,
             "error": error,
             "severity": severity,
@@ -82,7 +82,7 @@ class HealthMonitor:
 
     def get_error_rate(self, hours: float = 1.0) -> float:
         """Get error rate per the given time window."""
-        cutoff = datetime.utcnow() - timedelta(hours=hours)
+        cutoff = datetime.now(UTC) - timedelta(hours=hours)
         recent = [
             e for e in self._errors
             if datetime.fromisoformat(e["timestamp"]) > cutoff
@@ -108,7 +108,7 @@ class HealthMonitor:
             status.healthy = False
             status.error = str(e)
             self.record_error("database", str(e))
-        status.last_check = datetime.utcnow().isoformat()
+        status.last_check = datetime.now(UTC).isoformat()
         return status
 
     def check_price_api(self, provider=None) -> ComponentStatus:
@@ -117,7 +117,7 @@ class HealthMonitor:
         if provider is None:
             status.healthy = True
             status.response_time_ms = 0
-            status.last_check = datetime.utcnow().isoformat()
+            status.last_check = datetime.now(UTC).isoformat()
             return status
 
         start = time.time()
@@ -132,7 +132,7 @@ class HealthMonitor:
             status.healthy = False
             status.error = str(e)
             self.record_error("price_api", str(e))
-        status.last_check = datetime.utcnow().isoformat()
+        status.last_check = datetime.now(UTC).isoformat()
         return status
 
     async def check_price_api_async(self, provider=None) -> ComponentStatus:
@@ -141,7 +141,7 @@ class HealthMonitor:
         if provider is None:
             status.healthy = True
             status.response_time_ms = 0
-            status.last_check = datetime.utcnow().isoformat()
+            status.last_check = datetime.now(UTC).isoformat()
             return status
 
         start = time.time()
@@ -161,7 +161,7 @@ class HealthMonitor:
             status.healthy = False
             status.error = str(e)
             self.record_error("price_api", str(e))
-        status.last_check = datetime.utcnow().isoformat()
+        status.last_check = datetime.now(UTC).isoformat()
         return status
 
     def check_llm(self, agent=None) -> ComponentStatus:
@@ -170,7 +170,7 @@ class HealthMonitor:
         if agent is None:
             status.healthy = True
             status.response_time_ms = 0
-            status.last_check = datetime.utcnow().isoformat()
+            status.last_check = datetime.now(UTC).isoformat()
             return status
 
         start = time.time()
@@ -185,7 +185,7 @@ class HealthMonitor:
             status.healthy = False
             status.error = str(e)
             self.record_error("llm", str(e))
-        status.last_check = datetime.utcnow().isoformat()
+        status.last_check = datetime.now(UTC).isoformat()
         return status
 
     # ── Full Health Check ────────────────────────────────────
