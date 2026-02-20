@@ -199,6 +199,42 @@ class LLMRouter:
             lambda err: f"❌ AI unavailable — all providers failed: {err}",
         )
 
+    async def chat_json(
+        self,
+        messages: list[dict],
+        temperature: float = None,
+        max_tokens: int = None,
+    ) -> dict:
+        """
+        Send chat request with JSON response format.
+
+        Uses `response_format: {"type": "json_object"}` (supported by DeepSeek & OpenAI).
+        Falls back to extracting JSON from free-text if the provider doesn't support it.
+
+        Args:
+            messages: list of {"role": ..., "content": ...}
+                      IMPORTANT: The system prompt MUST mention "JSON" for this to work.
+            temperature: override provider default
+            max_tokens: override provider default
+
+        Returns:
+            Parsed JSON dict, or {"error": "..."} on failure
+        """
+        if not self.providers:
+            return {"error": "No LLM providers configured"}
+
+        self._call_count += 1
+
+        async def call_fn(provider):
+            return await self._call_provider_json(
+                provider, messages, temperature, max_tokens
+            )
+
+        return await self._retry_with_fallback(
+            call_fn,
+            lambda err: {"error": f"All providers failed: {err}"},
+        )
+
     async def chat_with_functions(
         self,
         messages: list[dict],
@@ -291,6 +327,90 @@ class LLMRouter:
         reply = data["choices"][0]["message"]["content"]
         self._log_usage(provider.name, data)
         return reply
+
+    async def _call_provider_json(
+        self,
+        provider: LLMProvider,
+        messages: list[dict],
+        temperature: float = None,
+        max_tokens: int = None,
+    ) -> dict:
+        """
+        Call provider requesting JSON output via response_format.
+
+        Falls back to extracting JSON from free-text if response_format
+        is not supported (HTTP 400).
+        """
+        import re
+
+        temp = temperature if temperature is not None else provider.temperature
+        tokens = max_tokens if max_tokens is not None else provider.max_tokens
+
+        payload = {
+            "model": provider.model,
+            "messages": messages,
+            "max_tokens": tokens,
+            "temperature": temp,
+            "response_format": {"type": "json_object"},
+        }
+
+        async with httpx.AsyncClient(timeout=60) as client:
+            try:
+                response = await client.post(
+                    f"{provider.api_base}/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {provider.api_key}",
+                        "Content-Type": "application/json",
+                    },
+                    json=payload,
+                )
+                response.raise_for_status()
+                data = response.json()
+            except httpx.HTTPStatusError as e:
+                if e.response.status_code == 400:
+                    # Provider may not support response_format — fall back to plain
+                    logger.info(f"{provider.name}: response_format unsupported, falling back to plain")
+                    payload.pop("response_format")
+                    response = await client.post(
+                        f"{provider.api_base}/chat/completions",
+                        headers={
+                            "Authorization": f"Bearer {provider.api_key}",
+                            "Content-Type": "application/json",
+                        },
+                        json=payload,
+                    )
+                    response.raise_for_status()
+                    data = response.json()
+                else:
+                    raise
+
+        raw = data["choices"][0]["message"]["content"] or ""
+        self._log_usage(provider.name, data)
+
+        # Try to parse as JSON directly
+        try:
+            return json.loads(raw)
+        except json.JSONDecodeError:
+            pass
+
+        # Try extracting JSON from markdown code block
+        match = re.search(r"```(?:json)?\s*\n?(.*?)\n?\s*```", raw, re.DOTALL)
+        if match:
+            try:
+                return json.loads(match.group(1))
+            except json.JSONDecodeError:
+                pass
+
+        # Try finding first { ... } block
+        match = re.search(r"\{.*\}", raw, re.DOTALL)
+        if match:
+            try:
+                return json.loads(match.group(0))
+            except json.JSONDecodeError:
+                pass
+
+        logger.warning(f"Could not parse JSON from LLM response: {raw[:200]}")
+        return {"error": "Could not parse JSON from response", "raw": raw[:500]}
 
     async def _call_provider_payload(
         self,
