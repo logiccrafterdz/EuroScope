@@ -405,6 +405,9 @@
                 <button class="tab-btn" id="tab-signals" onclick="switchTab('signals')">Signals</button>
                 <button class="tab-btn" id="tab-analysis" onclick="switchTab('analysis')">Analysis</button>
                 <button class="tab-btn" id="tab-macro" onclick="switchTab('macro')">Macro</button>
+                <button class="tab-btn" id="tab-backtest" onclick="switchTab('backtest')">Backtest</button>
+                <button class="tab-btn" id="tab-performance" onclick="switchTab('performance')">Perf</button>
+                <button class="tab-btn" id="tab-briefing" onclick="switchTab('briefing')">Briefing</button>
                 <button class="tab-btn" id="tab-alerts" onclick="switchTab('alerts')">System</button>
             </nav>
         </div>
@@ -512,6 +515,105 @@
             </div>
         </div>
 
+        <!-- BACKTEST DASHBOARD TAB -->
+        <div id="backtest-view" class="tab-content">
+            <div class="card">
+                <h3
+                    style="font-size: 0.6rem; color: var(--accent-primary); letter-spacing: 2px; margin-bottom: 16px; text-transform: uppercase;">
+                    Backtest Engine</h3>
+                <div style="display: flex; gap: 8px; margin-bottom: 16px;">
+                    <button class="tf-btn active" onclick="runBacktest(null)" style="flex:1">All</button>
+                    <button class="tf-btn" onclick="runBacktest('trend_following')" style="flex:1">Trend</button>
+                    <button class="tf-btn" onclick="runBacktest('mean_reversion')" style="flex:1">MR</button>
+                    <button class="tf-btn" onclick="runBacktest('breakout')" style="flex:1">Breakout</button>
+                </div>
+                <div id="bt-stats" style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
+                    <div class="small-card">
+                        <div class="label">Win Rate</div>
+                        <div id="bt-wr" class="value">--%</div>
+                    </div>
+                    <div class="small-card">
+                        <div class="label">Total P/L</div>
+                        <div id="bt-pnl" class="value">-- pips</div>
+                    </div>
+                    <div class="small-card">
+                        <div class="label">Trades</div>
+                        <div id="bt-trades" class="value">--</div>
+                    </div>
+                    <div class="small-card">
+                        <div class="label">Profit Factor</div>
+                        <div id="bt-pf" class="value">--</div>
+                    </div>
+                    <div class="small-card">
+                        <div class="label">Sharpe</div>
+                        <div id="bt-sharpe" class="value">--</div>
+                    </div>
+                    <div class="small-card">
+                        <div class="label">Max DD</div>
+                        <div id="bt-dd" class="value">--</div>
+                    </div>
+                </div>
+            </div>
+            <div class="card">
+                <h4
+                    style="font-size: 0.55rem; color: var(--accent-primary); margin-bottom: 12px; text-transform: uppercase;">
+                    Equity Curve</h4>
+                <div id="bt-equity" style="height: 120px; display: flex; align-items: flex-end; gap: 1px;"></div>
+            </div>
+        </div>
+
+        <!-- PERFORMANCE DASHBOARD TAB -->
+        <div id="performance-view" class="tab-content">
+            <div class="card">
+                <h3
+                    style="font-size: 0.6rem; color: var(--accent-primary); letter-spacing: 2px; margin-bottom: 16px; text-transform: uppercase;">
+                    Trading Performance</h3>
+                <div id="perf-stats" style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
+                    <div class="small-card">
+                        <div class="label">Total Trades</div>
+                        <div id="perf-total" class="value">--</div>
+                    </div>
+                    <div class="small-card">
+                        <div class="label">Win Rate</div>
+                        <div id="perf-wr" class="value">--%</div>
+                    </div>
+                    <div class="small-card">
+                        <div class="label">Total P/L</div>
+                        <div id="perf-pnl" class="value">--</div>
+                    </div>
+                    <div class="small-card">
+                        <div class="label">Avg P/L</div>
+                        <div id="perf-avg" class="value">--</div>
+                    </div>
+                </div>
+            </div>
+            <div class="card">
+                <h4
+                    style="font-size: 0.55rem; color: var(--accent-primary); margin-bottom: 12px; text-transform: uppercase;">
+                    Tuning Recommendations</h4>
+                <div id="perf-recommendations">
+                    <div class="empty-state">ANALYZING PERFORMANCE...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- VOICE BRIEFING TAB -->
+        <div id="briefing-view" class="tab-content">
+            <div class="card" style="text-align: center;">
+                <div style="font-size: 2rem; margin-bottom: 8px;">🎙️</div>
+                <div class="label" style="font-size: 0.55rem; letter-spacing: 1px; color: var(--text-dim);">MARKET
+                    BRIEFING</div>
+                <div id="briefing-urgency"
+                    style="font-size: 0.65rem; font-weight: 700; margin: 8px 0; color: var(--accent-primary);">NORMAL
+                </div>
+            </div>
+            <div class="card">
+                <p id="briefing-summary" style="font-size: 0.75rem; color: var(--text-muted); line-height: 1.6;">
+                    Generating briefing...</p>
+            </div>
+            <div id="briefing-sections"></div>
+        </div>
+
         <button class="primary-btn" onclick="sync()">REFRESH TERMINAL</button>
         <button class="secondary-btn" onclick="Telegram.WebApp.close()">EXIT</button>
     </div>
@@ -520,7 +622,10 @@
         const tg = window.Telegram.WebApp;
         tg.expand();
 
-        let API_ROOT = localStorage.getItem('ZENITH_API_OVERRIDE') || "";
+        // Auto-detect API root: use override if set, else detect if served from VPS
+        const VPS_URL = "https://site--euroscope--zyn6vtt48jxf.code.run";
+        let API_ROOT = localStorage.getItem('ZENITH_API_OVERRIDE')
+            || (location.origin.includes('code.run') ? '' : VPS_URL);
         let chart, candleSeries;
         let currentTF = 'H1';
 
@@ -588,6 +693,37 @@
             currentTF = tf;
             document.querySelectorAll('.tf-btn').forEach(b => b.classList.toggle('active', b.textContent === tf));
             sync('terminal');
+        }
+        async function runBacktest(strategy) {
+            const q = strategy ? `?strategy=${strategy}` : '';
+            const res = await api(`/backtest${q}`);
+            if (res.success && res.data) {
+                const d = res.data;
+                document.getElementById('bt-wr').textContent = `${d.win_rate}%`;
+                document.getElementById('bt-wr').style.color = d.win_rate >= 50 ? 'var(--up-color)' : 'var(--down-color)';
+                document.getElementById('bt-pnl').textContent = `${d.total_pnl > 0 ? '+' : ''}${d.total_pnl}p`;
+                document.getElementById('bt-pnl').style.color = d.total_pnl >= 0 ? 'var(--up-color)' : 'var(--down-color)';
+                document.getElementById('bt-trades').textContent = d.total_trades;
+                document.getElementById('bt-pf').textContent = d.profit_factor;
+                document.getElementById('bt-sharpe').textContent = d.sharpe_ratio;
+                document.getElementById('bt-dd').textContent = `${d.max_drawdown}p`;
+                // Equity curve rendering
+                const eqEl = document.getElementById('bt-equity');
+                const curve = d.equity_curve || [];
+                if (curve.length > 0) {
+                    const maxEq = Math.max(...curve.map(Math.abs)) || 1;
+                    eqEl.innerHTML = curve.map(v => {
+                        const h = Math.max(2, Math.abs(v) / maxEq * 100);
+                        const c = v >= 0 ? 'var(--up-color)' : 'var(--down-color)';
+                        return `<div style="flex:1; height:${h}%; background:${c}; border-radius:2px 2px 0 0; min-width:2px; opacity:0.8;"></div>`;
+                    }).join('');
+                } else {
+                    eqEl.innerHTML = '<div class="empty-state" style="width:100%">NO EQUITY DATA</div>';
+                }
+            } else {
+                document.getElementById('bt-wr').textContent = '--';
+                document.getElementById('bt-equity').innerHTML = `<div class="empty-state" style="width:100%">${res.error || 'BACKTEST UNAVAILABLE'}</div>`;
+            }
         }
 
         async function sync(activeTab = null) {
@@ -679,6 +815,47 @@
                             </div>
                         </div>`).join('');
                 } else list.innerHTML = `<div class="empty-state">NO RECENT SIGNALS</div>`;
+            } else if (activeTab === 'backtest') {
+                runBacktest(null);
+            } else if (activeTab === 'performance') {
+                const res = await api('/performance');
+                if (res.success && res.data) {
+                    const s = res.data.stats || {};
+                    document.getElementById('perf-total').textContent = s.total || 0;
+                    document.getElementById('perf-wr').textContent = `${(s.win_rate || 0).toFixed(0)}%`;
+                    document.getElementById('perf-pnl').textContent = `${(s.total_pnl || 0).toFixed(1)}p`;
+                    document.getElementById('perf-avg').textContent = `${(s.avg_pnl || 0).toFixed(1)}p`;
+                    const t = res.data.tuning || {};
+                    const recs = t.recommendations || [];
+                    const recEl = document.getElementById('perf-recommendations');
+                    if (recs.length > 0) {
+                        recEl.innerHTML = recs.map(r => `
+                            <div class="info-row">
+                                <span class="label">${r.param}</span>
+                                <span class="val" style="font-size:0.65rem;">${r.action} (${r.suggested_change})</span>
+                            </div>
+                            <div style="font-size:0.55rem; color:var(--text-dim); padding:0 0 8px;">${r.reason}</div>
+                        `).join('');
+                    } else {
+                        recEl.innerHTML = '<div class="empty-state">ALL PARAMETERS OPTIMAL</div>';
+                    }
+                }
+            } else if (activeTab === 'briefing') {
+                const res = await api('/briefing');
+                if (res.success && res.data) {
+                    const b = res.data;
+                    const urgColors = { normal: 'var(--accent-primary)', alert: 'var(--warn-color)', critical: 'var(--down-color)' };
+                    document.getElementById('briefing-urgency').textContent = (b.urgency || 'normal').toUpperCase();
+                    document.getElementById('briefing-urgency').style.color = urgColors[b.urgency] || 'var(--accent-primary)';
+                    document.getElementById('briefing-summary').textContent = b.summary || 'No data';
+                    const secEl = document.getElementById('briefing-sections');
+                    secEl.innerHTML = (b.sections || []).map(s => `
+                        <div class="card" style="margin-top: 12px;">
+                            <h4 style="font-size:0.55rem; color:var(--accent-primary); margin-bottom:8px; text-transform:uppercase;">${s.title}</h4>
+                            <p style="font-size:0.7rem; color:var(--text-muted); line-height:1.5;">${s.content}</p>
+                        </div>
+                    `).join('');
+                }
             }
         }
 

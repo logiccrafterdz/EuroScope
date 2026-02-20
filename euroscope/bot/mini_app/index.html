@@ -622,7 +622,10 @@
         const tg = window.Telegram.WebApp;
         tg.expand();
 
-        let API_ROOT = localStorage.getItem('ZENITH_API_OVERRIDE') || "";
+        // Auto-detect API root: use override if set, else detect if served from VPS
+        const VPS_URL = "https://site--euroscope--zyn6vtt48jxf.code.run";
+        let API_ROOT = localStorage.getItem('ZENITH_API_OVERRIDE')
+            || (location.origin.includes('code.run') ? '' : VPS_URL);
         let chart, candleSeries;
         let currentTF = 'H1';
 
