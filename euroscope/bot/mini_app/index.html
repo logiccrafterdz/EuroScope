@@ -792,33 +792,41 @@
         const parseMd = str => {
             if (!str) return "...";
 
+            // 0. Pre-format the raw block text to insert linebreaks strategically
+            let formatted = str
+                .replace(/\s?\*\*(Reasoning|Key Levels|Note):\*\*\s?/g, '\n**$1:**\n')
+                .replace(/\s+(\d+\.\s+\*\*)/g, '\n$1')
+                .replace(/\s+([*|-]\s+\*\*)/g, '\n$1');
+
             // 1. Bold and Italic
-            let parsed = str
+            let parsed = formatted
                 .replace(/\*\*(.*?)\*\*/g, '<strong style="color:var(--text-main);">$1</strong>')
                 .replace(/\*(.*?)\*/g, '<em style="color:var(--text-main);">$1</em>');
 
-            // 2. Handle numbered lists (e.g., "1. ") and bullet lists ("* " or "- ")
-            // We split by newline to process line by line
+            // 2. Handle lines
             const lines = parsed.split('\n');
             let output = [];
 
             for (let i = 0; i < lines.length; i++) {
                 let line = lines[i].trim();
+                if (!line) continue;
 
-                // If it's a list item, wrap it in a div with margin
-                if (/^(\d+\.|[-*])\s/.test(line)) {
+                // Is this a list item?
+                let listMatch = line.match(/^(\d+\.|[-*])\s+(.*)/);
+                if (listMatch) {
                     output.push(`<div style="margin-left:8px; margin-bottom:8px; display:flex; gap:6px;">
-                        <span style="color:var(--accent-primary); flex-shrink:0;">${line.match(/^(\d+\.|[-*])/)[1]}</span>
-                        <span>${line.replace(/^(\d+\.|[-*])\s*/, '')}</span>
+                        <span style="color:var(--accent-primary); flex-shrink:0;">${listMatch[1]}</span>
+                        <span>${listMatch[2]}</span>
                     </div>`);
                 }
-                // If it's a section header (like "Key Levels:")
-                else if (line.endsWith(':')) {
-                    output.push(`<div style="margin-top:12px; margin-bottom:4px; font-weight:600; color:var(--text-main);">${line}</div>`);
+                // Is it our specific header (Reasoning:, Key Levels:, Note:)
+                else if (line.match(/^<strong[^>]*>(Reasoning|Key Levels|Note):<\/strong>$/i)) {
+                    let cleanHeader = line.replace(/<\/?strong[^>]*>/g, '');
+                    output.push(`<div style="margin-top:20px; margin-bottom:8px; font-weight:800; color:var(--text-main); letter-spacing:1px; text-transform:uppercase; font-size:0.75rem;">${cleanHeader}</div>`);
                 }
                 // Regular paragraph
-                else if (line.length > 0) {
-                    output.push(`<div style="margin-bottom:8px;">${line}</div>`);
+                else {
+                    output.push(`<div style="margin-bottom:8px; line-height:1.6;">${line}</div>`);
                 }
             }
 
