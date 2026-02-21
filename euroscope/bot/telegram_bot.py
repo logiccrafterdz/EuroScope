@@ -1638,7 +1638,7 @@ class EuroScopeBot:
         logger.debug("API: Fetching market summary...")
         result = await self.orchestrator.run_skill("market_data", "get_price")
         if not result.success:
-            return web.json_response({"success": False, "error": result.error}, status=500)
+            return web.json_response({"success": False, "error": result.error})
         
         data = result.data
         resp = {
