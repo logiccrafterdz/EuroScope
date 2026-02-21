@@ -876,10 +876,36 @@
 
             if (activeTab === 'terminal') {
                 const statusEl = document.getElementById('chart-status');
-                const data = await api(`/candles?timeframe=${currentTF}`);
-                if (data.success && data.candles?.length > 0) {
-                    candleSeries.setData(data.candles); statusEl.style.display = 'none';
-                } else { statusEl.style.display = 'flex'; statusEl.textContent = "SYNC PENDING"; }
+                try {
+                    const data = await api(`/candles?timeframe=${currentTF}`);
+                    if (data.success && data.candles?.length > 0) {
+                        try {
+                            const uniqueCandles = [];
+                            const seenTimes = new Set();
+                            data.candles.sort((a, b) => a.time - b.time);
+                            for (const c of data.candles) {
+                                if (!seenTimes.has(c.time) && !isNaN(c.time)) {
+                                    seenTimes.add(c.time);
+                                    uniqueCandles.push(c);
+                                }
+                            }
+                            if (uniqueCandles.length > 0 && candleSeries) {
+                                candleSeries.setData(uniqueCandles);
+                                statusEl.style.display = 'none';
+                                chart.timeScale().fitContent();
+                            } else {
+                                statusEl.style.display = 'flex'; statusEl.textContent = "CHART ENGINE ERROR";
+                            }
+                        } catch (err) {
+                            log("Chart SetData Error: " + err.message, 'error');
+                            statusEl.style.display = 'flex'; statusEl.textContent = "CHART RENDER ERROR";
+                        }
+                    } else {
+                        statusEl.style.display = 'flex'; statusEl.textContent = "NO CANDLE DATA";
+                    }
+                } catch (e) {
+                    statusEl.style.display = 'flex'; statusEl.textContent = "SYNC FAILED";
+                }
             } else if (activeTab === 'forecast') {
                 const res = await api('/forecast');
                 if (res.success && res.data) {
