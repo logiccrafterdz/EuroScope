@@ -791,10 +791,38 @@
 
         const parseMd = str => {
             if (!str) return "...";
-            return str
+
+            // 1. Bold and Italic
+            let parsed = str
                 .replace(/\*\*(.*?)\*\*/g, '<strong style="color:var(--text-main);">$1</strong>')
-                .replace(/\*(.*?)\*/g, '<em style="color:var(--text-main);">$1</em>')
-                .replace(/\n/g, '<br>');
+                .replace(/\*(.*?)\*/g, '<em style="color:var(--text-main);">$1</em>');
+
+            // 2. Handle numbered lists (e.g., "1. ") and bullet lists ("* " or "- ")
+            // We split by newline to process line by line
+            const lines = parsed.split('\n');
+            let output = [];
+
+            for (let i = 0; i < lines.length; i++) {
+                let line = lines[i].trim();
+
+                // If it's a list item, wrap it in a div with margin
+                if (/^(\d+\.|[-*])\s/.test(line)) {
+                    output.push(`<div style="margin-left:8px; margin-bottom:8px; display:flex; gap:6px;">
+                        <span style="color:var(--accent-primary); flex-shrink:0;">${line.match(/^(\d+\.|[-*])/)[1]}</span>
+                        <span>${line.replace(/^(\d+\.|[-*])\s*/, '')}</span>
+                    </div>`);
+                }
+                // If it's a section header (like "Key Levels:")
+                else if (line.endsWith(':')) {
+                    output.push(`<div style="margin-top:12px; margin-bottom:4px; font-weight:600; color:var(--text-main);">${line}</div>`);
+                }
+                // Regular paragraph
+                else if (line.length > 0) {
+                    output.push(`<div style="margin-bottom:8px;">${line}</div>`);
+                }
+            }
+
+            return output.join('');
         };
 
         const f5 = (v) => (v != null && typeof v === 'number') ? v.toFixed(5) : '-.-----';
