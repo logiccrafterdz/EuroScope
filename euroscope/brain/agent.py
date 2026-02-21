@@ -171,10 +171,11 @@ class Agent:
                 except Exception as e:
                     result = {"success": False, "error": str(e)}
 
+                observation = self._format_tool_observation(name, result)
                 messages.append({
                     "role": "tool",
                     "tool_call_id": call_id,
-                    "content": json.dumps(result),
+                    "content": observation,
                 })
             # After tool results, ask for synthesis
             messages.append({
@@ -600,18 +601,25 @@ class Agent:
         if tool_name == "get_news_sentiment":
             if isinstance(data, dict):
                 return f"Sentiment: {data.get('sentiment')} | Score: {data.get('score')}"
-        if tool_name == "get_fundamental_analysis":
-            return json.dumps(data)
-        if tool_name == "get_patterns":
-            return json.dumps(data)
-        if tool_name == "get_risk_assessment":
-            return json.dumps(data)
-        if tool_name == "get_signals":
-            return json.dumps(data)
-        if tool_name == "get_forecast":
-            return json.dumps(data)
+        if tool_name in ["get_fundamental_analysis", "get_patterns", "get_risk_assessment", "get_signals", "get_forecast"]:
+            pass # Fall through to default safe JSON dump
 
-        return json.dumps(data)
+        try:
+            # Strip dataframes and extremely long lists to protect context window
+            safe_data = {}
+            for k, v in data.items():
+                if hasattr(v, "empty"): continue
+                if isinstance(v, list) and len(v) > 20:
+                    safe_data[k] = v[:20] + ["...truncated..."]
+                else:
+                    safe_data[k] = v
+            
+            raw = json.dumps(safe_data, default=str)
+            if len(raw) > 3000:
+                return raw[:3000] + "... [truncated due to length]"
+            return raw
+        except Exception:
+            return str(data)[:3000] + "... [truncated]"
 
     def _summarize_observations(self, observations: list[str]) -> str:
         return " | ".join(observations)
