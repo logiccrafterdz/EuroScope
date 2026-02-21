@@ -596,8 +596,15 @@
 
         <!-- SIGNALS TAB -->
         <div id="signals-view" class="tab-content">
+            <div style="margin-bottom: 16px;">
+                <button class="action-btn" onclick="scanSignals()" id="scan-btn"
+                    style="background: var(--accent-primary); color: #000; box-shadow: 0 0 15px var(--accent-glow); display: flex; align-items: center; justify-content: center; gap: 8px;">
+                    <span id="scan-btn-text">SCAN MARKET</span> <span class="loading-spinner" id="scan-spinner"
+                        style="display: none; border-top-color: #000; margin: 0;"></span>
+                </button>
+            </div>
             <div id="signal-list">
-                <div class="glass-card bento-full empty-state">NO RECENT SIGNALS</div>
+                <div class="glass-card bento-full empty-state" id="signal-empty-state">NO RECENT SIGNALS</div>
             </div>
         </div>
 
@@ -921,6 +928,45 @@
                         <div style="font-size:0.6rem; color:var(--text-dim); padding-bottom:8px;">${r.reason}</div>
                     `).join('');
                 } else recEl.innerHTML = '<div class="empty-state">ALL OPTIMAL ✅</div>';
+            }
+        }
+
+        async function scanSignals() {
+            const btnText = document.getElementById('scan-btn-text');
+            const spinner = document.getElementById('scan-spinner');
+            const btn = document.getElementById('scan-btn');
+            const emptyState = document.getElementById('signal-empty-state');
+
+            if (btn.disabled) return;
+
+            btn.disabled = true;
+            btnText.textContent = "ANALYZING...";
+            spinner.style.display = "inline-block";
+            btn.style.opacity = "0.7";
+
+            try {
+                const res = await api('/scan_signals');
+                if (res.success && res.signal) {
+                    // Success! Refresh the signals tab to show the new trade
+                    btnText.textContent = "SCAN MARKET";
+                    await sync('signals');
+                    try { tg.HapticFeedback.notificationOccurred('success'); } catch (e) { }
+                } else {
+                    // No high confidence signal found
+                    btnText.textContent = "SCAN MARKET";
+                    if (emptyState) {
+                        emptyState.innerHTML = `<span style="color:var(--warn-color); font-size:1.2rem; display:block; margin-bottom:8px;">⚠️</span>` + (res.message || "NO OPPORTUNITIES AT THE MOMENT. EXERCISE PATIENCE.");
+                    }
+                    try { tg.HapticFeedback.notificationOccurred('warning'); } catch (e) { }
+                }
+            } catch (e) {
+                btnText.textContent = "SCAN FAILED";
+                log("Scan Failed: " + e.message, 'error');
+                setTimeout(() => { btnText.textContent = "SCAN MARKET"; }, 3000);
+            } finally {
+                spinner.style.display = "none";
+                btn.disabled = false;
+                btn.style.opacity = "1";
             }
         }
 

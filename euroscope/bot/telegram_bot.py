@@ -1735,6 +1735,53 @@ class EuroScopeBot:
             "signals": signals
         })
 
+    async def _api_scan_signals(self, request):
+        """API endpoint to actively scan for and generate new trading signals."""
+        logger.debug("API: Actively scanning for new signals (Mini App request)...")
+        try:
+            from ..skills.base import SkillContext
+            ctx = SkillContext()
+            
+            # 1. Technical Analysis
+            ta_res = await self.orchestrator.run_skill("technical_analysis", "analyze", context=ctx, timeframe="H1")
+            if not ta_res.success:
+                return web.json_response({"success": False, "error": f"TA failed: {ta_res.error}"})
+                
+            # 2. Strategy Detection
+            strat_res = await self.orchestrator.run_skill("trading_strategy", "detect_signal", context=ctx)
+            if not strat_res.success:
+                return web.json_response({"success": False, "error": f"Strategy failed: {strat_res.error}"})
+                
+            signal_data = strat_res.data
+            direction = signal_data.get("direction", "WAIT")
+            confidence = signal_data.get("confidence", 0)
+            
+            if direction in ("BUY", "SELL") and confidence >= 50:
+                # 3. Execute Paper Trade
+                exec_res = await self.orchestrator.run_skill("signal_executor", "open_trade", context=ctx)
+                if exec_res.success:
+                    return web.json_response({
+                        "success": True,
+                        "signal": exec_res.data,
+                        "message": f"Found {direction} opportunity!"
+                    })
+                else:
+                    return web.json_response({
+                        "success": False,
+                        "error": f"Signal generation aborted by guardrails: {exec_res.error}",
+                        "signal": signal_data
+                    })
+            else:
+                return web.json_response({
+                    "success": False,
+                    "message": "No high-confidence opportunities currently available. Please exercise patience."
+                })
+                
+        except Exception as e:
+            import traceback
+            logger.error(f"API: Error scanning signals: {e}\n{traceback.format_exc()}")
+            return web.json_response({"success": False, "error": str(e)})
+
     async def _api_alerts(self, request):
         """API endpoint for active price alerts."""
         logger.debug("API: Fetching active alerts...")
@@ -1936,6 +1983,7 @@ class EuroScopeBot:
                 web.get('/healthz', self._api_health),
                 web.get('/api/summary', self._api_summary),
                 web.get('/api/signals', self._api_signals),
+                web.get('/api/scan_signals', self._api_scan_signals),
                 web.get('/api/alerts', self._api_alerts),
                 web.get('/api/analysis', self._api_analysis),
                 web.get('/api/candles', self._api_candles),
