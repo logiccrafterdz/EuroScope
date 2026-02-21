@@ -783,14 +783,14 @@
             try {
                 const container = document.getElementById('chart-container');
                 chart = LightweightCharts.createChart(container, {
-                    layout: { background: { type: 'solid', color: 'transparent' }, textColor: '#8b949e', fontSize: 10 },
+                    layout: { background: { type: 'solid', color: '#0A0D14' }, textColor: '#8b949e', fontSize: 10 },
                     grid: { vertLines: { color: 'rgba(255,255,255,0.03)' }, horzLines: { color: 'rgba(255,255,255,0.03)' } },
                     rightPriceScale: { borderColor: 'rgba(255,255,255,0.1)' },
                     timeScale: { borderColor: 'rgba(255,255,255,0.1)' }
                 });
                 candleSeries = chart.addCandlestickSeries({ upColor: '#00ff9d', downColor: '#ff3366', borderVisible: false, wickUpColor: '#00ff9d', wickDownColor: '#ff3366' });
                 new ResizeObserver(() => chart.applyOptions({ width: container.clientWidth, height: container.clientHeight })).observe(container);
-            } catch (e) { log("Chart initialization failed", 'error'); }
+            } catch (e) { log("Chart init error: " + e.message, 'error'); }
         }
 
         function switchTab(viewId) {
@@ -985,8 +985,17 @@
                 }
             }
         }
+        async function runInit() {
+            initChart();
+            await sync();
+            setInterval(() => sync(), 15000);
+        }
 
-        window.onload = async () => { initChart(); await sync(); setInterval(() => sync(), 15000); };
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', runInit);
+        } else {
+            runInit();
+        }
     </script>
 </body>
 
