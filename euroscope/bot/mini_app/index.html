@@ -442,6 +442,24 @@
             transition: 0.2s;
         }
 
+        .loading-spinner {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+            border-top-color: var(--accent-primary);
+            animation: spin 1s ease-in-out infinite;
+            vertical-align: middle;
+            margin-left: 8px;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
         button.action-btn:active {
             transform: scale(0.96);
         }
@@ -569,6 +587,10 @@
                 <div class="label-sm" style="color:var(--text-main);">Contextual Bias</div>
                 <p id="macro-context" style="font-size: 0.8rem; color: var(--text-muted); line-height: 1.6;">Loading
                     macro data...</p>
+                <div id="mixed-signal-warn"
+                    style="display:none; margin-top:12px; padding:10px; background:rgba(255,200,0,0.1); border:1px solid var(--warn-color); border-radius:8px; color:var(--warn-color); font-size:0.75rem;">
+                    ⚠️ <strong>Mixed Signals:</strong> AI Forecast and Contextual Bias are diverging.
+                </div>
             </div>
         </div>
 
@@ -611,7 +633,7 @@
                     </div>
                 </div>
                 <div class="label-sm" style="margin-top: 10px;">Equity Curve</div>
-                <div id="bt-equity" style="height: 60px; display: flex; align-items: flex-end; gap: 2px;"></div>
+                <div id="bt-equity" style="height: 80px; width: 100%; margin-top: 8px;"></div>
             </div>
 
             <!-- Performance Section -->
@@ -767,6 +789,14 @@
             location.reload();
         }
 
+        const parseMd = str => {
+            if (!str) return "...";
+            return str
+                .replace(/\*\*(.*?)\*\*/g, '<strong style="color:var(--text-main);">$1</strong>')
+                .replace(/\*(.*?)\*/g, '<em style="color:var(--text-main);">$1</em>')
+                .replace(/\n/g, '<br>');
+        };
+
         const f5 = (v) => (v != null && typeof v === 'number') ? v.toFixed(5) : '-.-----';
         const f2 = (v) => (v != null && typeof v === 'number') ? v.toFixed(2) : '---';
 
@@ -822,14 +852,22 @@
                 document.getElementById('bt-dd').textContent = `${d.max_drawdown}p`;
                 const eqEl = document.getElementById('bt-equity');
                 const curve = d.equity_curve || [];
+                eqEl.innerHTML = '';
                 if (curve.length > 0) {
-                    const maxEq = Math.max(...curve.map(Math.abs)) || 1;
-                    eqEl.innerHTML = curve.map(v => {
-                        const h = Math.max(4, Math.abs(v) / maxEq * 100);
-                        const c = v >= 0 ? 'var(--up-color)' : 'var(--down-color)';
-                        return `<div style="flex:1; height:${h}%; background:${c}; border-radius:2px 2px 0 0; min-width:2px; opacity:0.8; box-shadow:0 0 4px ${c};"></div>`;
-                    }).join('');
-                } else eqEl.innerHTML = '<div class="empty-state" style="width:100%">NO DATA</div>';
+                    const eqChart = LightweightCharts.createChart(eqEl, {
+                        width: eqEl.clientWidth, height: 80,
+                        layout: { background: { type: 'solid', color: 'transparent' }, textColor: '#8b949e' },
+                        grid: { vertLines: { visible: false }, horzLines: { visible: false } },
+                        timeScale: { visible: false }, rightPriceScale: { visible: false },
+                        handleScroll: false, handleScale: false
+                    });
+                    const lSeries = eqChart.addLineSeries({ color: 'var(--accent-primary)', lineWidth: 2 });
+                    const baseTime = Math.floor(Date.now() / 1000) - curve.length * 86400;
+                    lSeries.setData(curve.map((v, i) => ({ time: baseTime + i * 86400, value: v })));
+                    eqChart.timeScale().fitContent();
+                } else {
+                    eqEl.innerHTML = '<div class="empty-state" style="width:100%">NO DATA</div>';
+                }
             }
         }
 
@@ -908,6 +946,10 @@
                     statusEl.style.display = 'flex'; statusEl.textContent = "SYNC FAILED";
                 }
             } else if (activeTab === 'forecast') {
+                const fText = document.getElementById('forecast-text');
+                if (fText.textContent.includes('Awaiting') || fText.textContent === '...') {
+                    fText.innerHTML = 'AI analyzing market conditions... <span class="loading-spinner"></span>';
+                }
                 const res = await api('/forecast');
                 if (res.success && res.data) {
                     const d = res.data;
@@ -918,7 +960,9 @@
                     document.getElementById('forecast-conf-bar').style.backgroundColor = document.getElementById('forecast-dir').style.color;
                     document.getElementById('forecast-conf-bar').style.color = document.getElementById('forecast-dir').style.color;
                     document.getElementById('forecast-conf-text').textContent = `${((d.confidence || 0) * 100).toFixed(0)}%`;
-                    document.getElementById('forecast-text').textContent = d.reasoning || "...";
+                    document.getElementById('forecast-text').innerHTML = parseMd(d.reasoning || "...");
+                } else if (res.error) {
+                    document.getElementById('forecast-text').innerHTML = `<span style="color:var(--down-color)">${res.error}</span>`;
                 }
             } else if (activeTab === 'analysis') {
                 const res = await api('/analysis');
@@ -949,6 +993,15 @@
                     `;
                     const spread = eu.yield_spread;
                     document.getElementById('macro-context').textContent = spread ? `US 10Y ${f2(spread.us_10y)}% vs DE 10Y ${f2(spread.german_10y)}% → Spread ${f2(spread.spread)}%.` : "Data loaded.";
+
+                    const fDir = document.getElementById('forecast-dir').textContent.trim().toUpperCase();
+                    const mDir = (m.macro_impact || '').toUpperCase();
+                    const warnEl = document.getElementById('mixed-signal-warn');
+                    if (fDir && mDir && fDir !== 'NEUTRAL' && mDir !== 'NEUTRAL' && fDir !== mDir && fDir !== 'LOADING...') {
+                        warnEl.style.display = 'block';
+                    } else {
+                        warnEl.style.display = 'none';
+                    }
                 }
             } else if (activeTab === 'signals') {
                 const res = await api('/signals');
@@ -970,17 +1023,28 @@
             } else if (activeTab === 'stats') {
                 runBacktest(null); loadPerformance();
             } else if (activeTab === 'briefing') {
+                const bSum = document.getElementById('briefing-summary');
+                if (bSum.textContent === 'No data') {
+                    bSum.innerHTML = 'Generating AI Briefing... <span class="loading-spinner"></span>';
+                }
                 const res = await api('/briefing');
                 if (res.success && res.data) {
                     const b = res.data;
                     const urgColors = { normal: 'var(--accent-primary)', alert: 'var(--warn-color)', critical: 'var(--down-color)' };
                     document.getElementById('briefing-urgency').textContent = (b.urgency || 'normal').toUpperCase();
                     document.getElementById('briefing-urgency').style.color = urgColors[b.urgency] || 'var(--accent-primary)';
-                    document.getElementById('briefing-summary').textContent = b.summary || 'No data';
+
+                    // Prevent duplicate text between summary and first section
+                    let finalSummary = b.summary || 'No data';
+                    if (b.sections && b.sections.length > 0 && finalSummary.trim() === b.sections[0].content.trim()) {
+                        finalSummary = "Continuous monitoring active. See details below.";
+                    }
+                    document.getElementById('briefing-summary').innerHTML = parseMd(finalSummary);
+
                     document.getElementById('briefing-sections').innerHTML = (b.sections || []).map(s => `
                         <div class="glass-card bento-full">
                             <h4 style="font-size:0.6rem; color:var(--text-main); margin-bottom:8px; text-transform:uppercase; letter-spacing:1px;">${s.title}</h4>
-                            <p style="font-size:0.75rem; color:var(--text-muted); line-height:1.6;">${s.content}</p>
+                            <p style="font-size:0.75rem; color:var(--text-muted); line-height:1.6;">${parseMd(s.content)}</p>
                         </div>
                     `).join('');
                 }

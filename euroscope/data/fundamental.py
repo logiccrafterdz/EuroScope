@@ -107,7 +107,7 @@ class FundamentalDataProvider:
                 "quality": "reliable"
             }
             # Special logic for CPI (needs 2 points)
-            if key == "us_cpi" and len(data) >= 2:
+            if key in ("us_cpi", "eu_cpi") and len(data) >= 2:
                 current = data[0]["value"]
                 previous = data[1]["value"]
                 result["previous"] = previous
@@ -137,6 +137,10 @@ class FundamentalDataProvider:
     async def get_us_cpi(self) -> Optional[Dict]:
         """Get the latest US CPI reading."""
         return await self._get_series_data("us_cpi", FRED_SERIES["us_cpi"])
+
+    async def get_eu_cpi(self) -> Optional[Dict]:
+        """Get the latest Eurozone HICP (CPI) reading."""
+        return await self._get_series_data("eu_cpi", FRED_SERIES["eurozone_hicp"])
 
     async def get_ecb_main_rate(self) -> Optional[Dict]:
         """Get the ECB Main Refinancing Rate."""
@@ -235,12 +239,13 @@ class FundamentalDataProvider:
         self.warnings = []
         fed = await self.get_fed_funds_rate()
         ecb = await self.get_ecb_main_rate()
-        cpi = await self.get_us_cpi()
+        us_cpi = await self.get_us_cpi()
+        eu_cpi = await self.get_eu_cpi()
         yields = await self.get_yield_spread()
         
         # Determine quality
-        us_ok = all(x is not None for x in [fed, cpi])
-        eu_ok = all(x is not None for x in [ecb])
+        us_ok = all(x is not None for x in [fed, us_cpi])
+        eu_ok = all(x is not None for x in [ecb, eu_cpi])
         
         quality = "complete"
         if not us_ok and not eu_ok: quality = "minimal"
@@ -248,8 +253,8 @@ class FundamentalDataProvider:
         elif not eu_ok: quality = "partial_eu"
         
         return {
-            "us_data": {"fed": fed, "cpi": cpi},
-            "eu_data": {"ecb": ecb, "yield_spread": yields},
+            "us_data": {"fed": fed, "cpi": us_cpi},
+            "eu_data": {"ecb": ecb, "cpi": eu_cpi, "yield_spread": yields},
             "quality": quality,
             "warnings": list(set(self.warnings))
         }
