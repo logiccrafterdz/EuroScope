@@ -315,13 +315,13 @@ class CronScheduler:
             except Exception as e:
                 logger.error(f"Proactive analysis failed: {e}", exc_info=True)
 
-        interval_value = getattr(self.config, "proactive_analysis_interval_minutes", 30)
+        interval_value = getattr(self.config, "proactive_analysis_interval_minutes", 15)
         if isinstance(interval_value, int):
             interval = interval_value
         elif isinstance(interval_value, str) and interval_value.strip().isdigit():
             interval = int(interval_value)
         else:
-            interval = 30
+            interval = 15
         seconds = max(60, interval * 60)
         task = ScheduledTask(
             name="proactive_market_analysis",

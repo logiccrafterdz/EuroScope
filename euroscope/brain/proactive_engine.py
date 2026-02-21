@@ -69,7 +69,7 @@ class ProactiveEngine:
         else:
             return AlertPriority.LOW
 
-    def should_suppress(self, event: MarketEvent, user_min_priority: AlertPriority = AlertPriority.MEDIUM) -> bool:
+    def should_suppress(self, event: MarketEvent, user_min_priority: AlertPriority = AlertPriority.LOW) -> bool:
         """
         Context-aware alert suppression.
         """
@@ -79,18 +79,17 @@ class ProactiveEngine:
         if priority < user_min_priority:
             return True
             
-        # 2. De-duplication: Suppress similar events within 60 minutes
+        # 2. De-duplication: Suppress similar events within 15 minutes
         last_time = self.last_alerts.get(event.type)
         if last_time:
             delta = (datetime.now(UTC) - last_time).total_seconds() / 60
-            if delta < 60 and priority < AlertPriority.CRITICAL:
+            if delta < 15 and priority <= AlertPriority.MEDIUM:
                 return True
                 
-        # 3. Session awareness: Suppress non-critical during low liquidity (Asian session)
-        # Note: In a full implementation, this uses a SessionManager
+        # 3. Session awareness: Suppress LOW priority during low liquidity (Asian session)
         now_hour = datetime.now(UTC).hour
         is_asian = 22 <= now_hour or now_hour <= 7
-        if is_asian and priority < AlertPriority.HIGH:
+        if is_asian and priority <= AlertPriority.LOW:
             return True
             
         return False

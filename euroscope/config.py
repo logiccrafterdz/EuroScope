@@ -52,8 +52,8 @@ class Config:
     rate_limit_window_minutes: int = 1
     admin_chat_ids: list[str] = field(default_factory=list)
     vector_memory_ttl_days: int = 30
-    proactive_analysis_interval_minutes: int = 30
-    proactive_alert_cache_minutes: int = 60
+    proactive_analysis_interval_minutes: int = 15
+    proactive_alert_cache_minutes: int = 15
     proactive_alert_chat_ids: list[int] = field(default_factory=list)
     proactive_quiet_hours: tuple[int, int] | None = None
     proactive_disable_weekends: bool = True
@@ -115,8 +115,8 @@ class Config:
             rate_limit_window_minutes=int(os.getenv("EUROSCOPE_RATE_LIMIT_WINDOW_MINUTES", "1")),
             admin_chat_ids=admin_chat_ids,
             vector_memory_ttl_days=int(os.getenv("EUROSCOPE_VECTOR_MEMORY_TTL_DAYS", "30")),
-            proactive_analysis_interval_minutes=int(os.getenv("EUROSCOPE_PROACTIVE_INTERVAL_MINUTES", "30")),
-            proactive_alert_cache_minutes=int(os.getenv("EUROSCOPE_PROACTIVE_CACHE_MINUTES", "60")),
+            proactive_analysis_interval_minutes=int(os.getenv("EUROSCOPE_PROACTIVE_INTERVAL_MINUTES", "15")),
+            proactive_alert_cache_minutes=int(os.getenv("EUROSCOPE_PROACTIVE_CACHE_MINUTES", "15")),
             proactive_alert_chat_ids=proactive_chat_ids,
             proactive_quiet_hours=quiet_hours,
             proactive_disable_weekends=os.getenv("EUROSCOPE_PROACTIVE_DISABLE_WEEKENDS", "1") != "0",
