@@ -760,7 +760,6 @@ class Storage:
         min_similarity: float = 0.7,
         limit: int = 5,
     ) -> list[dict]:
-        self._conn.row_factory = sqlite3.Row
         if not pattern_name:
             return []
         query = """SELECT *,

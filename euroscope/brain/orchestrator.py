@@ -252,7 +252,7 @@ class Orchestrator:
         
         ctx = await self._execute_pipeline(pipeline, context, params)
 
-        market_state = self._infer_market_state(ctx)
+        market_state = self._infer_market_state(ctx) or {}
         if market_state:
             ctx.metadata.update(market_state)
 

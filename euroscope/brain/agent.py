@@ -72,15 +72,6 @@ class Agent:
         if not self.config.api_key:
             return "⚠️ AI features disabled — no API key configured."
 
-        system = system_override or SYSTEM_PROMPT
-
-        # Build messages
-        messages = [{"role": "system", "content": system}]
-
-        # Add recent conversation history for context
-        messages.extend(self.conversation_history[-self.max_history:])
-        messages.append({"role": "user", "content": user_message})
-
         try:
             async with httpx.AsyncClient(timeout=60) as client:
                 response = await client.post(
@@ -457,10 +448,9 @@ class Agent:
             "Keep the reply concise, professional, and insightful. Use bullet points."
         )
 
-        response = await self.chat_with_tools(
+        response = await self.chat(
             user_message="Provide a concise Market Pulse update based on current conditions.",
-            max_iterations=2,
-            system_override=pulse_prompt
+            system_override=pulse_prompt,
         )
         
         return response
@@ -570,7 +560,7 @@ class Agent:
                             name = t["name"]
                             if name in allowed_names:
                                 calls.append({"name": name, "arguments": t.get("arguments", {})})
-            except:
+            except (json.JSONDecodeError, KeyError, TypeError):
                 continue
         return calls
 
@@ -751,6 +741,15 @@ class Agent:
 
         if tool_name == "get_signals":
             tf = arguments.get("timeframe") or "H1"
+            data_result = await orchestrator.run_skill(
+                "market_data",
+                "get_candles",
+                context=ctx,
+                timeframe=tf,
+                count=200,
+            )
+            if not data_result.success:
+                return self._skill_result_payload(data_result)
             ta_result = await orchestrator.run_skill(
                 "technical_analysis",
                 "full",
