@@ -357,11 +357,14 @@ class CronScheduler:
             if self._is_quiet_time():
                 return
             try:
-                from ..data.storage import Storage
                 from ..learning.pattern_tracker import PatternTracker
                 from ..learning.forecast_tracker import ForecastTracker
 
-                storage = Storage()
+                storage = getattr(self.bot, "storage", None)
+                if not storage:
+                    from ..data.storage import Storage
+                    storage = Storage()
+
                 provider = getattr(self.bot, "price_provider", None)
                 if not provider:
                     return
@@ -386,10 +389,13 @@ class CronScheduler:
 
         async def daily_tuning():
             try:
-                from ..data.storage import Storage
                 from ..learning.adaptive_tuner import AdaptiveTuner
 
-                storage = Storage()
+                storage = getattr(self.bot, "storage", None)
+                if not storage:
+                    from ..data.storage import Storage
+                    storage = Storage()
+
                 tuner = AdaptiveTuner(storage=storage)
                 report = tuner.format_report()
 

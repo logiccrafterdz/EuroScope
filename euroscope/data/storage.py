@@ -348,6 +348,20 @@ class Storage:
         row = self._conn.execute("SELECT value FROM memory WHERE key=?", (key,)).fetchone()
         return row[0] if row else None
 
+    def save_json(self, key: str, value: Any):
+        """Save a JSON-serializable value to the memory table."""
+        self.set_memory(key, json.dumps(value))
+
+    def load_json(self, key: str) -> Optional[Any]:
+        """Load a JSON value from the memory table."""
+        raw = self.get_memory(key)
+        if raw is None:
+            return None
+        try:
+            return json.loads(raw)
+        except (json.JSONDecodeError, TypeError):
+            return None
+
     # --- Market Notes ---
 
     def add_note(self, category: str, content: str, metadata: dict = None):

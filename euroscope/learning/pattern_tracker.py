@@ -405,6 +405,7 @@ class PatternTracker:
         current = float(df["Volume"].iloc[-1])
         avg = float(df["Volume"].mean())
         return avg > 0 and current < (0.8 * avg)
+
     def format_report(self) -> str:
         """Generate a human-readable pattern performance report."""
         rates = self.get_success_rates()
