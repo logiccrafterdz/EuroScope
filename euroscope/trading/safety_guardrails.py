@@ -28,16 +28,20 @@ class SafetyGuardrail:
             if direction not in ("BUY", "SELL"):
                 return True, "Signal direction missing for safety validation"
 
+            # Soft checks: warn instead of blocking for missing context data
+            warnings = []
             session = context.metadata.get("session_regime")
             if not session:
-                return True, "Session regime missing for safety validation"
+                warnings.append("Session regime data unavailable")
+                session = "unknown"  # Allow signal through with warning
 
             quality = context.metadata.get("macro_quality")
             if not quality:
                 details = context.metadata.get("data_quality_details", {})
                 quality = details.get("quality")
             if not quality:
-                return True, "Macro data quality missing for safety validation"
+                warnings.append("Macro data quality unavailable")
+                quality = "unknown"  # Allow signal through with warning
 
             block_minutes = int(getattr(self.config, "safety_news_block_minutes", 30))
             calendar = context.analysis.get("calendar") if context.analysis else None
@@ -58,8 +62,14 @@ class SafetyGuardrail:
                 if strategy in ("reversal", "mean_reversion"):
                     return True, f"Weak reversal signal ({confidence:.0%} confidence) in low-liquidity Asian session"
 
+            # Only block for known-bad quality, not for unknown/missing
             if quality in ("partial_eu", "partial_us", "minimal"):
                 return True, f"Incomplete macro data ({quality}) — cannot assess full risk context"
+
+            # Attach warnings to metadata so the user sees them
+            if warnings:
+                existing = context.metadata.get("safety_warnings", [])
+                context.metadata["safety_warnings"] = existing + warnings
 
             return False, ""
         except Exception as e:

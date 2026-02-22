@@ -136,8 +136,10 @@ class CronScheduler:
         if self.config and interval and interval > 0:
             self._schedule_proactive_analysis()
         
-        # Schedule periodic 'Market Pulse' (every 6 hours)
+        # Schedule periodic 'Market Pulse' (every 2 hours during active sessions)
         self._schedule_periodic_pulse()
+        # Schedule self-learning loop
+        self._schedule_learning_tasks()
 
     def _schedule_periodic_pulse(self):
         async def pulse_task():
@@ -161,8 +163,8 @@ class CronScheduler:
             except Exception as e:
                 logger.error(f"Periodic pulse task failed: {e}")
 
-        # Run every 6 hours (21600 seconds)
-        interval_secs = 6 * 3600
+        # Run every 2 hours (7200 seconds) during active sessions
+        interval_secs = 2 * 3600
         self.schedule(
             "market_pulse",
             TaskFrequency.MINUTELY,
@@ -229,9 +231,13 @@ class CronScheduler:
                 if now.hour >= start or now.hour < end:
                     return True
 
+        # Weekend Insights mode: allow MEDIUM+ analysis on weekends
+        # instead of full blackout — the bot stays engaged
         if getattr(self.config, "proactive_disable_weekends", False):
             if now.weekday() >= 5:
-                return True
+                # Don't block completely — let proactive analysis run
+                # but _schedule_proactive_analysis will handle reduced frequency
+                pass
 
         holiday_dates = set(getattr(self.config, "proactive_holiday_dates", []))
         if holiday_dates and now.strftime("%Y-%m-%d") in holiday_dates:
@@ -312,6 +318,17 @@ class CronScheduler:
                             f"Proactive alert sent [{decision.get('priority')}]: "
                             f"{message[:50]} | Reason: {decision.get('reason')}"
                         )
+
+                # Auto-notify for new signals via NotificationManager
+                try:
+                    notifier = getattr(self.bot, "notification_manager", None)
+                    if notifier and decision.get("signal"):
+                        signal_data = decision.get("signal", {})
+                        for chat_id in chat_ids:
+                            await notifier.notify_new_signal(chat_id, signal_data)
+                except Exception as notify_err:
+                    logger.warning(f"Signal notification failed: {notify_err}")
+
             except Exception as e:
                 logger.error(f"Proactive analysis failed: {e}", exc_info=True)
 
@@ -332,6 +349,78 @@ class CronScheduler:
         )
         self._tasks[task.name] = task
         logger.info(f"Cron: scheduled '{task.name}' ({interval}m)")
+
+    def _schedule_learning_tasks(self):
+        """Schedule self-learning loop: resolve patterns, forecasts, and daily tuning."""
+
+        async def learning_tick():
+            if self._is_quiet_time():
+                return
+            try:
+                from ..data.storage import Storage
+                from ..learning.pattern_tracker import PatternTracker
+                from ..learning.forecast_tracker import ForecastTracker
+
+                storage = Storage()
+                provider = getattr(self.bot, "price_provider", None)
+                if not provider:
+                    return
+
+                price_data = await provider.get_price()
+                current_price = price_data.get("price")
+                if not current_price:
+                    return
+
+                # 1. Resolve pending patterns
+                pt = PatternTracker(storage=storage)
+                pt.resolve_pending(current_price)
+
+                # 2. Resolve open forecasts
+                ft = ForecastTracker(storage=storage)
+                resolved = ft.resolve_all(current_price)
+                if resolved:
+                    logger.info(f"Learning: resolved {len(resolved)} forecasts")
+
+            except Exception as e:
+                logger.error(f"Learning tick failed: {e}")
+
+        async def daily_tuning():
+            try:
+                from ..data.storage import Storage
+                from ..learning.adaptive_tuner import AdaptiveTuner
+
+                storage = Storage()
+                tuner = AdaptiveTuner(storage=storage)
+                report = tuner.format_report()
+
+                chat_ids = getattr(self.config, "proactive_alert_chat_ids", [])
+                for chat_id in chat_ids:
+                    await self._send_proactive_alert_message(
+                        chat_id,
+                        f"📊 <b>Daily Self-Learning Report</b>\n\n{report}\n\n"
+                        f"<i>— EuroScope Adaptive Tuner</i>"
+                    )
+            except Exception as e:
+                logger.error(f"Daily tuning report failed: {e}")
+
+        # Learning tick every 15 minutes
+        self.schedule(
+            "learning_tick",
+            TaskFrequency.MINUTELY,
+            learning_tick,
+            interval_seconds=900,
+            delay=120,
+        )
+        logger.info("Cron: scheduled 'learning_tick' (15m)")
+
+        # Daily tuning report at ~18:00 UTC
+        self.schedule(
+            "daily_tuning_report",
+            TaskFrequency.DAILY,
+            daily_tuning,
+            delay=self._seconds_until(18, 0),
+        )
+        logger.info("Cron: scheduled 'daily_tuning_report' (daily 18:00 UTC)")
 
     async def _send_proactive_alert(self, chat_id: int, decision: dict) -> bool:
         if not self.bot:

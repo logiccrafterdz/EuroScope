@@ -37,6 +37,7 @@ class PriceProvider:
     def __init__(self):
         self._cache: dict[str, tuple[pd.DataFrame, datetime]] = {}
         self._cache_ttl = timedelta(minutes=5)
+        self._last_known_price: Optional[dict] = None  # Fallback for weekends
 
     @async_retry(max_attempts=3, delay=1.0, exceptions=(Exception,))
     async def get_price(self) -> dict:
@@ -48,6 +49,12 @@ class PriceProvider:
             # Get today's 1-minute data for latest price
             hist = ticker.history(period="2d", interval="1h")
             if hist.empty:
+                # Return last known price if available (weekend/offline fallback)
+                if self._last_known_price:
+                    cached = self._last_known_price.copy()
+                    cached["cached"] = True
+                    cached["timestamp"] = f"{cached.get('timestamp', '')} (CACHED)"
+                    return cached
                 return {"error": "Unable to fetch price data"}
 
             current = float(hist["Close"].iloc[-1])
@@ -59,7 +66,7 @@ class PriceProvider:
             change = current - prev_close
             change_pct = (change / prev_close) * 100 if prev_close else 0
 
-            return {
+            result = {
                 "symbol": "EUR/USD",
                 "price": round(current, 5),
                 "open": round(day_open, 5),
@@ -71,8 +78,17 @@ class PriceProvider:
                 "spread_pips": round(abs(day_high - day_low) * 10000, 1),
                 "timestamp": datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC"),
             }
+            # Store as fallback for offline/weekend periods
+            self._last_known_price = result.copy()
+            return result
         except Exception as e:
             logger.error(f"Error fetching price: {e}")
+            # Return cached price if available
+            if self._last_known_price:
+                cached = self._last_known_price.copy()
+                cached["cached"] = True
+                cached["timestamp"] = f"{cached.get('timestamp', '')} (CACHED)"
+                return cached
             return {"error": str(e)}
 
     @async_retry(max_attempts=3, delay=1.0, exceptions=(Exception,))
