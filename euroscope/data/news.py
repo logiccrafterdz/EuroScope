@@ -95,7 +95,10 @@ class NewsEngine:
     async def fetch_news(self, query: str = "EUR/USD forex", count: int = 10) -> list[dict]:
         """Fetch news articles related to EUR/USD via DuckDuckGo."""
         try:
-            from duckduckgo_search import DDGS
+            try:
+                from ddgs import DDGS
+            except ImportError:
+                from duckduckgo_search import DDGS
 
             def _search():
                 with DDGS() as ddgs:
@@ -142,8 +145,8 @@ class NewsEngine:
             return articles[:count]
 
         except ImportError:
-            logger.error("duckduckgo-search not installed. Run: pip install duckduckgo-search")
-            return [{"title": "❌ News unavailable", "description": "duckduckgo-search not installed"}]
+            logger.error("ddgs not installed. Run: pip install ddgs")
+            return [{"title": "❌ News unavailable", "description": "ddgs not installed"}]
         except Exception as e:
             logger.error(f"News fetch error: {e}")
             return [{"title": "❌ Error fetching news", "description": str(e)}]
