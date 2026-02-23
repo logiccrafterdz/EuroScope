@@ -1458,9 +1458,26 @@ class EuroScopeBot:
         self._bg_tasks.add(heartbeat_task)
         heartbeat_task.add_done_callback(self._bg_tasks.discard)
 
-        cron_task = asyncio.create_task(self.cron.start())
-        self._bg_tasks.add(cron_task)
-        cron_task.add_done_callback(self._bg_tasks.discard)
+        # Let the framework's JobQueue handle the cron ticks so it doesn't get starved
+        async def tick_job(context: ContextTypes.DEFAULT_TYPE):
+            try:
+                await self.cron._tick()
+            except Exception as e:
+                logger.error(f"Cron loop tick failed: {e}")
+
+        if application.job_queue:
+            application.job_queue.run_repeating(
+                tick_job, 
+                interval=self.cron.tick_interval, 
+                first=self.cron.tick_interval,
+                name="euroscope_cron_ticker"
+            )
+            logger.info("Cron ticking delegated to JobQueue")
+        else:
+            logger.warning("JobQueue not available, falling back to standalone cron loop")
+            cron_task = asyncio.create_task(self.cron.start())
+            self._bg_tasks.add(cron_task)
+            cron_task.add_done_callback(self._bg_tasks.discard)
 
         # 3. Schedule learning tasks
         self.cron.schedule("resolve_patterns", TaskFrequency.HOURLY, self._task_resolve_patterns)
