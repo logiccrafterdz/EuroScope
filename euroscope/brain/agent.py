@@ -398,9 +398,25 @@ class Agent:
         """
         Autonomous market analysis for proactive alerts (Phase 3A+).
         """
+        # Fetch live data so the LLM works with real prices
+        current_price = "Unavailable"
+        recent_candles = "Unavailable"
+        if hasattr(self, "orchestrator") and self.orchestrator:
+            try:
+                res = await self.orchestrator.run_skill("market_data", "get_price")
+                if res.success and "price" in res.data:
+                    current_price = f"{res.data['price']:.5f}"
+                res_c = await self.orchestrator.run_skill("market_data", "get_candles", timeframe="H1", limit=6)
+                if res_c.success and "df" in res_c.data:
+                    df = res_c.data["df"]
+                    recent_candles = df[["open", "high", "low", "close"]].tail(6).to_string()
+            except Exception as e:
+                logger.warning(f"Proactive analysis: failed to fetch live data: {e}")
+
         proactive_prompt = (
             "You are EuroScope, a highly proactive, intelligent, and autonomous EUR/USD trading companion.\n"
             "YOUR GOAL: Continuously monitor the market, discover opportunities, assess risks, and SHARE YOUR THOUGHTS with the user before they ask.\n\n"
+            f"CURRENT LIVE DATA:\n- EUR/USD Price: {current_price}\n- Recent H1 Candles:\n{recent_candles}\n\n"
             "MULTI-LAYER DETECTION SYSTEM:\n"
             "1. **Layer 1: Technical & Price Action**: Breakouts, bounces off key levels (Support/Resistance/Fib), or interesting candle formations.\n"
             "2. **Layer 2: Liquidity Events**: Order blocks, sweeps of session highs/lows, or institutional accumulation/distribution.\n"
@@ -438,11 +454,30 @@ class Agent:
         tracker = PatternTracker(storage=storage)
         lessons = tracker.get_recent_lessons(limit=3)
 
+        # Force fetch current price and recent candles so context isn't stale
+        current_price = "Unavailable"
+        recent_action = "Unavailable"
+        if hasattr(self, "orchestrator") and self.orchestrator:
+            try:
+                res_price = await self.orchestrator.run_skill("market_data", "get_price")
+                if res_price.success and "price" in res_price.data:
+                    current_price = f"{res_price.data['price']:.5f}"
+                
+                res_candles = await self.orchestrator.run_skill("market_data", "get_candles", timeframe="H1", limit=4)
+                if res_candles.success and "df" in res_candles.data:
+                    df = res_candles.data["df"]
+                    recent_action = df[["open", "high", "low", "close"]].tail(4).to_string()
+            except Exception as e:
+                logger.warning(f"Market Pulse: failed to fetch live data: {e}")
+
         pulse_prompt = (
             "You are EuroScope providing a regular 'Market Pulse' update.\n"
             "Your goal is to demonstrate continuous analysis and self-learning.\n\n"
+            "CURRENT LIVE DATA:\n"
+            f"- EUR/USD Current Price: {current_price}\n"
+            f"- Recent H1 Action:\n{recent_action}\n\n"
             "CONTENT GUIDELINES:\n"
-            "1. **Market Context**: Brief summary of current price action and session context.\n"
+            "1. **Market Context**: Brief summary of current price action and session context based on the live price.\n"
             "2. **Learning Update**: Briefly acknowledge recent successes or failures in pattern detection.\n"
             "3. **Current Focus**: What you are watching right now (e.g., waiting for session open, monitoring a level).\n\n"
             f"RECENT LESSONS LEARNED:\n{lessons}\n\n"
