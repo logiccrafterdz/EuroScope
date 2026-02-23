@@ -1450,9 +1450,17 @@ class EuroScopeBot:
         ]
         await application.bot.set_my_commands(cmds)
 
+        # Keep strong references to background tasks to prevent garbage collection
+        self._bg_tasks = set()
+
         # 2. Start automation services
-        asyncio.create_task(self.heartbeat.start())
-        asyncio.create_task(self.cron.start())
+        heartbeat_task = asyncio.create_task(self.heartbeat.start())
+        self._bg_tasks.add(heartbeat_task)
+        heartbeat_task.add_done_callback(self._bg_tasks.discard)
+
+        cron_task = asyncio.create_task(self.cron.start())
+        self._bg_tasks.add(cron_task)
+        cron_task.add_done_callback(self._bg_tasks.discard)
 
         # 3. Schedule learning tasks
         self.cron.schedule("resolve_patterns", TaskFrequency.HOURLY, self._task_resolve_patterns)
@@ -1472,7 +1480,9 @@ class EuroScopeBot:
         )
 
         # 4. Start Zenith Dashboard API
-        asyncio.create_task(self.start_api_server())
+        api_task = asyncio.create_task(self.start_api_server())
+        self._bg_tasks.add(api_task)
+        api_task.add_done_callback(self._bg_tasks.discard)
 
         logger.info("⚡ Background services & Commands registered.")
 
