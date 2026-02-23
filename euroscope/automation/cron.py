@@ -170,7 +170,7 @@ class CronScheduler:
             TaskFrequency.MINUTELY,
             pulse_task,
             interval_seconds=interval_secs,
-            delay=interval_secs,
+            delay=120,  # First pulse 2 min after startup
         )
 
     async def _send_proactive_alert_message(self, chat_id: int, text: str) -> bool:
@@ -337,7 +337,7 @@ class CronScheduler:
             frequency=TaskFrequency.MINUTELY,
             callback=analysis_task,
             interval_seconds=seconds,
-            next_run=time.time() + seconds,
+            next_run=time.time() + 90,  # First run 90s after startup
         )
         self._tasks[task.name] = task
         logger.info(f"Cron: scheduled '{task.name}' ({interval}m)")
