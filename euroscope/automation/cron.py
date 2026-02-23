@@ -127,23 +127,21 @@ class CronScheduler:
         self.proactive_engine = ProactiveEngine()
         if self.config and getattr(self.config, "vector_memory_ttl_days", None):
             self._schedule_vector_memory_cleanup()
-        interval_value = getattr(self.config, "proactive_analysis_interval_minutes", None)
-        interval = None
-        if isinstance(interval_value, int):
-            interval = interval_value
-        elif isinstance(interval_value, str) and interval_value.strip().isdigit():
-            interval = int(interval_value)
-        if self.config and interval and interval > 0:
-            self._schedule_proactive_analysis()
+
+        # Always schedule proactive analysis (default 15 min)
+        self._schedule_proactive_analysis()
         
         # Schedule periodic 'Market Pulse' (every 2 hours during active sessions)
         self._schedule_periodic_pulse()
         # Schedule self-learning loop
         self._schedule_learning_tasks()
+        logger.info(f"Cron: {len(self._tasks)} tasks scheduled: {list(self._tasks.keys())}")
 
     def _schedule_periodic_pulse(self):
         async def pulse_task():
+            logger.info("Market Pulse task starting...")
             if self._is_quiet_time():
+                logger.info("Market Pulse skipped: quiet time")
                 return
             try:
                 agent = getattr(self.bot, "agent", None)
@@ -246,7 +244,9 @@ class CronScheduler:
 
     def _schedule_proactive_analysis(self):
         async def analysis_task():
+            logger.info("Proactive analysis task starting...")
             if self._is_quiet_time():
+                logger.info("Proactive analysis skipped: quiet time")
                 return
             try:
 
