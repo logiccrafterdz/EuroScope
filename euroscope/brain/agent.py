@@ -434,7 +434,8 @@ class Agent:
         Generate a regular 'Market Pulse' summary showing continuous thinking.
         """
         from ..learning.pattern_tracker import PatternTracker
-        tracker = PatternTracker()
+        storage = getattr(self, "storage", None)
+        tracker = PatternTracker(storage=storage)
         lessons = tracker.get_recent_lessons(limit=3)
 
         pulse_prompt = (

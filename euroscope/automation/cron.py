@@ -249,24 +249,16 @@ class CronScheduler:
             if self._is_quiet_time():
                 return
             try:
-                from ..analytics.health_monitor import HealthMonitor
-                from ..data.storage import Storage
-
-                storage = Storage()
-                monitor = HealthMonitor(storage=storage)
-                health = await monitor.full_check_async()
-                healthy_components = [c for c in health.components if c.healthy]
-                health_score = (len(healthy_components) / max(len(health.components), 1)) * 100
-                if health_score < 90:
-                    logger.warning("Proactive analysis skipped due to health score")
-                    return
 
                 # Reuse the bot's agent (has router, orchestrator, vector_memory)
                 agent = getattr(self.bot, "agent", None)
                 if agent is None:
                     logger.warning("Proactive analysis skipped: no agent available on bot")
                     return
-                decision = await agent.run_proactive_analysis()
+                decision = await asyncio.wait_for(
+                    agent.run_proactive_analysis(),
+                    timeout=90,
+                )
                 if not decision.get("should_alert"):
                     logger.debug("Proactive analysis: No alert warranted")
                     return
@@ -529,7 +521,10 @@ class CronScheduler:
 
     async def _loop(self):
         while self._running:
-            await self._tick()
+            try:
+                await self._tick()
+            except Exception as e:
+                logger.error(f"Cron loop tick failed (recovering): {e}", exc_info=True)
             await asyncio.sleep(self.tick_interval)
 
     async def _tick(self):
@@ -541,7 +536,7 @@ class CronScheduler:
             try:
                 start = time.monotonic()
                 if asyncio.iscoroutinefunction(task.callback):
-                    await task.callback()
+                    await asyncio.wait_for(task.callback(), timeout=120)
                 else:
                     task.callback()
                 elapsed = round((time.monotonic() - start) * 1000, 1)
@@ -560,6 +555,14 @@ class CronScheduler:
                 if task.max_runs and task.run_count >= task.max_runs:
                     task.enabled = False
 
+            except asyncio.TimeoutError:
+                logger.warning(f"Cron task '{task.name}' timed out after 120s — skipping")
+                task.schedule_next()
+                self._history.append({
+                    "task": task.name,
+                    "status": "timeout",
+                    "timestamp": datetime.now(UTC).isoformat(),
+                })
             except Exception as e:
                 logger.error(f"Cron task '{task.name}' failed: {e}")
                 task.schedule_next()
