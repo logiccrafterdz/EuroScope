@@ -39,6 +39,7 @@ class ScheduledTask:
     run_count: int = 0
     enabled: bool = True
     max_runs: int = 0  # 0 = unlimited
+    is_running: bool = False
 
     def is_due(self) -> bool:
         return self.enabled and time.time() >= self.next_run
@@ -114,6 +115,7 @@ class CronScheduler:
         self._running = False
         self._task: Optional[asyncio.Task] = None
         self._history: list[dict] = []
+        self._active_tasks = set()
         self._proactive_warned = False
         cache_minutes = getattr(self.config, "proactive_alert_cache_minutes", 60)
         try:
@@ -528,11 +530,8 @@ class CronScheduler:
             await asyncio.sleep(self.tick_interval)
 
     async def _tick(self):
-        """Check and execute due tasks."""
-        for task in list(self._tasks.values()):
-            if not task.is_due():
-                continue
-
+        """Check and execute due tasks concurrently."""
+        async def run_task(task: ScheduledTask):
             try:
                 start = time.monotonic()
                 if asyncio.iscoroutinefunction(task.callback):
@@ -572,6 +571,17 @@ class CronScheduler:
                     "error": str(e)[:200],
                     "timestamp": datetime.now(UTC).isoformat(),
                 })
+            finally:
+                task.is_running = False
+
+        for task in list(self._tasks.values()):
+            if not task.is_due() or getattr(task, "is_running", False):
+                continue
+
+            task.is_running = True
+            t = asyncio.create_task(run_task(task))
+            self._active_tasks.add(t)
+            t.add_done_callback(self._active_tasks.discard)
 
         # Cap history to prevent unbounded growth
         if len(self._history) > 50:
