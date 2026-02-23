@@ -1418,12 +1418,18 @@ class EuroScopeBot:
         self.cron.set_bot(self)
         # 1. Register commands to appear in the Telegram menu button
         if self.config.telegram.web_app_url:
-            await application.bot.set_chat_menu_button(
-                menu_button=MenuButtonWebApp(
-                    text="Zenith v4",
-                    web_app=WebAppInfo(url=self.config.telegram.web_app_url)
+            try:
+                await asyncio.wait_for(
+                    application.bot.set_chat_menu_button(
+                        menu_button=MenuButtonWebApp(
+                            text="Zenith v4",
+                            web_app=WebAppInfo(url=self.config.telegram.web_app_url)
+                        )
+                    ),
+                    timeout=10.0
                 )
-            )
+            except Exception as e:
+                logger.warning(f"Failed to set chat menu button (timeout/network error): {e}")
 
         cmds = [
             BotCommand("start", "Start the bot"),
@@ -1448,7 +1454,13 @@ class EuroScopeBot:
             BotCommand("id", "Get your Telegram Chat ID"),
             BotCommand("help", "List all commands"),
         ]
-        await application.bot.set_my_commands(cmds)
+        try:
+            await asyncio.wait_for(
+                application.bot.set_my_commands(cmds),
+                timeout=10.0
+            )
+        except Exception as e:
+            logger.warning(f"Failed to set bot commands (timeout/network error): {e}")
 
         # Keep strong references to background tasks to prevent garbage collection
         self._bg_tasks = set()
