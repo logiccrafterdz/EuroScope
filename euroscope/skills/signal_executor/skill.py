@@ -33,7 +33,7 @@ class SignalExecutorSkill(BaseSkill):
     emoji = "⚡"
     category = SkillCategory.TRADING
     version = "1.0.0"
-    capabilities = ["open_trade", "close_trade", "list_trades", "trade_history"]
+    capabilities = ["open_trade", "close_trade", "list_trades", "trade_history", "update_trade"]
 
     def __init__(self):
         super().__init__()
@@ -73,6 +73,8 @@ class SignalExecutorSkill(BaseSkill):
             return await self._list_trades()
         elif action == "trade_history":
             return await self._trade_history()
+        elif action == "update_trade":
+            return await self._update_trade(context, **params)
         return SkillResult(success=False, error=f"Unknown action: {action}")
 
     async def execute_trade(self, context: SkillContext, **params) -> SkillResult:
@@ -256,18 +258,52 @@ class SignalExecutorSkill(BaseSkill):
                         take_profit=trade.take_profit,
                         strategy=trade.strategy,
                         timeframe="H1",
-                        regime="paper",
+                        regime="paper", # Changed from trade.execution_mode as it's not defined on PaperTrade
                         confidence=0.0,
                         indicators={},
                         patterns=[],
-                        reasoning=f"Closed automatically at {exit_price}",
+                        reasoning=f"Closed manually or via TP/SL exit at {exit_price}",
                         status="closed",
                         pnl=trade.pnl_pips
                     )
-
                 return SkillResult(success=True, data=trade.__dict__)
 
-        return SkillResult(success=False, error=f"Trade {trade_id} not found")
+        return SkillResult(success=False, error=f"Trade {trade_id} not found in open positions")
+
+    async def _update_trade(self, context: SkillContext, **params) -> SkillResult:
+        """Modify SL/TP of an active open trade."""
+        trade_id = params.get("trade_id")
+        new_sl = params.get("stop_loss")
+        new_tp = params.get("take_profit")
+        
+        if not trade_id:
+            return SkillResult(success=False, error="trade_id is required")
+            
+        for trade in self._open:
+            if trade.trade_id == trade_id:
+                old_sl = trade.stop_loss
+                old_tp = trade.take_profit
+                
+                if new_sl is not None:
+                    trade.stop_loss = float(new_sl)
+                if new_tp is not None:
+                    trade.take_profit = float(new_tp)
+                    
+                import logging
+                logging.getLogger("euroscope.trading.signal_executor").info(
+                    f"Trade {trade_id} updated: SL {old_sl} -> {trade.stop_loss}, TP {old_tp} -> {trade.take_profit}"
+                )
+                
+                # Optionally sync open positions in context
+                if hasattr(context, "open_positions"):
+                    for i, pos_dict in enumerate(context.open_positions):
+                        if isinstance(pos_dict, dict) and pos_dict.get("trade_id") == trade_id:
+                            pos_dict["stop_loss"] = trade.stop_loss
+                            pos_dict["take_profit"] = trade.take_profit
+                            
+                return SkillResult(success=True, data=trade.__dict__)
+                
+        return SkillResult(success=False, error=f"Open Trade {trade_id} not found")
 
     async def _list_trades(self) -> SkillResult:
         trades = [t.__dict__ for t in self._open]

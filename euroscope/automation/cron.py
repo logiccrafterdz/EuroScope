@@ -5,6 +5,7 @@ Provides a lightweight scheduler for analysis runs, reports,
 and maintenance tasks.
 """
 
+import inspect
 import asyncio
 import logging
 import time
@@ -540,13 +541,46 @@ class CronScheduler:
                     
                 open_trades = [t for t in trades_res.data if t.get("status") == "OPEN"]
                 
-                # 3. Check TP/SL
+                # 3. Check Trailing Stops & TP/SL
                 for trade in open_trades:
                     direction = trade.get("direction")
                     sl = trade.get("stop_loss")
                     tp = trade.get("take_profit")
+                    entry = trade.get("entry_price")
                     trade_id = trade.get("trade_id")
                     
+                    # Context required for signal_executor standard signature
+                    from ..skills.base import SkillContext
+                    ctx = SkillContext()
+                    
+                    # --- Trailing Stop Logic ---
+                    if direction == "BUY":
+                        floating_pips = (current_price - entry) * 10000
+                        if floating_pips >= 20.0:
+                            # Move SL to Break-Even + 5 pips if SL is still below that
+                            new_sl = entry + 0.0005
+                            if sl < new_sl:
+                                logger.info(f"Trailing Stop Triggered ON {trade_id}: Moving SL {sl:.5f} -> {new_sl:.5f}")
+                                await orchestrator.run_skill(
+                                    "signal_executor", "update_trade", context=ctx,
+                                    trade_id=trade_id, stop_loss=new_sl
+                                )
+                                sl = new_sl # Update local variable for TP/SL check below
+                                
+                    elif direction == "SELL":
+                        floating_pips = (entry - current_price) * 10000
+                        if floating_pips >= 20.0:
+                            # Move SL to Break-Even + 5 pips if SL is still above that
+                            new_sl = entry - 0.0005
+                            if sl > new_sl:
+                                logger.info(f"Trailing Stop Triggered ON {trade_id}: Moving SL {sl:.5f} -> {new_sl:.5f}")
+                                await orchestrator.run_skill(
+                                    "signal_executor", "update_trade", context=ctx,
+                                    trade_id=trade_id, stop_loss=new_sl
+                                )
+                                sl = new_sl
+
+                    # --- TP/SL Hit Logic ---
                     hit_tp = False
                     hit_sl = False
                     
@@ -559,10 +593,6 @@ class CronScheduler:
                         
                     if hit_tp or hit_sl:
                         logger.info(f"Trade Monitor: {trade_id} hit {'TP' if hit_tp else 'SL'} at {current_price:.5f}")
-                        
-                        # Context required for signal_executor standard signature
-                        from ..skills.base import SkillContext
-                        ctx = SkillContext()
                         
                         close_res = await orchestrator.run_skill(
                             "signal_executor", 
@@ -712,10 +742,12 @@ class CronScheduler:
         async def run_task(task: ScheduledTask):
             try:
                 start = time.monotonic()
-                if asyncio.iscoroutinefunction(task.callback):
+                if inspect.iscoroutinefunction(task.callback) or inspect.isawaitable(task.callback):
                     await asyncio.wait_for(task.callback(), timeout=120)
                 else:
-                    task.callback()
+                    res = task.callback()
+                    if inspect.isawaitable(res):
+                        await asyncio.wait_for(res, timeout=120)
                 elapsed = round((time.monotonic() - start) * 1000, 1)
 
                 task.last_run = time.time()

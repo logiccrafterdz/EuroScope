@@ -23,6 +23,23 @@ class SafetyGuardrail:
 
             if context.metadata.get("emergency_mode"):
                 return True, "EMERGENCY: market regime shift"
+                
+            # --- DAILY DRAWDOWN CHECK ---
+            max_dd_pips = float(getattr(self.config, "safety_max_daily_drawdown_pips", 50.0))
+            if max_dd_pips > 0:
+                try:
+                    from ..data.storage import Storage
+                    from datetime import datetime, timezone
+                    storage = Storage()
+                    today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+                    today_trades = storage.get_trade_journal_for_date(today_str, status="closed")
+                    daily_pnl = sum(t.get("pnl_pips", 0.0) for t in today_trades)
+                    
+                    if daily_pnl <= -max_dd_pips:
+                        return True, f"DAILY DRAWDOWN REACHED: {daily_pnl:.1f} pips (Limit: -{max_dd_pips}). Trading halted for today."
+                except Exception as e:
+                    import logging
+                    logging.getLogger("euroscope.guardrails").warning(f"Could not fetch daily PnL: {e}")
 
             direction = (context.signals or {}).get("direction")
             if direction not in ("BUY", "SELL"):

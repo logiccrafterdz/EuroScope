@@ -79,11 +79,11 @@ class ProactiveEngine:
         if priority < user_min_priority:
             return True
             
-        # 2. De-duplication: Suppress similar events within 15 minutes
+        # 2. De-duplication: Suppress similar events within 60 minutes
         last_time = self.last_alerts.get(event.type)
         if last_time:
             delta = (datetime.now(UTC) - last_time).total_seconds() / 60
-            if delta < 15 and priority <= AlertPriority.MEDIUM:
+            if delta < 60 and priority < AlertPriority.CRITICAL:
                 return True
                 
         # 3. Session awareness: Suppress LOW priority during low liquidity (Asian session)

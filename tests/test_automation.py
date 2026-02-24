@@ -92,9 +92,11 @@ class TestCronScheduler:
         cron = CronScheduler(tick_interval=1)
         cron.schedule_once("test", inc, delay=0)
         await cron._tick()
+        await asyncio.sleep(0.01) # Yield to allow the created task to complete
         assert counter["n"] == 1
         # Should not run again
         await cron._tick()
+        await asyncio.sleep(0.01)
         assert counter["n"] == 1
 
     @pytest.mark.asyncio
@@ -106,6 +108,7 @@ class TestCronScheduler:
         cron = CronScheduler()
         task = cron.schedule("test", TaskFrequency.MINUTELY, inc, delay=0)
         await cron._tick()
+        await asyncio.sleep(0.01)
         assert counter["n"] == 1
         assert task.run_count == 1
 
@@ -126,6 +129,7 @@ class TestCronScheduler:
         cron = CronScheduler()
         cron.schedule_once("bad", bad, delay=0)
         await cron._tick()
+        await asyncio.sleep(0.01)
         assert len(cron.history) == 1
         assert cron.history[0]["status"] == "error"
 
