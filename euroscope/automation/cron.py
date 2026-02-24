@@ -539,7 +539,7 @@ class CronScheduler:
                 if not trades_res.success or not trades_res.data:
                     return
                     
-                open_trades = [t for t in trades_res.data if t.get("status") == "OPEN"]
+                open_trades = [t for t in trades_res.data if str(t.get("status", "")).upper() == "OPEN"]
                 
                 # 3. Check Trailing Stops & TP/SL
                 for trade in open_trades:
