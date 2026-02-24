@@ -654,25 +654,36 @@ class Agent:
         """
         Autonomous market analysis for proactive alerts (Phase 3A+).
         """
-        # Fetch live data so the LLM works with real prices
+        # Fetch live data and run advanced skills so the LLM works with a deep understanding
         current_price = "Unavailable"
         recent_candles = "Unavailable"
+        advanced_analysis = "No advanced analysis available."
+        
         if hasattr(self, "orchestrator") and self.orchestrator:
             try:
+                # 1. Get raw price quickly
                 res = await self.orchestrator.run_skill("market_data", "get_price")
                 if res.success and "price" in res.data:
                     current_price = f"{res.data['price']:.5f}"
+                
+                # 2. Get recent candles
                 res_c = await self.orchestrator.run_skill("market_data", "get_candles", timeframe="H1", limit=6)
                 if res_c.success and "df" in res_c.data:
                     df = res_c.data["df"]
                     recent_candles = df[["open", "high", "low", "close"]].tail(6).to_string()
+                    
+                # 3. Run the complete autonomous pipeline to get Liquidity, Fundamentals, Risk, etc.
+                ctx = await self.orchestrator.run_full_analysis_pipeline(timeframe="H1")
+                advanced_analysis = ctx.metadata.get("formatted", "Pipeline executed but yielded no formatted summary.")
+                
             except Exception as e:
-                logger.warning(f"Proactive analysis: failed to fetch live data: {e}")
+                logger.warning(f"Proactive analysis: failed to run full advanced pipeline: {e}")
 
         proactive_prompt = (
             "You are EuroScope, a highly proactive, intelligent, and autonomous EUR/USD trading companion.\n"
-            "YOUR GOAL: Continuously monitor the market, discover opportunities, assess risks, and SHARE YOUR THOUGHTS with the user before they ask.\n\n"
-            f"CURRENT LIVE DATA:\n- EUR/USD Price: {current_price}\n- Recent H1 Candles:\n{recent_candles}\n\n"
+            "Your goal is to digest the raw market data AND the deep advanced analysis provided below to decide if an alert is warranted.\n\n"
+            f"--- LIVE MARKET STATE ---\n- EUR/USD Price: {current_price}\n- Recent H1 Candles:\n{recent_candles}\n\n"
+            f"--- ADVANCED SKILLS ANALYSIS ---\n{advanced_analysis}\n\n"
             "MULTI-LAYER DETECTION SYSTEM:\n"
             "1. **Layer 1: Technical & Price Action**: Breakouts, bounces off key levels (Support/Resistance/Fib), or interesting candle formations.\n"
             "2. **Layer 2: Liquidity Events**: Order blocks, sweeps of session highs/lows, or institutional accumulation/distribution.\n"
@@ -718,9 +729,11 @@ class Agent:
         tracker = PatternTracker(storage=storage)
         lessons = tracker.get_recent_lessons(limit=3)
 
-        # Force fetch current price and recent candles so context isn't stale
+        # Force fetch current price, recent candles, AND advanced context so the pulse is deeply informative
         current_price = "Unavailable"
         recent_action = "Unavailable"
+        advanced_analysis = "No advanced analysis available."
+        
         if hasattr(self, "orchestrator") and self.orchestrator:
             try:
                 res_price = await self.orchestrator.run_skill("market_data", "get_price")
@@ -731,18 +744,23 @@ class Agent:
                 if res_candles.success and "df" in res_candles.data:
                     df = res_candles.data["df"]
                     recent_action = df[["open", "high", "low", "close"]].tail(4).to_string()
+                    
+                # Run the full pipeline to inject liquidity and macro context into the pulse
+                ctx = await self.orchestrator.run_full_analysis_pipeline(timeframe="H1")
+                advanced_analysis = ctx.metadata.get("formatted", "Pipeline executed but yielded no formatted summary.")
             except Exception as e:
-                logger.warning(f"Market Pulse: failed to fetch live data: {e}")
+                logger.warning(f"Market Pulse: failed to fetch live advanced data: {e}")
 
         pulse_prompt = (
             "You are EuroScope, an intelligent, persistent EUR/USD AI expert providing your regular 'Market Pulse'.\n"
             "Your goal is to demonstrate continuous analysis, self-learning, and active monitoring.\n\n"
             "## CRITICAL INSTRUCTION:\n"
-            "You are NOT allowed to hallucinate data. You must USE YOUR TOOLS to fetch the current price and indicators.\n"
-            "You have access to get_price, get_technical_analysis, and get_news_sentiment.\n\n"
-            "CURRENT CACHED DATA (May be stale, USE TOOLS if needed!):\n"
+            "You have access to get_price, get_technical_analysis, and get_news_sentiment if you need MORE context.\n\n"
+            "--- CURRENT LIVE STATE ---\n"
             f"- Last Known Price: {current_price}\n"
             f"- Recent H1 Action:\n{recent_action}\n\n"
+            "--- ADVANCED SKILLS ANALYSIS ---\n"
+            f"{advanced_analysis}\n\n"
             "CONTENT GUIDELINES:\n"
             "1. **Market Context**: Brief summary of current price action, momentum, and session context based on *actual live data*.\n"
             "2. **Learning Update**: How does this map to our recent findings or failures? Have we invalidated any prior thesis?\n"
