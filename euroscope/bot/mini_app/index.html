@@ -594,17 +594,31 @@
             </div>
         </div>
 
-        <!-- SIGNALS TAB -->
+        <!-- TRADES TAB -->
         <div id="signals-view" class="tab-content">
             <div style="margin-bottom: 16px;">
                 <button class="action-btn" onclick="scanSignals()" id="scan-btn"
                     style="background: var(--accent-primary); color: #000; box-shadow: 0 0 15px var(--accent-glow); display: flex; align-items: center; justify-content: center; gap: 8px;">
-                    <span id="scan-btn-text">SCAN MARKET</span> <span class="loading-spinner" id="scan-spinner"
+                    <span id="scan-btn-text">AUTO-SCAN FOR TRADES</span> <span class="loading-spinner" id="scan-spinner"
                         style="display: none; border-top-color: #000; margin: 0;"></span>
                 </button>
             </div>
-            <div id="signal-list">
-                <div class="glass-card bento-full empty-state" id="signal-empty-state">NO RECENT SIGNALS</div>
+
+            <div class="glass-card bento-full" style="margin-bottom: 16px; padding-bottom: 8px;">
+                <div class="label-sm" style="margin-bottom: 12px; display: flex; justify-content: space-between;">
+                    <span>Active Positions</span>
+                    <span id="open-trades-count" style="color: var(--accent-primary);">0</span>
+                </div>
+                <div id="open-trades-list">
+                    <div class="empty-state" style="padding: 20px 0;">NO ACTIVE TRADES</div>
+                </div>
+            </div>
+
+            <div class="glass-card bento-full">
+                <div class="label-sm" style="margin-bottom: 12px;">Recent History</div>
+                <div id="trade-history-list">
+                    <div class="empty-state" style="padding: 20px 0;">NO HISTORY</div>
+                </div>
             </div>
         </div>
 
@@ -700,9 +714,11 @@
             </svg>
         </button>
         <button class="dock-btn" id="tab-signals" onclick="switchTab('signals')">
+            <!-- Briefcase Icon for Trades -->
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                 stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+                <rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect>
+                <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path>
             </svg>
         </button>
         <button class="dock-btn" id="tab-analysis" onclick="switchTab('analysis')">
@@ -1086,22 +1102,46 @@
                     }
                 }
             } else if (activeTab === 'signals') {
-                const res = await api('/signals');
-                const list = document.getElementById('signal-list');
-                if (res.success && res.signals?.length > 0) {
-                    list.innerHTML = res.signals.map(s => `
-                        <div class="glass-card bento-full" style="padding: 20px;">
-                            <div style="display:flex; justify-content:space-between; margin-bottom:16px;">
-                                <span style="font-weight:800; color: ${s.direction === 'BUY' ? 'var(--up-color)' : 'var(--down-color)'}; font-size: 0.75rem; letter-spacing:2px; text-shadow: 0 0 10px currentColor;">${s.direction} SIGNAL</span>
-                                <span style="font-size: 0.6rem; color: var(--text-dim);">${new Date(s.timestamp || s.created_at).toLocaleTimeString()}</span>
+                const resTrades = await api('/trades');
+                const listOpen = document.getElementById('open-trades-list');
+                const countBadge = document.getElementById('open-trades-count');
+
+                if (resTrades.success && resTrades.trades?.length > 0) {
+                    countBadge.textContent = resTrades.trades.length;
+                    listOpen.innerHTML = resTrades.trades.map(t => `
+                        <div style="padding: 12px 0; border-bottom: 1px solid var(--border-color);">
+                            <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+                                <span style="font-weight:800; color: ${t.direction === 'BUY' ? 'var(--up-color)' : 'var(--down-color)'}; font-size: 0.75rem; letter-spacing:2px;">${t.direction} POSITION</span>
+                                <span style="font-size: 0.65rem; color: ${t.pnl_pips >= 0 ? 'var(--up-color)' : 'var(--down-color)'}; font-weight:700;">${t.pnl_pips >= 0 ? '+' : ''}${t.pnl_pips?.toFixed(1) || 0} pips</span>
                             </div>
                             <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; text-align:center;">
-                                <div><div class="label-sm">ENTRY</div><div class="val-md">${f5(s.entry_price)}</div></div>
-                                <div><div class="label-sm">STOP</div><div class="val-md" style="color:var(--down-color)">${f5(s.stop_loss)}</div></div>
-                                <div><div class="label-sm">TARGET</div><div class="val-md" style="color:var(--up-color)">${f5(s.take_profit)}</div></div>
+                                <div><div class="label-sm">ENTRY</div><div class="val-md">${f5(t.entry_price)}</div></div>
+                                <div><div class="label-sm">STOP</div><div class="val-md" style="color:var(--down-color)">${f5(t.stop_loss)}</div></div>
+                                <div><div class="label-sm">TARGET</div><div class="val-md" style="color:var(--up-color)">${f5(t.take_profit)}</div></div>
                             </div>
                         </div>`).join('');
-                } else list.innerHTML = `<div class="glass-card bento-full empty-state">NO ACTIVE SIGNALS</div>`;
+                } else {
+                    countBadge.textContent = '0';
+                    listOpen.innerHTML = `<div class="empty-state">NO ACTIVE TRADES</div>`;
+                }
+
+                const resHist = await api('/history');
+                const listHist = document.getElementById('trade-history-list');
+                if (resHist.success && resHist.history?.length > 0) {
+                    listHist.innerHTML = resHist.history.map(t => `
+                        <div style="padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,0.03); display:flex; justify-content:space-between; align-items:center;">
+                            <div>
+                                <div style="font-weight:700; font-size:0.7rem; color:${t.direction === 'BUY' ? 'var(--up-color)' : 'var(--down-color)'};">${t.direction}</div>
+                                <div style="font-size:0.55rem; color:var(--text-dim);">${t.strategy}</div>
+                            </div>
+                            <div style="text-align:right;">
+                                <div style="font-family:'Fira Code'; font-weight:700; font-size:0.75rem; color:${t.pnl_pips >= 0 ? 'var(--up-color)' : 'var(--down-color)'};">${t.pnl_pips >= 0 ? '+' : ''}${t.pnl_pips?.toFixed(1) || 0} p</div>
+                                <div style="font-size:0.55rem; color:var(--text-muted);">${new Date(t.timestamp * 1000).toLocaleDateString()}</div>
+                            </div>
+                        </div>`).join('');
+                } else {
+                    listHist.innerHTML = `<div class="empty-state">NO HISTORY YET</div>`;
+                }
             } else if (activeTab === 'stats') {
                 runBacktest(null); loadPerformance();
             } else if (activeTab === 'briefing') {

@@ -1779,6 +1779,27 @@ class EuroScopeBot:
             "signals": signals
         })
 
+    async def _api_trades(self, request):
+        """API endpoint for active open trades (Phase 5)."""
+        logger.debug("API: Fetching open trades...")
+        res = await self.orchestrator.run_skill("signal_executor", "list_trades")
+        if not res.success:
+            return web.json_response({"success": False, "error": res.error, "trades": []})
+        return web.json_response({"success": True, "trades": res.data})
+
+    async def _api_history(self, request):
+        """API endpoint for closed trade history (Phase 5)."""
+        logger.debug("API: Fetching closed trade history...")
+        res = await self.orchestrator.run_skill("signal_executor", "trade_history")
+        if not res.success:
+            return web.json_response({"success": False, "error": res.error, "history": []})
+        
+        # Optionally limit to the last 20 for the UI
+        history = res.data[-20:] if res.data else []
+        # Sort descending by timestamp (newest first)
+        history.sort(key=lambda x: x.get("timestamp", 0), reverse=True)
+        return web.json_response({"success": True, "history": history})
+
     async def _api_scan_signals(self, request):
         """API endpoint to actively scan for and generate new trading signals."""
         logger.debug("API: Actively scanning for new signals (Mini App request)...")
@@ -2037,6 +2058,8 @@ class EuroScopeBot:
                 web.get('/api/backtest', self._api_backtest),
                 web.get('/api/performance', self._api_performance),
                 web.get('/api/briefing', self._api_briefing),
+                web.get('/api/trades', self._api_trades),
+                web.get('/api/history', self._api_history),
             ])
             
             port = int(os.getenv("PORT", 8080))
