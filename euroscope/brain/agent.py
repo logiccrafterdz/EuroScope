@@ -109,6 +109,53 @@ class Agent:
             logger.error(f"LLM call failed: {e}")
             return f"❌ AI unavailable: {str(e)[:100]}"
 
+    async def stateless_chat(self, user_message: str, system_override: str = None) -> str:
+        """Send a message to the LLM WITHOUT polluting the user's conversation history."""
+        system = system_override or self._get_system_prompt_with_tools()
+
+        # Add vector memory context if available
+        if self.vector_memory:
+            context = self.vector_memory.get_relevant_context(user_message)
+            if context:
+                system += f"\n\n### LONG-TERM MEMORY (PAST CONTEXT)\n{context}"
+
+        messages = [
+            {"role": "system", "content": system},
+            {"role": "user", "content": user_message}
+        ]
+
+        if self.router:
+            reply = await self.router.chat(messages)
+            return reply
+
+        if not self.config.api_key:
+            return "⚠️ AI features disabled — no API key configured."
+
+        try:
+            async with httpx.AsyncClient(timeout=60) as client:
+                response = await client.post(
+                    f"{self.config.api_base}/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {self.config.api_key}",
+                        "Content-Type": "application/json",
+                    },
+                    json={
+                        "model": self.config.model,
+                        "messages": messages,
+                        "max_tokens": self.config.max_tokens,
+                        "temperature": self.config.temperature,
+                    },
+                )
+                response.raise_for_status()
+                data = response.json()
+            return data["choices"][0]["message"]["content"]
+        except httpx.HTTPStatusError as e:
+            logger.error(f"Stateless LLM API error: {e.response.status_code} — {e.response.text[:500]}")
+            return f"❌ AI error: {e.response.status_code}"
+        except Exception as e:
+            logger.error(f"Stateless LLM call failed: {e}")
+            return f"❌ AI unavailable: {str(e)[:100]}"
+
     async def chat_with_tools(self, user_message: str, max_iterations: int = 3) -> str:
         """Simple tool-enabled chat with synthesis."""
         system = self._get_system_prompt_with_tools()
@@ -394,6 +441,215 @@ class Agent:
             "warning": "Reached max iterations — answer may be incomplete",
         }
 
+    async def stateless_chat_with_react_loop(
+        self,
+        user_message: str,
+        max_iterations: int = 5,
+        max_tokens_per_iteration: int = 1500,
+        custom_functions: Optional[list[dict]] = None,
+        system_override: Optional[str] = None,
+    ) -> dict[str, Any]:
+        """A ReAct loop that does NOT include the user's conversational history."""
+        if not self.router or not hasattr(self.router, "chat_with_functions"):
+            final_answer = await self.stateless_chat(user_message, system_override=self._get_system_prompt_with_tools())
+            return {
+                "final_answer": final_answer,
+                "reasoning_steps": [],
+                "tools_used": [],
+                "iterations": 0,
+                "confidence": self._calculate_confidence(final_answer, []),
+            }
+        
+        system = system_override or self._get_react_system_prompt()
+        if self.vector_memory:
+            context = self.vector_memory.get_relevant_context(user_message)
+            if context:
+                system += f"\n\n### LONG-TERM MEMORY (PAST CONTEXT)\n{context}"
+
+        functions = custom_functions if custom_functions is not None else get_all_function_schemas()
+        # NOTICE: No self.conversation_history loaded here
+        messages = [
+            {"role": "system", "content": system},
+            {"role": "user", "content": user_message},
+        ]
+
+        reasoning_steps: list[str] = []
+        tools_used: list[str] = []
+        iteration = 0
+        start_time = time.time()
+        max_total_time = 75  # Slightly longer for background analysis
+
+        while iteration < max_iterations:
+            if time.time() - start_time > max_total_time:
+                final_answer = await self._force_final_answer(messages)
+                confidence = self._calculate_confidence(final_answer, tools_used, incomplete=True)
+                return {
+                    "final_answer": final_answer,
+                    "reasoning_steps": reasoning_steps,
+                    "tools_used": tools_used,
+                    "iterations": iteration,
+                    "confidence": confidence,
+                    "warning": "Reached max time — answer may be incomplete",
+                }
+
+            iteration += 1
+            try:
+                response = await asyncio.wait_for(
+                    self.router.chat_with_functions(
+                        messages=messages,
+                        functions=functions,
+                        function_call="auto",
+                        max_tokens=max_tokens_per_iteration,
+                    ),
+                    timeout=20, # Higher timeout for background processing
+                )
+            except Exception as e:
+                final_answer = await self._force_final_answer(messages)
+                if not reasoning_steps and not tools_used:
+                    # In case of early timeout
+                    final_answer = "Timeout during background task before any data was processed."
+                confidence = self._calculate_confidence(final_answer, tools_used, incomplete=True)
+                return {
+                    "final_answer": final_answer,
+                    "reasoning_steps": reasoning_steps,
+                    "tools_used": tools_used,
+                    "iterations": iteration,
+                    "confidence": confidence,
+                    "warning": f"Iteration timeout or error: {str(e)[:100]}",
+                }
+
+            content = response.get("content")
+            function_calls = response.get("function_calls") or []
+
+            if not function_calls and content:
+                function_calls = self._parse_text_tool_calls(content)
+
+            if content:
+                for trigger in ["Observation:", "OBSERVE:", "Result:", "RESULT:"]:
+                    if trigger in content:
+                        logger.warning(f"Detected hallucinated {trigger} in stateless iteration {iteration}")
+                        content = content.split(trigger)[0].strip()
+                        break
+                
+                reasoning = self._extract_reasoning(content)
+                if reasoning:
+                    reasoning_steps.append(f"Iteration {iteration}: {reasoning}")
+
+            if content and not function_calls:
+                lowered = content.lower()
+                if (
+                    "get_" not in lowered
+                    and not any(x in lowered for x in ["reason:", "act:", "thought:", "observation:", "observe:"])
+                ):
+                    clean_content = content
+                    for marker in ["REASON:", "ACT:", "THOUGHT:", "FINAL ANALYSIS:"]:
+                        clean_content = clean_content.replace(marker, "").strip()
+                    confidence = self._calculate_confidence(clean_content, tools_used)
+                    return {
+                        "final_answer": clean_content,
+                        "reasoning_steps": reasoning_steps,
+                        "tools_used": tools_used,
+                        "iterations": iteration,
+                        "confidence": confidence,
+                    }
+                if any(x in lowered for x in ["final analysis:", "answer:", "comprehensive analysis", "summary:"]):
+                    clean_content = content
+                    for marker in ["REASON:", "ACT:", "THOUGHT:", "FINAL ANALYSIS:"]:
+                        clean_content = clean_content.replace(marker, "").strip()
+                    
+                    confidence = self._calculate_confidence(clean_content, tools_used)
+                    return {
+                        "final_answer": clean_content,
+                        "reasoning_steps": reasoning_steps,
+                        "tools_used": tools_used,
+                        "iterations": iteration,
+                        "confidence": confidence,
+                    }
+                else:
+                    messages.append({
+                        "role": "user",
+                        "content": "You provided reasoning but no action. Either call a tool or provide 'FINAL ANALYSIS:' if you are finished."
+                    })
+                    continue
+
+            if not function_calls:
+                final_answer = await self._force_final_answer(messages)
+                confidence = self._calculate_confidence(final_answer, tools_used, incomplete=True)
+                return {
+                    "final_answer": final_answer,
+                    "reasoning_steps": reasoning_steps,
+                    "tools_used": tools_used,
+                    "iterations": iteration,
+                    "confidence": confidence,
+                    "warning": "No tools selected — answer may be incomplete",
+                }
+
+            proactive_call = next(
+                (call for call in function_calls if call.get("name") == "proactive_alert_decision"),
+                None,
+            )
+            if proactive_call:
+                return {
+                    "final_answer": content or "",
+                    "reasoning_steps": reasoning_steps,
+                    "tools_used": tools_used,
+                    "iterations": iteration,
+                    "confidence": self._calculate_confidence(content or "", tools_used),
+                    "function_call_result": proactive_call.get("arguments") or {},
+                }
+
+            raw_message = response.get("raw_message")
+            if raw_message and raw_message.get("tool_calls"):
+                messages.append(raw_message)
+            else:
+                messages.append({
+                    "role": "assistant",
+                    "content": content,
+                    "tool_calls": [
+                        {
+                            "id": call.get("id") or f"call_{iteration}_{i}",
+                            "type": "function",
+                            "function": {"name": call["name"], "arguments": json.dumps(call.get("arguments", {}))}
+                        } for i, call in enumerate(function_calls)
+                    ]
+                })
+
+            tool_results = []
+            for i, call in enumerate(function_calls):
+                name = call.get("name")
+                args = call.get("arguments") or {}
+                call_id = call.get("id") or f"call_{iteration}_{i}"
+                if name == "proactive_alert_decision":
+                    continue
+                
+                try:
+                    result = await asyncio.wait_for(
+                        self._execute_tool(name, args),
+                        timeout=self.tool_timeout,
+                    )
+                except Exception as e:
+                    result = {"success": False, "error": str(e)}
+
+                tools_used.append(name)
+                observation = self._format_tool_observation(name, result)
+                tool_results.append(observation)
+                messages.append({
+                    "role": "tool",
+                    "tool_call_id": call_id,
+                    "content": observation,
+                })
+
+        final_answer = await self._force_final_answer(messages)
+        confidence = self._calculate_confidence(final_answer, tools_used, incomplete=True)
+        return {
+            "final_answer": final_answer,
+            "reasoning_steps": reasoning_steps,
+            "tools_used": tools_used,
+            "iterations": iteration,
+            "confidence": confidence,
+            "warning": "Reached max iterations — answer may be incomplete",
+        }
+
     async def run_proactive_analysis(self) -> dict[str, Any]:
         """
         Autonomous market analysis for proactive alerts (Phase 3A+).
@@ -435,14 +691,22 @@ class Agent:
         )
 
         decision_functions = get_all_function_schemas()
-        response = await self.chat_with_react_loop(
-            user_message="Scan EUR/USD multilayer events for proactive intelligence",
+        response = await self.stateless_chat_with_react_loop(
+            user_message="Scan EUR/USD multilayer events for proactive intelligence. Check current price, technical indicators, and news.",
             max_iterations=4,
             custom_functions=decision_functions,
             system_override=proactive_prompt,
         )
         decision = self._extract_proactive_decision(response)
         decision["analysis_summary"] = "\n".join(response.get("reasoning_steps", []))
+        
+        # Make sure memory knows about this discovery
+        if decision.get("should_alert") and decision.get("message") and self.vector_memory:
+            await self.vector_memory.add_document(
+                content=decision["message"],
+                category="proactive_insight",
+                metadata={"priority": decision.get("priority", "low")}
+            )
         return decision
 
     async def run_periodic_observation(self) -> str:
@@ -471,23 +735,41 @@ class Agent:
                 logger.warning(f"Market Pulse: failed to fetch live data: {e}")
 
         pulse_prompt = (
-            "You are EuroScope providing a regular 'Market Pulse' update.\n"
-            "Your goal is to demonstrate continuous analysis and self-learning.\n\n"
-            "CURRENT LIVE DATA:\n"
-            f"- EUR/USD Current Price: {current_price}\n"
+            "You are EuroScope, an intelligent, persistent EUR/USD AI expert providing your regular 'Market Pulse'.\n"
+            "Your goal is to demonstrate continuous analysis, self-learning, and active monitoring.\n\n"
+            "## CRITICAL INSTRUCTION:\n"
+            "You are NOT allowed to hallucinate data. You must USE YOUR TOOLS to fetch the current price and indicators.\n"
+            "You have access to get_price, get_technical_analysis, and get_news_sentiment.\n\n"
+            "CURRENT CACHED DATA (May be stale, USE TOOLS if needed!):\n"
+            f"- Last Known Price: {current_price}\n"
             f"- Recent H1 Action:\n{recent_action}\n\n"
             "CONTENT GUIDELINES:\n"
-            "1. **Market Context**: Brief summary of current price action and session context based on the live price.\n"
-            "2. **Learning Update**: Briefly acknowledge recent successes or failures in pattern detection.\n"
+            "1. **Market Context**: Brief summary of current price action, momentum, and session context based on *actual live data*.\n"
+            "2. **Learning Update**: How does this map to our recent findings or failures? Have we invalidated any prior thesis?\n"
             "3. **Current Focus**: What you are watching right now (e.g., waiting for session open, monitoring a level).\n\n"
             f"RECENT LESSONS LEARNED:\n{lessons}\n\n"
             "Keep the reply concise, professional, and insightful. Use bullet points."
         )
 
-        response = await self.chat(
-            user_message="Provide a concise Market Pulse update based on current conditions.",
+        # Run via stateless ReAct loop so it actually fetches data
+        result = await self.stateless_chat_with_react_loop(
+            user_message="Provide a concise Market Pulse update based on REAL-TIME CONDITIONS. Fetch needed data first.",
+            max_iterations=3,
             system_override=pulse_prompt,
         )
+        
+        response = result.get("final_answer", "")
+        # Add a fallback just in case the final answer is empty
+        if not response.strip():
+            response = "Market is currently consolidating. Awaiting clearer direction."
+            
+        # Log this to memory so it remembers its last pulse
+        if self.vector_memory:
+             await self.vector_memory.add_document(
+                 content=f"Market Pulse sent: {response}",
+                 category="market_pulse_log",
+                 metadata={"type": "periodic"}
+             )
         
         return response
 

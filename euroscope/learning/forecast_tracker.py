@@ -146,6 +146,23 @@ class ForecastTracker:
                 # Update skill weight
                 self._update_weight(fc)
                 resolved.append(fc)
+                
+                # Push the lesson to Vector Memory
+                try:
+                    from ..brain.vector_memory import VectorMemory
+                    vm = VectorMemory()
+                    lesson_text = (
+                        f"Resolved Forecast [{fc.id}]: The {fc.skill} analysis predicted {fc.direction} "
+                        f"with target {fc.target_price}. Outcome: {outcome} ({fc.pnl_pips:+.1f} pips)."
+                    )
+                    # We wrap this in a synchronous check or run, because resolve_all is synchronous.
+                    # To keep it simple, we'll just log it. The cron job will pick it up or we can
+                    # make resolve_all async if needed. Since cron is async, we'll let cron handle the memory push.
+                    # Wait, memory adding is async, we can't do it here easily since resolve_all is sync.
+                    # We will append the text to be handled by the caller.
+                    fc._lesson_text = lesson_text
+                except Exception as e:
+                    logger.debug(f"Could not prepare lesson for vector memory: {e}")
 
                 logger.info(
                     f"✅ Forecast {fc.id} resolved: {outcome} "
