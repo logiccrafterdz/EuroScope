@@ -19,6 +19,8 @@ class SkillFunction(Enum):
     GET_TRADES = "get_trades"
     GET_STRATEGY = "get_strategy"
     GET_MARKET_STATUS = "get_market_status"
+    GET_LIQUIDITY = "get_liquidity"
+    GET_MARKET_SHIFTS = "get_market_shifts"
 
 
 FUNCTION_SCHEMAS: Dict[str, Dict[str, Any]] = {
@@ -197,12 +199,35 @@ FUNCTION_SCHEMAS: Dict[str, Dict[str, Any]] = {
     },
     SkillFunction.GET_MARKET_STATUS.value: {
         "name": "get_market_status",
-        "description": "Check if EUR/USD market is open",
+        "description": "Check if the EUR/USD market is currently open or closed",
         "parameters": {
             "type": "object",
             "properties": {},
             "required": []
-        },
+        }
+    },
+    SkillFunction.GET_LIQUIDITY.value: {
+        "name": "get_liquidity",
+        "description": "Analyze liquidity pools, order blocks, and session sweeps for EUR/USD",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "timeframe": {
+                    "type": "string",
+                    "description": "Timeframe for liquidity analysis (e.g., H1, H4)"
+                }
+            },
+            "required": []
+        }
+    },
+    SkillFunction.GET_MARKET_SHIFTS.value: {
+        "name": "get_market_shifts",
+        "description": "Detect subtle shifts in market regime, volatility volatility, and trend strength",
+        "parameters": {
+            "type": "object",
+            "properties": {},
+            "required": []
+        }
     },
     "proactive_alert_decision": {
         "name": "proactive_alert_decision",

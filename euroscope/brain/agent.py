@@ -832,6 +832,8 @@ class Agent:
             "- get_patterns: Chart patterns (H&S, Double Top, etc.)\n"
             "- get_risk_assessment: Trade risk and position sizing\n"
             "- get_signals: Active trading signals\n"
+            "- get_liquidity: Liquidity pools, order blocks, session sweeps\n"
+            "- get_market_shifts: Regime shifts and volatility deviations\n"
             "- get_forecast: AI directional forecast\n\n"
             "## THINKING PROCESS:\n"
             "- You only analyze EUR/USD.\n"
@@ -1148,7 +1150,38 @@ class Agent:
             return self._skill_result_payload(result)
 
         if tool_name == "get_news_sentiment":
-            result = await orchestrator.run_skill("fundamental_analysis", "get_sentiment", context=ctx)
+            result = await orchestrator.run_skill("fundamental_analysis", "get_news", context=ctx)
+            return self._skill_result_payload(result)
+
+        if tool_name == "get_liquidity":
+            tf = arguments.get("timeframe") or "H1"
+            data_result = await orchestrator.run_skill(
+                "market_data",
+                "get_candles",
+                context=ctx,
+                timeframe=tf,
+                count=200,
+            )
+            if not data_result.success:
+                return self._skill_result_payload(data_result)
+            result = await orchestrator.run_skill(
+                "liquidity_awareness",
+                "analyze",
+                context=ctx,
+                timeframe=tf
+            )
+            return self._skill_result_payload(result)
+
+        if tool_name == "get_market_shifts":
+            result = await orchestrator.run_skill(
+                "deviation_monitor",
+                "analyze",
+                context=ctx
+            )
+            return self._skill_result_payload(result)
+
+        if tool_name == "proactive_alert_decision":
+            result = await orchestrator.run_skill("fundamental_analysis", "get_calendar", context=ctx)
             return self._skill_result_payload(result)
 
         if tool_name == "get_calendar":
@@ -1253,15 +1286,12 @@ class Agent:
         return await self.chat(prompt, system_override=SYSTEM_PROMPT)
 
     async def ask(self, question: str, current_price: str = "N/A",
-                  current_bias: str = "N/A", support: str = "N/A",
-                  resistance: str = "N/A", market_status: str = "N/A") -> str:
+                  market_status: str = "N/A", advanced_context: str = "No advanced data provided.") -> str:
         """Answer a free-form question about EUR/USD."""
         prompt = QUESTION_PROMPT.format(
             current_price=current_price,
-            current_bias=current_bias,
-            support=support,
-            resistance=resistance,
             market_status=market_status,
+            advanced_context=advanced_context,
             question=question,
         )
         return await self.chat(prompt)

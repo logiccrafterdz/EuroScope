@@ -1129,7 +1129,7 @@ class EuroScopeBot:
             return
 
         question = " ".join(context.args)
-        await self._reply(update, "🤔 Thinking...")
+        await self._reply(update, "🤔 Thinking... (Generating deep skills context)")
 
         chat_id = update.effective_chat.id
         lang = self._preferred_language(chat_id, question)
@@ -1140,17 +1140,16 @@ class EuroScopeBot:
             return
 
         price = await self.price_provider.get_price()
-        h1_candles = await self.price_provider.get_candles("H1")
-        ta = self.technical.analyze(h1_candles) if h1_candles is not None else {}
-        sr = self.levels.find_support_resistance(h1_candles) if h1_candles is not None else {}
+        
+        # --- PHASE 3: ORCHESTRATOR INJECTION ---
+        ctx = await self.orchestrator.run_full_analysis_pipeline(timeframe="H1")
+        advanced_context = ctx.metadata.get("formatted", "No advanced analysis available.")
 
         answer = await self.agent.ask(
             question=question,
             current_price=str(price.get("price", "N/A")),
-            current_bias=ta.get("overall_bias", "N/A"),
-            support=str(sr.get("support", ["N/A"])[:2]),
-            resistance=str(sr.get("resistance", ["N/A"])[:2]),
             market_status=f"{market_status.get('status', 'N/A')} — {market_status.get('reason', 'N/A')} — {market_status.get('current_time_et', 'N/A')}",
+            advanced_context=advanced_context,
         )
         await self._reply(update, safe_markdown(truncate(answer)), parse_mode="Markdown")
 
@@ -1163,7 +1162,7 @@ class EuroScopeBot:
         if not text:
             return
 
-        await self._reply(update, "🤔 Thinking...")
+        await self._reply(update, "🤔 Thinking... (Gathering deep market context)")
 
         chat_id = update.effective_chat.id
         lang = self._preferred_language(chat_id, text)
@@ -1174,10 +1173,16 @@ class EuroScopeBot:
             return
 
         price = await self.price_provider.get_price()
+        
+        # --- PHASE 3: ORCHESTRATOR INJECTION ---
+        ctx = await self.orchestrator.run_full_analysis_pipeline(timeframe="H1")
+        advanced_context = ctx.metadata.get("formatted", "No advanced analysis available.")
+
         answer = await self.agent.ask(
             question=text,
             current_price=str(price.get("price", "N/A")),
             market_status=f"{market_status.get('status', 'N/A')} — {market_status.get('reason', 'N/A')} — {market_status.get('current_time_et', 'N/A')}",
+            advanced_context=advanced_context,
         )
         await self._reply(update, safe_markdown(truncate(answer)), parse_mode="Markdown")
 

@@ -101,12 +101,13 @@ QUESTION_PROMPT = """You are EuroScope, the EUR/USD expert. Answer the following
 
 ## Current Market Context
 Price: {current_price}
-Bias: {current_bias}
-Key Levels: Support {support} | Resistance {resistance}
 Market Status: {market_status}
+
+## Advanced Market Context
+{advanced_context}
 
 ## Question
 {question}
 
-Remember: ONLY discuss EUR/USD. Be specific with numbers and levels.
+Remember: ONLY discuss EUR/USD. Be specific with numbers and levels. Include insights from the advanced context if relevant.
 """
