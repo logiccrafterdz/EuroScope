@@ -137,6 +137,11 @@ class CronScheduler:
         self._schedule_periodic_pulse()
         # Schedule self-learning loop
         self._schedule_learning_tasks()
+        
+        # --- PHASE 4: Autonomous Paper Trader ---
+        self._schedule_auto_trader()
+        self._schedule_trade_monitor()
+        
         logger.info(f"Cron: {len(self._tasks)} tasks scheduled: {list(self._tasks.keys())}")
 
     def _schedule_periodic_pulse(self):
@@ -432,6 +437,168 @@ class CronScheduler:
             delay=self._seconds_until(18, 0),
         )
         logger.info("Cron: scheduled 'daily_tuning_report' (daily 18:00 UTC)")
+
+    def _schedule_auto_trader(self):
+        """Phase 4: Autonomous Paper Trader that scans the market and executes trades."""
+        async def auto_trade_task():
+            logger.info("Auto Trader task starting...")
+            if getattr(self.config, "paper_trading_only", True) is False:
+                logger.warning("Paper trading is disabled. Auto-trader will not run.")
+                return
+                
+            if self._is_quiet_time():
+                logger.debug("Auto Trader skipped: quiet time")
+                return
+                
+            orchestrator = getattr(self.bot, "orchestrator", None)
+            if not orchestrator:
+                return
+                
+            try:
+                # 1. Run the full analytical pipeline
+                ctx = await orchestrator.run_full_analysis_pipeline(timeframe="H1")
+                
+                # 2. Re-evaluate strategy with fresh context
+                strat_res = await orchestrator.run_skill("trading_strategy", "detect_signal", context=ctx)
+                if not strat_res.success:
+                    return
+                    
+                signal_data = strat_res.data
+                direction = signal_data.get("direction", "WAIT")
+                confidence = signal_data.get("confidence", 0)
+                
+                # Only execute high-confidence signals autonomously
+                if direction in ("BUY", "SELL") and confidence >= 60:
+                    logger.info(f"Auto Trader found high-confidence {direction} signal ({confidence}%)!")
+                    
+                    # 3. Execute the paper trade
+                    exec_res = await orchestrator.run_skill("signal_executor", "open_trade", context=ctx)
+                    if exec_res.success:
+                        trade = exec_res.data
+                        
+                        # Extract the final parameters chosen by exactly what signal_executor did
+                        entry_price = trade.get("entry_price")
+                        sl = trade.get("stop_loss")
+                        tp = trade.get("take_profit")
+                        
+                        # 4. Notify admins
+                        chat_ids = getattr(self.config, "admin_chat_ids", [])
+                        for chat_id in chat_ids:
+                            msg = (
+                                f"🤖 <b>Autonomous Trade Opened</b>\n\n"
+                                f"Direction: <b>{direction}</b> EUR/USD\n"
+                                f"Entry: {entry_price:.5f}\n"
+                                f"SL: {sl:.5f} | TP: {tp:.5f}\n"
+                                f"Confidence: {confidence}%\n\n"
+                                f"<i>— EuroScope Auto-Trader</i>"
+                            )
+                            await self._send_proactive_alert_message(chat_id, msg)
+                    else:
+                        logger.warning(f"Auto Trader execution blocked: {exec_res.error}")
+                        
+            except Exception as e:
+                logger.error(f"Auto Trader task failed: {e}", exc_info=True)
+
+        interval_value = getattr(self.config, "proactive_analysis_interval_minutes", 15)
+        try:
+            interval = int(interval_value)
+        except Exception:
+            interval = 15
+            
+        seconds = max(60, interval * 60)
+        self.schedule(
+            "autonomous_trader",
+            TaskFrequency.MINUTELY,
+            auto_trade_task,
+            interval_seconds=seconds,
+            delay=180,  # Offset from proactive_analysis so they don't hit APIs at exact same second
+        )
+        logger.info(f"Cron: scheduled 'autonomous_trader' ({interval}m)")
+
+    def _schedule_trade_monitor(self):
+        """Phase 4: Monitors open trades every minute for TP/SL hits."""
+        async def monitor_task():
+            if self._is_quiet_time():
+                return
+                
+            orchestrator = getattr(self.bot, "orchestrator", None)
+            provider = getattr(self.bot, "price_provider", None)
+            if not orchestrator or not provider:
+                return
+                
+            try:
+                # 1. Get current price
+                price_data = await provider.get_price()
+                current_price = price_data.get("price")
+                if not current_price:
+                    return
+                    
+                # 2. Get open trades
+                trades_res = await orchestrator.run_skill("signal_executor", "list_trades")
+                if not trades_res.success or not trades_res.data:
+                    return
+                    
+                open_trades = [t for t in trades_res.data if t.get("status") == "OPEN"]
+                
+                # 3. Check TP/SL
+                for trade in open_trades:
+                    direction = trade.get("direction")
+                    sl = trade.get("stop_loss")
+                    tp = trade.get("take_profit")
+                    trade_id = trade.get("trade_id")
+                    
+                    hit_tp = False
+                    hit_sl = False
+                    
+                    if direction == "BUY":
+                        if current_price >= tp: hit_tp = True
+                        if current_price <= sl: hit_sl = True
+                    elif direction == "SELL":
+                        if current_price <= tp: hit_tp = True
+                        if current_price >= sl: hit_sl = True
+                        
+                    if hit_tp or hit_sl:
+                        logger.info(f"Trade Monitor: {trade_id} hit {'TP' if hit_tp else 'SL'} at {current_price:.5f}")
+                        
+                        # Context required for signal_executor standard signature
+                        from ..skills.base import SkillContext
+                        ctx = SkillContext()
+                        
+                        close_res = await orchestrator.run_skill(
+                            "signal_executor", 
+                            "close_trade", 
+                            context=ctx,
+                            trade_id=trade_id, 
+                            exit_price=current_price
+                        )
+                        
+                        if close_res.success:
+                            closed_trade = close_res.data
+                            pnl = closed_trade.get("pnl_pips", 0)
+                            outcome_emoji = "✅" if pnl > 0 else "❌"
+                            
+                            chat_ids = getattr(self.config, "admin_chat_ids", [])
+                            for chat_id in chat_ids:
+                                msg = (
+                                    f"🤖 <b>Autonomous Trade Closed</b>\n\n"
+                                    f"Status: {outcome_emoji} {'Take Profit' if hit_tp else 'Stop Loss'} Hit\n"
+                                    f"Direction: <b>{direction}</b>\n"
+                                    f"Exit Price: {current_price:.5f}\n"
+                                    f"PnL: <b>{'+' if pnl > 0 else ''}{pnl:.1f} pips</b>\n\n"
+                                    f"<i>— EuroScope Auto-Trader</i>"
+                                )
+                                await self._send_proactive_alert_message(chat_id, msg)
+            except Exception as e:
+                logger.error(f"Trade Monitor task failed: {e}", exc_info=True)
+
+        self.schedule(
+            "trade_monitor",
+            TaskFrequency.MINUTELY,
+            monitor_task,
+            interval_seconds=60,  # Run every minute!
+            delay=60,
+        )
+        logger.info("Cron: scheduled 'trade_monitor' (1m)")
 
     async def _send_proactive_alert(self, chat_id: int, decision: dict) -> bool:
         if not self.bot:

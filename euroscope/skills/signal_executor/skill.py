@@ -223,11 +223,48 @@ class SignalExecutorSkill(BaseSkill):
                 trade.exit_price = exit_price
                 trade.status = "closed"
                 if trade.direction == "BUY":
-                    trade.pnl_pips = round((exit_price - trade.entry_price) * 10000, 1)
+                    trade.pnl_pips = round((float(exit_price) - float(trade.entry_price)) * 10000, 1)
                 else:
-                    trade.pnl_pips = round((trade.entry_price - exit_price) * 10000, 1)
+                    trade.pnl_pips = round((float(trade.entry_price) - float(exit_price)) * 10000, 1)
                 self._closed.append(trade)
                 self._open.pop(i)
+                
+                # Push lesson to Vector Memory for Continuous Learning
+                try:
+                    from ...brain.vector_memory import VectorMemory
+                    vm = VectorMemory()
+                    outcome = "WON" if trade.pnl_pips > 0 else "LOST"
+                    lesson = (
+                        f"Trade {trade.trade_id} executed a {trade.direction} based on {trade.strategy}. "
+                        f"Entry: {trade.entry_price}, Exit: {trade.exit_price} (SL: {trade.stop_loss}, TP: {trade.take_profit}). "
+                        f"Outcome: {outcome} with a PnL of {trade.pnl_pips:+.1f} pips."
+                    )
+                    await vm.add_document(
+                        content=lesson,
+                        category="trade_lesson",
+                        metadata={"strategy": trade.strategy, "outcome": outcome}
+                    )
+                except Exception as e:
+                    import logging
+                    logging.getLogger("euroscope.trading.signal_executor").error(f"Failed to record trade memory: {e}")
+
+                if self._storage:
+                    self._storage.save_trade_journal(
+                        direction=trade.direction,
+                        entry_price=trade.entry_price,
+                        stop_loss=trade.stop_loss,
+                        take_profit=trade.take_profit,
+                        strategy=trade.strategy,
+                        timeframe="H1",
+                        regime="paper",
+                        confidence=0.0,
+                        indicators={},
+                        patterns=[],
+                        reasoning=f"Closed automatically at {exit_price}",
+                        status="closed",
+                        pnl=trade.pnl_pips
+                    )
+
                 return SkillResult(success=True, data=trade.__dict__)
 
         return SkillResult(success=False, error=f"Trade {trade_id} not found")
