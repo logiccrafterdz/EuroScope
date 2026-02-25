@@ -104,9 +104,13 @@ class NewsEngine:
                 import os
                 import warnings
                 os.environ["RUST_LOG"] = "error"
+                import logging
+                logging.getLogger("primp").setLevel(logging.CRITICAL)
+                logging.getLogger("primp.impersonate").setLevel(logging.CRITICAL)
                 with warnings.catch_warnings():
                     warnings.filterwarnings("ignore", category=UserWarning, module="primp")
                     with DDGS() as ddgs:
+                        return list(ddgs.news(query, max_results=count))
                         return list(ddgs.news(query, max_results=count))
 
             raw_results = await asyncio.to_thread(_search)
