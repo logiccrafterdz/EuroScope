@@ -93,6 +93,9 @@ def setup_structured_logging(level: str = "INFO", log_dir: str = "data/logs"):
     for noisy in ("httpx", "httpcore", "yfinance", "telegram", "urllib3", "matplotlib"):
         logging.getLogger(noisy).setLevel(logging.WARNING)
 
+    logging.getLogger('primp').setLevel(logging.ERROR)
+    logging.getLogger('primp.impersonate').setLevel(logging.ERROR)
+
     logging.getLogger("euroscope").info(
         f"Structured logging initialized (console={level}, file={log_file})"
     )

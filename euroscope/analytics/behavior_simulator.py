@@ -103,6 +103,9 @@ class BehavioralSimulator:
             # 2. Grade active alerts in metrics
             self.metrics.grade_meaningful_alerts(current_price, bar_idx)
             
+            if bar_idx % 500 == 0:
+                print(f"⏳ Processed {bar_idx}/{len(history)} bars...")
+            
             # To simulate real-time behavior without doing 24 hours a day
             # we'll only trigger a full Orchestrator pipeline every 4 bars (e.g. 4 hours)
             # or if volatility explodes. For simplicity, just every 4 bars.
@@ -116,27 +119,27 @@ class BehavioralSimulator:
                 # It just runs the mathematical skills.
                 ctx = await self.orchestrator.run_full_analysis_pipeline(timeframe="H1")
                 
-                # Check if a signal was generated
-                strat_res = await self.orchestrator.run_skill("trading_strategy", "detect_signal", context=ctx)
-                if strat_res.success:
-                    signal = strat_res.data
-                    direction = signal.get("decision", "WAIT").upper()
-                    conf = signal.get("confidence", 0)
+                # Extract the final consensus processed by the entire pipeline (including Conflict Arbiter)
+                signal_data = ctx.signals or {}
+                # The arbiter places the final synthesized trade plan into "verdict",
+                # while trading_strategy raw sets "direction". We prioritize "verdict".
+                direction = signal_data.get("verdict", signal_data.get("direction", "WAIT")).upper()
+                conf = signal_data.get("confidence", signal_data.get("raw_confidence", 0))
+                
+                if direction in ("BUY", "SELL"):
+                    # Record the alert
+                    self.metrics.record_signal(direction, conf, current_price, bar_idx, timestamp)
                     
-                    if direction in ("BUY", "SELL"):
-                        # Record the alert
-                        self.metrics.record_signal(direction, conf, current_price, bar_idx, timestamp)
-                        
-                        # Let profiles react
-                        orchestrator_output = {
-                            "signal_data": signal,
-                            "technical": ctx.analysis,
-                            "market": ctx.market_data
-                        }
-                        for profile in self.profiles:
-                            action = profile.evaluate_signal(orchestrator_output, current_price, bar_idx, timestamp)
-                            if action:
-                                logger.debug(f"[{timestamp}] {action}")
+                    # Let profiles react
+                    orchestrator_output = {
+                        "signal_data": signal_data,
+                        "technical": ctx.analysis,
+                        "market": ctx.market_data
+                    }
+                    for profile in self.profiles:
+                        action = profile.evaluate_signal(orchestrator_output, current_price, bar_idx, timestamp)
+                        if action:
+                            logger.debug(f"[{timestamp}] {action}")
                                 
             except Exception as e:
                 logger.error(f"Simulator error at bar {bar_idx}: {e}")

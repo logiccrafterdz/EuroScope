@@ -21,38 +21,28 @@ load_dotenv()
 # Setup Orchestrator
 orchestrator = Orchestrator()
 
-def _make_candles(n=1000, start_price=1.0900):
-    import datetime
-    candles = []
-    price = start_price
-    base_time = datetime.datetime.now() - datetime.timedelta(days=30)
-    for i in range(n):
-        # Add basic trends and noise
-        import math
-        trend = math.sin(i / 100.0) * 0.0050
-        noise = (i % 5 - 2) * 0.0005
-        
-        o = price
-        c = start_price + trend + noise
-        h = max(o, c) + 0.0008
-        l = min(o, c) - 0.0008
-        
-        candles.append({
-            "timestamp": (base_time + datetime.timedelta(minutes=15 * i)).isoformat(),
-            "Open": round(o, 5),
-            "High": round(h, 5),
-            "Low": round(l, 5),
-            "Close": round(c, 5),
-            "Volume": 1000.0 + (i % 20) * 10,
-        })
-        price = c
-    return candles
+def _load_historical_data(file_path="data/eurusd_h1_2years.csv"):
+    import pandas as pd
+    try:
+        df = pd.read_csv(file_path)
+        # Ensure timestamp is string for JSON serialization
+        df['timestamp'] = df['timestamp'].astype(str)
+        # Convert to list of dicts
+        records = df.to_dict('records')
+        return records
+    except Exception as e:
+        print(f"Failed to load CSV: {e}")
+        return []
 
 async def main():
-    print(f"[{datetime.now().time()}] 📡 Generating synthetic EUR/USD M15 candles for simulation...")
+    print(f"[{datetime.now().time()}] 📡 Loading real EUR/USD H1 historical data for simulation...")
     try:
-        candles = _make_candles(1000)
-        print(f"✅ Generated {len(candles)} bars successfully.")
+        candles = _load_historical_data()
+        if not candles:
+            print("❌ Failed to load candles. Run fetch_historical_data.py first.")
+            return
+            
+        print(f"✅ Loaded {len(candles)} bars successfully.")
         
         sim = BehavioralSimulator(orchestrator)
         report = await sim.run(candles)

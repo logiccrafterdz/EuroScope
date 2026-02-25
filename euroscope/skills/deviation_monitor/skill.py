@@ -76,13 +76,15 @@ class DeviationMonitorSkill(BaseSkill):
             if self._market_data_skill:
                 try:
                     ctx = SkillContext()
-                    await self._market_data_skill.execute(ctx, "get_candles", timeframe="M1", count=100)
+                    res = await self._market_data_skill.execute(ctx, "get_candles", timeframe="M1", count=100)
                     buffer = self._get_buffer()
+                    if not res.success:
+                        logger.debug(f"DeviationMonitor: auto-fetch failed: {res.error}")
                 except Exception as e:
-                    logger.debug(f"DeviationMonitor: auto-fetch failed: {e}")
+                    logger.debug(f"DeviationMonitor: auto-fetch exception: {e}")
 
         if not buffer:
-            logger.warning("DeviationMonitor: no market data buffer available")
+            logger.debug("DeviationMonitor: no market data buffer available")
             return
 
         candles = buffer.get("candles")
