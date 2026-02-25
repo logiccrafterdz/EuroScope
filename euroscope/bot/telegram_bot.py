@@ -657,14 +657,13 @@ class EuroScopeBot:
             from ..skills.base import SkillContext
         try:
             ctx = SkillContext()
-            result = await self.orchestrator.run_skill('technical_analysis', 'analyze', context=ctx, timeframe='H1')
+            # Feed current market data logic
+            await self.orchestrator.run_skill('market_data', 'get_price', context=ctx)
+            result = await self.orchestrator.run_skill('technical_analysis', 'detect_patterns', context=ctx, timeframe='H1')
             if not result.success:
                 return web.json_response({'success': False, 'error': result.error})
             
-            # The pattern skill output is nested in the technical analysis result
-            ta_data = result.data
-            patterns = ta_data.get('patterns', [])
-            return web.json_response({'success': True, 'data': patterns})
+            return web.json_response({'success': True, 'data': result.data})
         except Exception as e:
             logger.error(f'API: Patterns error: {e}')
             return web.json_response({'success': False, 'error': str(e)})
@@ -678,32 +677,70 @@ class EuroScopeBot:
             from ..skills.base import SkillContext
         try:
             ctx = SkillContext()
-            result = await self.orchestrator.run_skill('technical_analysis', 'analyze', context=ctx, timeframe='H1')
+            # Feed current market data logic
+            await self.orchestrator.run_skill('market_data', 'get_price', context=ctx)
+            result = await self.orchestrator.run_skill('technical_analysis', 'find_levels', context=ctx, timeframe='H1')
             if not result.success:
                 return web.json_response({'success': False, 'error': result.error})
             
-            ta_data = result.data
-            levels = ta_data.get('levels', {})
-            return web.json_response({'success': True, 'data': levels})
+            return web.json_response({'success': True, 'data': result.data})
         except Exception as e:
             logger.error(f'API: Levels error: {e}')
             return web.json_response({'success': False, 'error': str(e)})
             
     async def _api_settings(self, request):
-        """API endpoint to get or update user settings/risk parameters."""
-        # For simplicity in V4, global risk params
-        if request.method == 'GET':
+        """API endpoint to get user settings/risk parameters."""
+        try:
+            import json, os
+            settings_path = os.path.join(self.config.data_dir, 'bot_settings.json')
+            data = {
+                'risk_per_trade': 1.0,
+                'max_daily_loss': 3.0,
+                'auto_trading_enabled': False
+            }
+            if os.path.exists(settings_path):
+                with open(settings_path, 'r') as f:
+                    data.update(json.load(f))
+            return web.json_response({'success': True, 'data': data})
+        except Exception as e:
+            return web.json_response({'success': False, 'error': str(e)})
+
+    async def _api_settings_update(self, request):
+        """API endpoint to update user settings/risk parameters."""
+        try:
+            import json, os
+            new_data = await request.json()
+            
+            # Persist to disk
+            settings_path = os.path.join(self.config.data_dir, 'bot_settings.json')
+            data = {
+                'risk_per_trade': 1.0,
+                'max_daily_loss': 3.0,
+                'auto_trading_enabled': False
+            }
+            if os.path.exists(settings_path):
+                with open(settings_path, 'r') as f:
+                    data.update(json.load(f))
+                    
+            data.update(new_data)
+            
+            # Ensure dir exists
+            os.makedirs(self.config.data_dir, exist_ok=True)
+            with open(settings_path, 'w') as f:
+                json.dump(data, f)
+                
+            # Update Live Risk Manager
             try:
-                # Stubbing settings API - integrating properly in the next steps
-                return web.json_response({'success': True, 'data': {
-                    'risk_per_trade': 1.0,
-                    'max_daily_loss': 3.0,
-                    'auto_trading_enabled': False
-                }})
+                risk_skill = self.orchestrator.registry.get('risk_management')
+                if risk_skill and hasattr(risk_skill, 'manager'):
+                    risk_skill.manager.config.risk_per_trade = float(data.get('risk_per_trade', 1.0))
+                    risk_skill.manager.config.max_daily_loss = float(data.get('max_daily_loss', 3.0))
             except Exception as e:
-                return web.json_response({'success': False, 'error': str(e)})
-        else:
-            return web.json_response({'success': False, 'error': 'Method not allowed'})
+                logger.warning(f"API: Failed to hot-reload risk manager config: {e}")
+
+            return web.json_response({'success': True, 'data': data})
+        except Exception as e:
+            return web.json_response({'success': False, 'error': str(e)})
 
 
     async def _api_health(self, request):
@@ -741,7 +778,8 @@ class EuroScopeBot:
                 web.get('/api/history', self._api_history),
                 web.get('/api/patterns', self._api_patterns),
                 web.get('/api/levels', self._api_levels),
-                web.get('/api/settings', self._api_settings)
+                web.get('/api/settings', self._api_settings),
+                web.post('/api/settings', self._api_settings_update)
             ])
             port = int(os.getenv('PORT', 8080))
             runner = web.AppRunner(app)

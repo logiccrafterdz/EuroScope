@@ -872,12 +872,36 @@
 
         async function saveSettings() {
             const btn = document.querySelector('#settings-form .action-btn');
+            btn.disabled = true;
             btn.textContent = 'SAVING...';
-            // Placeholder for saving settings (to be wired into POST /settings later)
-            setTimeout(() => {
+
+            const payload = {
+                risk_per_trade: parseFloat(document.getElementById('setting-risk').value),
+                max_daily_loss: parseFloat(document.getElementById('setting-maxloss').value),
+                auto_trading_enabled: document.getElementById('setting-auto').checked
+            };
+
+            const res = await api('/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (res.success) {
                 btn.textContent = 'SETTINGS SAVED';
-                setTimeout(() => btn.textContent = 'SAVE SETTINGS', 2000);
-            }, 800);
+                btn.style.background = 'var(--up-color)';
+                try { tg.HapticFeedback.notificationOccurred('success'); } catch (e) { }
+            } else {
+                btn.textContent = 'FAILED TO SAVE';
+                btn.style.background = 'var(--down-color)';
+                log('Save settings failed: ' + res.error, 'error');
+            }
+
+            setTimeout(() => {
+                btn.textContent = 'SAVE SETTINGS';
+                btn.style.background = 'var(--accent-primary)';
+                btn.disabled = false;
+            }, 2000);
         }
 
         const parseMd = str => {
@@ -927,11 +951,11 @@
         const f5 = (v) => (v != null && typeof v === 'number') ? v.toFixed(5) : '-.-----';
         const f2 = (v) => (v != null && typeof v === 'number') ? v.toFixed(2) : '---';
 
-        async function api(path) {
+        async function api(path, options = {}) {
             const url = `${API_ROOT}/api${path}`;
             try {
                 // Increased timeout to 60s to accommodate slow LLM AI responses (Briefing, Macro, Backtests)
-                const r = await fetch(url, { signal: AbortSignal.timeout(60000) });
+                const r = await fetch(url, { signal: AbortSignal.timeout(60000), ...options });
                 if (!r.ok) throw new Error(`HTTP ${r.status}`);
                 return await r.json();
             } catch (e) { return { success: false, error: e.message }; }
