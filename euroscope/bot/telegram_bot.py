@@ -515,6 +515,12 @@ class EuroScopeBot:
         try:
             from ..skills.base import SkillContext
             ctx = SkillContext()
+            
+            # 1. Fetch live market price for risk calculations
+            mkt_res = await self.orchestrator.run_skill('market_data', 'get_price', context=ctx)
+            if not mkt_res.success:
+                return web.json_response({'success': False, 'error': f'Market data failed: {mkt_res.error}'})
+                
             ta_res = await self.orchestrator.run_skill('technical_analysis', 'analyze', context=ctx, timeframe='H1')
             if not ta_res.success:
                 return web.json_response({'success': False, 'error': f'TA failed: {ta_res.error}'})
