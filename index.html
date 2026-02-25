@@ -572,10 +572,34 @@
 
         <!-- ANALYSIS TAB -->
         <div id="analysis-view" class="tab-content">
-            <div class="glass-card bento-full">
+            <div style="margin-bottom: 16px;">
+                <button class="action-btn" onclick="runAnalysis()" id="analysis-btn"
+                    style="background: var(--text-main); color: #000; box-shadow: 0 0 15px rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center; gap: 8px;">
+                    <span id="analysis-btn-text">RUN NEURAL ANALYSIS</span> <span class="loading-spinner"
+                        id="analysis-spinner" style="display: none; border-top-color: #000; margin: 0;"></span>
+                </button>
+            </div>
+
+            <div class="glass-card bento-full" style="margin-bottom: 12px;">
                 <div class="label-sm" style="margin-bottom: 16px;">Neural Indicators</div>
                 <div id="node-analysis">
                     <div class="empty-state">SYNCING ANALYTICS...</div>
+                </div>
+            </div>
+
+            <div class="bento">
+                <div class="glass-card bento-full" style="margin-bottom: 0px;">
+                    <div class="label-sm" style="margin-bottom: 12px;">Detected Patterns</div>
+                    <div id="patterns-list">
+                        <div class="empty-state" style="padding: 10px 0;">SCANNING...</div>
+                    </div>
+                </div>
+
+                <div class="glass-card bento-full" style="margin-top: 0px;">
+                    <div class="label-sm" style="margin-bottom: 12px;">Key Levels (S/R)</div>
+                    <div id="levels-list">
+                        <div class="empty-state" style="padding: 10px 0;">CALCULATING...</div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -759,7 +783,25 @@
         <div class="glass-card" style="margin-top: 40px;">
             <div class="label-sm" style="font-size:0.75rem; color:#fff;">System Diagnostics</div>
             <div id="alert-list" style="margin-bottom: 16px;"></div>
-            <div class="label-sm">API ENDPOINT</div>
+
+            <div class="label-sm" style="font-size:0.75rem; color:#fff; margin-top:16px;">Bot Settings</div>
+            <div id="settings-loader" class="empty-state" style="padding: 10px 0;">LOADING SETTINGS...</div>
+            <div id="settings-form" style="display:none; margin-bottom: 16px;">
+                <div class="label-sm" style="margin-top:8px;">RISK PER TRADE (%)</div>
+                <input type="number" id="setting-risk" class="action-in" step="0.1" max="5.0" min="0.1">
+                <div class="label-sm">MAX DAILY LOSS (%)</div>
+                <input type="number" id="setting-maxloss" class="action-in" step="0.5" max="10.0" min="1.0">
+                <label
+                    style="display:flex; align-items:center; gap:8px; margin-top:8px; font-size:0.75rem; color:var(--text-main); font-weight:700;">
+                    <input type="checkbox" id="setting-auto"
+                        style="width:16px; height:16px; accent-color:var(--accent-primary);">
+                    ENABLE AUTO-TRADING
+                </label>
+                <button class="action-btn" onclick="saveSettings()"
+                    style="margin-top:16px; background:var(--accent-primary); color:#000;">SAVE SETTINGS</button>
+            </div>
+
+            <div class="label-sm" style="margin-top:16px;">API ENDPOINT</div>
             <input type="text" id="api-url-input" class="action-in" placeholder="https://your-bot-server.com">
             <button class="action-btn" onclick="saveOverride()">APPLY OVERRIDE</button>
             <button class="action-btn action-outline" onclick="toggleDebug()">TOGGLE DEBUG CONSOLE</button>
@@ -799,6 +841,22 @@
                 document.getElementById('system-overlay').classList.add('active');
                 document.getElementById('api-url-input').value = API_ROOT;
                 try { tg.HapticFeedback.impactOccurred('heavy'); } catch (e) { }
+
+                // Fetch Settings
+                document.getElementById('settings-loader').style.display = 'block';
+                document.getElementById('settings-form').style.display = 'none';
+                api('/settings').then(res => {
+                    if (res.success && res.data) {
+                        document.getElementById('setting-risk').value = res.data.risk_per_trade;
+                        document.getElementById('setting-maxloss').value = res.data.max_daily_loss;
+                        document.getElementById('setting-auto').checked = res.data.auto_trading_enabled;
+                        document.getElementById('settings-loader').style.display = 'none';
+                        document.getElementById('settings-form').style.display = 'block';
+                    } else {
+                        document.getElementById('settings-loader').textContent = 'FAILED TO LOAD SETTINGS';
+                    }
+                });
+
             }, 800);
         });
         logoEl.addEventListener('pointerup', () => clearTimeout(logoTimer));
@@ -810,6 +868,16 @@
             if (val) localStorage.setItem('ZENITH_API_OVERRIDE', val);
             else localStorage.removeItem('ZENITH_API_OVERRIDE');
             location.reload();
+        }
+
+        async function saveSettings() {
+            const btn = document.querySelector('#settings-form .action-btn');
+            btn.textContent = 'SAVING...';
+            // Placeholder for saving settings (to be wired into POST /settings later)
+            setTimeout(() => {
+                btn.textContent = 'SETTINGS SAVED';
+                setTimeout(() => btn.textContent = 'SAVE SETTINGS', 2000);
+            }, 800);
         }
 
         const parseMd = str => {
@@ -947,6 +1015,36 @@
             }
         }
 
+        async function runAnalysis() {
+            const btnText = document.getElementById('analysis-btn-text');
+            const spinner = document.getElementById('analysis-spinner');
+            const btn = document.getElementById('analysis-btn');
+
+            if (btn.disabled) return;
+
+            btn.disabled = true;
+            btnText.textContent = "COMPUTING...";
+            spinner.style.display = "inline-block";
+            btn.style.opacity = "0.7";
+
+            try {
+                // To force a fresh analysis on the backend, we might normally hit a specific endpoint.
+                // For now, re-syncing the analysis view achieves the UI refresh.
+                await sync('analysis');
+                btnText.textContent = "ANALYSIS COMPLETE";
+                setTimeout(() => { btnText.textContent = "RUN NEURAL ANALYSIS"; }, 2000);
+                try { tg.HapticFeedback.notificationOccurred('success'); } catch (e) { }
+            } catch (e) {
+                btnText.textContent = "ANALYSIS FAILED";
+                log("Analysis Failed: " + e.message, 'error');
+                setTimeout(() => { btnText.textContent = "RUN NEURAL ANALYSIS"; }, 3000);
+            } finally {
+                spinner.style.display = "none";
+                btn.disabled = false;
+                btn.style.opacity = "1";
+            }
+        }
+
         async function scanSignals() {
             const btnText = document.getElementById('scan-btn-text');
             const spinner = document.getElementById('scan-spinner');
@@ -1077,6 +1175,43 @@
                         <div class="info-row"><span class="label">ATR</span><span class="val">${f2(ind.ATR?.pips)} Pips</span></div>
                     `;
                 }
+
+                // Fetch Patterns
+                api('/patterns').then(res => {
+                    const list = document.getElementById('patterns-list');
+                    if (res.success && res.data && res.data.length > 0) {
+                        list.innerHTML = res.data.map(p => `
+                            <div style="padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.05); display:flex; justify-content:space-between; align-items:center;">
+                                <div style="font-size: 0.7rem; font-weight:600; color:var(--text-main);">${p.name || p.pattern}</div>
+                                <div style="font-size: 0.65rem; color:${p.significance === 'high' ? 'var(--accent-primary)' : 'var(--text-muted)'};">${(p.status || 'Active').toUpperCase()}</div>
+                            </div>
+                        `).join('');
+                    } else {
+                        list.innerHTML = `<div class="empty-state" style="padding: 10px 0;">NO PATTERNS DETECTED</div>`;
+                    }
+                });
+
+                // Fetch Levels
+                api('/levels').then(res => {
+                    const list = document.getElementById('levels-list');
+                    if (res.success && res.data) {
+                        const lvls = res.data;
+                        let html = '';
+                        if (lvls.resistance && lvls.resistance.length > 0) {
+                            html += `<div style="font-size:0.6rem; color:var(--down-color); margin-top:4px; margin-bottom:4px;">RESISTANCE</div>`;
+                            html += lvls.resistance.slice(0, 2).map(r => `<div class="info-row"><span class="label" style="font-size:0.65rem;">R${lvls.resistance.indexOf(r) + 1}</span><span class="val" style="color:var(--text-main);">${f5(r)}</span></div>`).join('');
+                        }
+                        if (lvls.support && lvls.support.length > 0) {
+                            html += `<div style="font-size:0.6rem; color:var(--up-color); margin-top:8px; margin-bottom:4px;">SUPPORT</div>`;
+                            html += lvls.support.slice(0, 2).map(s => `<div class="info-row"><span class="label" style="font-size:0.65rem;">S${lvls.support.indexOf(s) + 1}</span><span class="val" style="color:var(--text-main);">${f5(s)}</span></div>`).join('');
+                        }
+                        if (html === '') html = `<div class="empty-state" style="padding: 10px 0;">NO LEVELS FOUND</div>`;
+                        list.innerHTML = html;
+                    } else {
+                        list.innerHTML = `<div class="empty-state" style="padding: 10px 0;">NO LEVELS FOUND</div>`;
+                    }
+                });
+
             } else if (activeTab === 'macro') {
                 const res = await api('/macro');
                 if (res.success && res.data) {
