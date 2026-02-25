@@ -20,7 +20,7 @@ class MarketDataSkill(BaseSkill):
         self._provider = provider
         self._buffer: dict = {}
 
-    def set_price_provider(self, provider):
+    def set_provider(self, provider):
         """Standard setter for price provider (DI)."""
         self._provider = provider
 
