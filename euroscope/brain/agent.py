@@ -754,7 +754,7 @@ class Agent:
             "You are EuroScope, an intelligent, persistent EUR/USD AI expert providing your regular 'Market Pulse'.\n"
             "Your goal is to demonstrate continuous analysis, self-learning, and active monitoring.\n\n"
             "## CRITICAL INSTRUCTION:\n"
-            "You have access to get_price, get_technical_analysis, and get_news_sentiment if you need MORE context.\n\n"
+            "Read the context below carefully. Provide the final output directly without asking for tools.\n\n"
             "--- CURRENT LIVE STATE ---\n"
             f"- Last Known Price: {current_price}\n"
             f"- Recent H1 Action:\n{recent_action}\n\n"
@@ -768,14 +768,15 @@ class Agent:
             "Keep the reply concise, professional, and insightful. Use bullet points."
         )
 
-        # Run via stateless ReAct loop so it actually fetches data
-        result = await self.stateless_chat_with_react_loop(
-            user_message="Provide a concise Market Pulse update based on REAL-TIME CONDITIONS. Fetch needed data first.",
-            max_iterations=3,
-            system_override=pulse_prompt,
-        )
-        
-        response = result.get("final_answer", "")
+        # Run via simple stateless chat without tools to force output generation
+        try:
+            response = await self.stateless_chat(
+                user_message="Using the REAL-TIME CONDITIONS provided in the system prompt, generate the Market Pulse update directly NOW.",
+                system_override=pulse_prompt,
+            )
+        except Exception as e:
+            logger.error(f"Market Pulse LLM generation failed: {e}")
+            response = ""
         # Add a fallback just in case the final answer is empty
         if not response.strip():
             response = "Market is currently consolidating. Awaiting clearer direction."
