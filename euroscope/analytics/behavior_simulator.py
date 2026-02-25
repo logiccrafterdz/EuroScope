@@ -31,12 +31,35 @@ class MockPriceProvider:
         
     async def get_price(self):
         row = self.history.iloc[self.current_idx]
+        timestamp_str = row.name.isoformat() if hasattr(row.name, 'isoformat') else str(row.name)
+        
+        # Calculate dynamic spread
+        base_spread = 1.0
+        spread_pips = base_spread
+        
+        try:
+            # 1. Rollover widening (17:00 EST / 22:00 UTC)
+            if hasattr(row.name, 'hour'):
+                hour = row.name.hour
+                if hour == 22:
+                    spread_pips += 8.0  # Huge widening at exact rollover hour
+                elif hour == 21 or hour == 23:
+                    spread_pips += 3.0  # Elevated spread pre/post rollover
+            
+            # 2. Volatility widening
+            if 'High' in row and 'Low' in row:
+                candle_range_pips = (row['High'] - row['Low']) * 10000
+                if candle_range_pips > 30: # unusually large H1 candle
+                    spread_pips += (candle_range_pips - 30) * 0.1 # Add 1 pip per 10 pips over 30
+        except Exception as e:
+            logger.debug(f"Dynamic spread calculation error: {e}")
+            
         return {
             "price": row["Close"],
-            "spread_pips": 1.0,
+            "spread_pips": round(min(spread_pips, 25.0), 1), # Cap max simulated spread at 25 pips
             "change": 0.0,
             "change_pct": 0.0,
-            "timestamp": row.name.isoformat() if hasattr(row.name, 'isoformat') else str(row.name)
+            "timestamp": timestamp_str
         }
         
     async def get_candles(self, timeframe="H1", count=100):
