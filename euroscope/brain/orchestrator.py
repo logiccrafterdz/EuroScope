@@ -262,6 +262,17 @@ class Orchestrator:
         # Store in vector memory if available
         if self.vector_memory and ctx.analysis:
             formatted = ctx.metadata.get("formatted", "")
+            if not formatted:
+                import json
+                summary_data = {
+                    "signals": ctx.signals,
+                    "market_state": market_state,
+                    "technical_bias": ctx.metadata.get("technical_bias"),
+                    "pattern_signal": ctx.metadata.get("pattern_signal")
+                }
+                formatted = json.dumps(summary_data, indent=2)
+                ctx.metadata["formatted"] = formatted
+
             if formatted:
                 self.vector_memory.store_analysis(
                     formatted,

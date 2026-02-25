@@ -186,10 +186,17 @@ class TechnicalAnalysisSkill(BaseSkill):
         context.metadata["pattern_signal"] = self._infer_pattern_signal(adjusted)
         if multipliers:
             context.metadata["pattern_multipliers"] = multipliers
+            
+        formatted_ta = self._format_analysis(ta)
+        formatted_patterns = self._format_patterns(adjusted)
+        formatted_levels = self._format_levels(levels)
+        formatted = f"{formatted_ta}\n\n{formatted_patterns}\n\n{formatted_levels}"
         
+        context.metadata["formatted"] = formatted
+
         return SkillResult(
             success=True, data=data, next_skill="risk_management",
-            metadata={"pattern_multipliers": multipliers}
+            metadata={"pattern_multipliers": multipliers, "formatted": formatted}
         )
 
     @staticmethod
