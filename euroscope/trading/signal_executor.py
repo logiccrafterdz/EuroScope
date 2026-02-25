@@ -66,15 +66,52 @@ class SignalExecutor:
 
         return signal_id
 
+    def create_pending_order(self, direction: str, trigger_price: float,
+                             stop_loss: float, take_profit: float,
+                             strategy: str = "llm_precalc", timeframe: str = "H1",
+                             confidence: float = 75.0, reasoning: str = "Pending Order") -> int:
+        """
+        Create a pending order to eliminate LLM execution latency.
+        The AI pre-calculates the trigger, and the system executes instantly when hit.
+        """
+        rr = 0.0
+        sl_dist = abs(trigger_price - stop_loss)
+        tp_dist = abs(take_profit - trigger_price)
+        if sl_dist > 0:
+            rr = round(tp_dist / sl_dist, 2)
+            
+        signal_id = self.storage.save_signal(
+            direction=direction.upper(),
+            entry_price=trigger_price, # Store trigger as entry
+            stop_loss=stop_loss,
+            take_profit=take_profit,
+            confidence=confidence,
+            timeframe=timeframe,
+            source=strategy,
+            reasoning=reasoning,
+            risk_reward_ratio=rr,
+            # Using 'pending' status natively supported by storage
+        )
+        logger.info(f"Created pending order #{signal_id}: {direction.upper()} at {trigger_price}")
+        return signal_id
+
     def check_signals(self, current_price: float) -> list[dict]:
         """
-        Check all open signals against current price.
-
-        Triggers stop loss or take profit if hit.
-
-        Returns:
-            List of closed signal dicts with PnL
+        Check all open signals and pending orders against current price.
+        Triggers stop loss, take profit, or activates pending orders.
         """
+        # 1. Check Pending Orders -> Open them if triggered
+        pending_signals = self.storage.get_signals(status="pending")
+        for p in pending_signals:
+            trigger = p["entry_price"]
+            dir = p["direction"]
+            # Simplified trigger logic (both Stop and Limit)
+            if (dir == "BUY" and current_price >= trigger) or \
+               (dir == "SELL" and current_price <= trigger):
+                self.storage.update_signal_status(p["id"], "open")
+                logger.info(f"⚡ INSTANT EXECUTION: Pending order #{p['id']} activated at {current_price} (Zero LLM Latency)")
+                
+        # 2. Check Open Signals -> Close them if SL/TP hit
         open_signals = self.get_open_signals()
         closed = []
 
