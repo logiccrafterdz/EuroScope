@@ -713,10 +713,9 @@ class Agent:
         
         # Make sure memory knows about this discovery
         if decision.get("should_alert") and decision.get("message") and self.vector_memory:
-            await self.vector_memory.add_document(
-                content=decision["message"],
-                category="proactive_insight",
-                metadata={"priority": decision.get("priority", "low")}
+            await self.vector_memory.store_analysis(
+                text=decision["message"],
+                metadata={"priority": decision.get("priority", "low"), "type": "proactive_insight"}
             )
         return decision
 
@@ -783,10 +782,9 @@ class Agent:
             
         # Log this to memory so it remembers its last pulse
         if self.vector_memory:
-             await self.vector_memory.add_document(
-                 content=f"Market Pulse sent: {response}",
-                 category="market_pulse_log",
-                 metadata={"type": "periodic"}
+             await self.vector_memory.store_analysis(
+                 text=f"Market Pulse sent: {response}",
+                 metadata={"type": "periodic", "category": "market_pulse_log"}
              )
         
         return response
