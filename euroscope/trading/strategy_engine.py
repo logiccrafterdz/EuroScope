@@ -150,7 +150,6 @@ class StrategyEngine:
         adx = indicators.get("adx", 0)
         rsi = indicators.get("rsi", 50)
         macd = indicators.get("macd", {})
-        volume_status = indicators.get("volume_profile", "normal") # Example structure
 
         confidence = 40.0
         entry_rules = []
@@ -167,13 +166,20 @@ class StrategyEngine:
             entry_rules.append("Market Structure: Bearish (BOS detected / Price < EMA 50)")
             confidence += 15
 
-        # Volume Confirmation
-        if volume_status == "high_volume_node":
-            entry_rules.append("Volume Profile: Supporting strong momentum")
-            confidence += 10
-        elif volume_status == "low_volume_node":
-            entry_rules.append("Volume Profile: Low liquidity zone, careful of fake-outs")
-            confidence -= 5
+        # Volume/Volatility Expansion Confirmation (ATR proxy instead of pseudo-volume)
+        atr_data = indicators.get("atr", {})
+        current_atr = atr_data.get("current", 0)
+        avg_atr = atr_data.get("avg_14", 1)  # Using 14-period avg as baseline
+        
+        atr_expansion = False
+        if current_atr and avg_atr and avg_atr > 0:
+            if current_atr / avg_atr > 1.25:
+                atr_expansion = True
+                entry_rules.append("ATR Expansion: High momentum supports trend")
+                confidence += 10
+            elif current_atr / avg_atr < 0.75:
+                entry_rules.append("ATR Compression: Low volatility, risk of fake-out")
+                confidence -= 5
 
         # ADX confirmation
         if adx > 30:
@@ -327,15 +333,18 @@ class StrategyEngine:
                 entry_rules.append(f"Price broke above resistance {nearest_r}")
                 confidence += 20
 
-                # Momentum & Volume confirmation
+                # Momentum & Volatility confirmation
                 hist = macd.get("histogram_latest")
-                volume_status = indicators.get("volume_profile", "normal")
+                atr_data = indicators.get("atr", {})
+                current_atr = atr_data.get("current", 0)
+                avg_atr = atr_data.get("avg_14", 1)
+                
                 if hist and hist > 0:
                     entry_rules.append("MACD momentum confirms breakout")
                     confidence += 10
                 
-                if volume_status == "high_volume_spike":
-                    entry_rules.append("Volume spike validates breakout (Smart Money)")
+                if current_atr and avg_atr and avg_atr > 0 and current_atr / avg_atr > 1.25:
+                    entry_rules.append("ATR Expansion validates breakout momentum")
                     confidence += 15
 
                 if rsi > 50:
@@ -351,13 +360,16 @@ class StrategyEngine:
                 confidence += 20
 
                 hist = macd.get("histogram_latest")
-                volume_status = indicators.get("volume_profile", "normal")
+                atr_data = indicators.get("atr", {})
+                current_atr = atr_data.get("current", 0)
+                avg_atr = atr_data.get("avg_14", 1)
+                
                 if hist and hist < 0:
                     entry_rules.append("MACD momentum confirms breakdown")
                     confidence += 10
                 
-                if volume_status == "high_volume_spike":
-                    entry_rules.append("Volume spike validates breakdown (Smart Money)")
+                if current_atr and avg_atr and avg_atr > 0 and current_atr / avg_atr > 1.25:
+                    entry_rules.append("ATR Expansion validates breakdown momentum")
                     confidence += 15
 
                 if rsi < 50:

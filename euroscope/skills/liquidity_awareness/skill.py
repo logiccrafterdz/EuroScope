@@ -14,6 +14,10 @@ logger = logging.getLogger("euroscope.skills.liquidity_awareness")
 class LiquidityZoneType(str, Enum):
     SESSION_HIGH = "session_high"
     SESSION_LOW = "session_low"
+    PREVIOUS_DAY_HIGH = "previous_day_high"
+    PREVIOUS_DAY_LOW = "previous_day_low"
+    WEEKLY_HIGH = "weekly_high"
+    WEEKLY_LOW = "weekly_low"
     PSYCHOLOGICAL = "psychological"
     EQUAL_HIGHS = "equal_highs"
     EQUAL_LOWS = "equal_lows"
@@ -92,6 +96,8 @@ class LiquidityAwarenessSkill(BaseSkill):
         zones: list[LiquidityZone] = []
         last_dt = df.index[-1]
         last_date = last_dt.date()
+        
+        # 1. Session Highs / Lows
         for name, start, end in (("london", 7, 12), ("newyork", 16, 21)):
             session_df = df[(df.index.date == last_date) & (df.index.hour >= start) & (df.index.hour < end)]
             if not session_df.empty:
@@ -107,6 +113,45 @@ class LiquidityAwarenessSkill(BaseSkill):
                     strength=0.75,
                     session=name,
                 ))
+
+        # 2. Previous Day High / Low
+        # Find the most recent day before `last_date` that has data
+        unique_dates = pd.Series(df.index.date).unique()
+        prev_dates = sorted([d for d in unique_dates if d < last_date], reverse=True)
+        if prev_dates:
+            prev_date = prev_dates[0]
+            prev_day_df = df[df.index.date == prev_date]
+            if not prev_day_df.empty:
+                zones.append(LiquidityZone(
+                    price_level=float(prev_day_df["High"].max()),
+                    zone_type=LiquidityZoneType.PREVIOUS_DAY_HIGH.value,
+                    strength=0.85,
+                    session="daily",
+                ))
+                zones.append(LiquidityZone(
+                    price_level=float(prev_day_df["Low"].min()),
+                    zone_type=LiquidityZoneType.PREVIOUS_DAY_LOW.value,
+                    strength=0.85,
+                    session="daily",
+                ))
+
+        # 3. Weekly High / Low
+        # We look at the last 7 calendar days to approximate a week of data
+        week_ago_date = last_date - pd.Timedelta(days=7)
+        weekly_df = df[(df.index.date >= week_ago_date) & (df.index.date < last_date)]
+        if not weekly_df.empty:
+            zones.append(LiquidityZone(
+                price_level=float(weekly_df["High"].max()),
+                zone_type=LiquidityZoneType.WEEKLY_HIGH.value,
+                strength=0.90,
+                session="weekly",
+            ))
+            zones.append(LiquidityZone(
+                price_level=float(weekly_df["Low"].min()),
+                zone_type=LiquidityZoneType.WEEKLY_LOW.value,
+                strength=0.90,
+                session="weekly",
+            ))
 
         low = float(df["Low"].min())
         high = float(df["High"].max())
@@ -171,7 +216,7 @@ class LiquidityAwarenessSkill(BaseSkill):
                 session=session_regime,
             ))
 
-        zones_sorted = sorted(zones, key=lambda z: z.strength, reverse=True)[:8]
+        zones_sorted = sorted(zones, key=lambda z: z.strength, reverse=True)[:12]
         return [
             {
                 "price_level": round(z.price_level, 5),

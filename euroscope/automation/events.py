@@ -6,6 +6,7 @@ enabling reactive, event-driven workflows.
 """
 
 import asyncio
+import inspect
 import logging
 import time
 from collections import defaultdict
@@ -109,7 +110,7 @@ class EventBus:
 
         for cb in callbacks:
             try:
-                if asyncio.iscoroutinefunction(cb):
+                if inspect.iscoroutinefunction(cb):
                     await cb(event)
                 else:
                     cb(event)
@@ -126,7 +127,7 @@ class EventBus:
         callbacks.extend(self._wildcard_subscribers)
 
         for cb in callbacks:
-            if not asyncio.iscoroutinefunction(cb):
+            if not inspect.iscoroutinefunction(cb):
                 try:
                     cb(event)
                 except Exception as e:

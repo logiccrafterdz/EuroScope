@@ -153,24 +153,51 @@ class FundamentalDataProvider:
     # ─── Derived Metrics ─────────────────────────────────────
 
     async def get_interest_rate_differential(self) -> Optional[Dict]:
-        """Calculate the interest rate differential."""
+        """Calculate the interest rate differential and its 90-day trend."""
         fed = await self.get_fed_funds_rate()
         ecb = await self.get_ecb_main_rate()
 
         if not fed or not ecb:
             return None
 
-        diff = round(fed["rate"] - ecb["value"], 2)
-        bias = "USD stronger" if diff > 0 else "EUR stronger" if diff < 0 else "neutral"
+        current_fed = fed["rate"]
+        current_ecb = ecb["value"]
+        current_diff = round(current_fed - current_ecb, 2)
+        
+        # ----- Trend Calculation -----
+        # Fetch up to 90 days (roughly 60-65 trading days, but FRED drops weekends, so let's get 65 points)
+        trend = "neutral"
+        try:
+            fed_hist = await self._fetch_series(FRED_SERIES["fed_funds_rate"], limit=65)
+            ecb_hist = await self._fetch_series(FRED_SERIES["ecb_main_rate"], limit=65)
+            
+            if fed_hist and ecb_hist and len(fed_hist) > 10 and len(ecb_hist) > 10:
+                # Simple average of the historical observations
+                avg_fed = sum(x["value"] for x in fed_hist) / len(fed_hist)
+                avg_ecb = sum(x["value"] for x in ecb_hist) / len(ecb_hist)
+                historical_diff = avg_fed - avg_ecb
+                
+                # If the current differential is significantly different from the 90-day avg, there's a trend
+                if current_diff > historical_diff + 0.10:
+                    trend = "widening_for_usd"
+                elif current_diff < historical_diff - 0.10:
+                    trend = "narrowing_for_eur"
+                else:
+                    trend = "stable"
+        except Exception as e:
+            logger.warning(f"Failed to calculate rate differential trend: {e}")
+
+        bias = "USD stronger" if current_diff > 0 else "EUR stronger" if current_diff < 0 else "neutral"
 
         return {
-            "fed_rate": fed["rate"],
-            "ecb_rate": ecb["value"],
-            "differential": diff,
+            "fed_rate": current_fed,
+            "ecb_rate": current_ecb,
+            "differential": current_diff,
+            "trend": trend,
             "bias": bias,
             "interpretation": (
-                f"Fed {fed['rate']}% vs ECB {ecb['value']}% → "
-                f"Spread: {diff:+.2f}% favoring {'USD' if diff > 0 else 'EUR'}"
+                f"Fed {current_fed}% vs ECB {current_ecb}% → "
+                f"Spread: {current_diff:+.2f}% favoring {'USD' if current_diff > 0 else 'EUR'} (Trend: {trend})"
             ),
         }
 

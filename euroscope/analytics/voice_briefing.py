@@ -79,12 +79,17 @@ class VoiceBriefingEngine:
         if signal_section:
             sections.append(signal_section)
 
-        # 4. Performance Summary
+        # 4. Scenario Analysis & Targets
+        scenario_section = await self._get_scenario_section()
+        if scenario_section:
+            sections.append(scenario_section)
+
+        # 5. Performance Summary
         perf_section = self._get_performance_section()
         if perf_section:
             sections.append(perf_section)
 
-        # 5. Risk Alerts
+        # 6. Risk Alerts
         risk_section = self._get_risk_section()
         if risk_section:
             sections.append(risk_section)
@@ -148,6 +153,31 @@ class VoiceBriefingEngine:
                 )
         except Exception as e:
             logger.debug(f"Technical section failed: {e}")
+        return None
+
+    async def _get_scenario_section(self) -> Optional[BriefingSection]:
+        """Get structured strategic scenarios from the forecaster."""
+        if not self.orchestrator or not hasattr(self.orchestrator, 'global_context'):
+            return None
+        try:
+            # We can retrieve the forecast from memory if it ran recently, 
+            # but for a fresh briefing, we should trigger a forecast scan
+            # However, invoking the full LLM forecaster here might be slow.
+            # Fast path: check if we have a recent forecast stored in memory.
+            mem = self.storage.get_memory('active_forecast', {})
+            if mem and mem.get('text'):
+                text = mem.get('text', '')
+                # Just use the raw text, the UI markdown parser will handle scenario formatting.
+                # Only include a snippet if it's too long for TTS.
+                snippet = text[:300] + "..." if len(text) > 300 else text
+                return BriefingSection(
+                    title="Strategic Scenarios",
+                    content=snippet,
+                    priority=3,
+                )
+            return None
+        except Exception as e:
+            logger.debug(f"Scenario section failed: {e}")
         return None
 
     def _get_signal_section(self) -> Optional[BriefingSection]:

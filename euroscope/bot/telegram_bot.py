@@ -532,6 +532,9 @@ class EuroScopeBot:
         """API endpoint to actively scan for and generate new trading signals."""
         logger.debug('API: Actively scanning for new signals (Mini App request)...')
         try:
+            if self.bot_settings.get('emergency_mode'):
+                return web.json_response({'success': False, 'error': 'SYSTEM IS IN EMERGENCY MODE. TRADING AND SCANNING HALTED.'})
+
             from ..skills.base import SkillContext
             ctx = SkillContext()
             
@@ -765,10 +768,59 @@ class EuroScopeBot:
         except Exception as e:
             return web.json_response({'success': False, 'error': str(e)})
 
-
     async def _api_health(self, request):
         """Standard health check endpoint."""
         return web.Response(text='OK', content_type='text/plain')
+
+    async def _api_emergency(self, request):
+        """API endpoint to trigger the Emergency Kill Switch."""
+        logger.warning('🚨 EMERGENCY KILL SWITCH TRIGGERED VIA API 🚨')
+        try:
+            data = await request.json()
+            is_active = data.get('active', True)
+            
+            import json, os
+            settings_path = os.path.join(self.config.data_dir, 'bot_settings.json')
+            s_data = {
+                'risk_per_trade': 1.0,
+                'max_daily_loss': 3.0,
+                'auto_trading_enabled': False,
+                'emergency_mode': False
+            }
+            if os.path.exists(settings_path):
+                with open(settings_path, 'r') as f:
+                    s_data.update(json.load(f))
+                    
+            s_data['emergency_mode'] = is_active
+            # Force auto-trading off instantly when emergency is triggered
+            if is_active:
+                s_data['auto_trading_enabled'] = False
+                
+            self.bot_settings.update(s_data)
+            
+            # Persist
+            os.makedirs(self.config.data_dir, exist_ok=True)
+            with open(settings_path, 'w') as f:
+                json.dump(s_data, f)
+                
+            status = "ACTIVATED (Trading Halted)" if is_active else "DEACTIVATED"
+            logger.info(f"Emergency Mode: {status}")
+            
+            # Notify Admins
+            chat_ids = self.config.proactive_alert_chat_ids
+            if chat_ids:
+                asyncio.create_task(
+                    self.notifications.broadcast_message(
+                        f"⚠️ *EMERGENCY KILL SWITCH {status}*\nTriggered via Zenith Dashboard.",
+                        chat_ids=chat_ids,
+                        parse_mode="Markdown"
+                    )
+                )
+
+            return web.json_response({'success': True, 'emergency_mode': is_active, 'message': f"Emergency Mode {status}"})
+        except Exception as e:
+            logger.error(f'API: Emergency trigger failed: {e}')
+            return web.json_response({'success': False, 'error': str(e)})
 
     async def _serve_mini_app(self, request):
         """Serve the Zenith Terminal Mini App directly from the bot server."""
@@ -802,7 +854,8 @@ class EuroScopeBot:
                 web.get('/api/patterns', self._api_patterns),
                 web.get('/api/levels', self._api_levels),
                 web.get('/api/settings', self._api_settings),
-                web.post('/api/settings', self._api_settings_update)
+                web.post('/api/settings', self._api_settings_update),
+                web.post('/api/emergency', self._api_emergency)
             ])
             port = int(os.getenv('PORT', 8080))
             runner = web.AppRunner(app)

@@ -804,7 +804,21 @@
             <div class="label-sm" style="margin-top:16px;">API ENDPOINT</div>
             <input type="text" id="api-url-input" class="action-in" placeholder="https://your-bot-server.com">
             <button class="action-btn" onclick="saveOverride()">APPLY OVERRIDE</button>
-            <button class="action-btn action-outline" onclick="toggleDebug()">TOGGLE DEBUG CONSOLE</button>
+
+            <div style="margin-top:24px; border-top: 1px solid rgba(255, 51, 102, 0.3); padding-top:16px;">
+                <div class="label-sm" style="color:var(--down-color); margin-bottom:8px;">CRITICAL OPERATIONS</div>
+                <button class="action-btn" id="btn-killswitch" onclick="toggleEmergency()"
+                    style="background:rgba(255, 51, 102, 0.1); color:var(--down-color); border:1px solid var(--down-color); box-shadow:0 0 15px rgba(255,51,102,0.2);">
+                    🚨 ACTIVATE KILL SWITCH
+                </button>
+                <div
+                    style="font-size:0.6rem; color:var(--text-muted); margin-top:8px; text-align:center; line-height:1.4;">
+                    Halts all autonomous execution immediately.<br>Use only in extreme market conditions.
+                </div>
+            </div>
+
+            <button class="action-btn action-outline" onclick="toggleDebug()" style="margin-top:24px;">TOGGLE DEBUG
+                CONSOLE</button>
             <button class="action-btn action-outline" style="border:none; color:var(--text-main);"
                 onclick="closeSystem()">CLOSE</button>
         </div>
@@ -904,6 +918,63 @@
             }, 2000);
         }
 
+        let isEmergency = false;
+        async function toggleEmergency() {
+            const btn = document.getElementById('btn-killswitch');
+            const targetState = !isEmergency;
+
+            if (targetState && !confirm("WARNING: This will immediately halt all autonomous trading. Are you sure?")) {
+                return;
+            }
+
+            btn.disabled = true;
+            btn.textContent = 'PROCESSING...';
+
+            const res = await api('/emergency', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ active: targetState })
+            });
+
+            if (res.success) {
+                isEmergency = res.emergency_mode;
+
+                if (isEmergency) {
+                    btn.textContent = 'RESTORE SYSTEM OPERATIONS';
+                    btn.style.background = 'rgba(0, 255, 157, 0.1)';
+                    btn.style.color = 'var(--up-color)';
+                    btn.style.borderColor = 'var(--up-color)';
+                    btn.style.boxShadow = '0 0 15px rgba(0,255,157,0.2)';
+
+                    document.getElementById('mkt-status').textContent = 'HALTED';
+                    document.getElementById('mkt-status').className = 'market-badge status-closed';
+                    document.getElementById('mkt-status').style.boxShadow = '0 0 15px rgba(255, 51, 102, 0.6)';
+                    document.getElementById('mkt-status').style.backgroundColor = 'var(--down-color)';
+                    document.getElementById('mkt-status').style.color = '#fff';
+
+                    // Update local Settings UI 
+                    document.getElementById('setting-auto').checked = false;
+
+                    try { window.Telegram.WebApp.HapticFeedback.notificationOccurred('error'); } catch (e) { }
+                    log("EMERGENCY KILL SWITCH ACTIVATED.", "error");
+                } else {
+                    btn.textContent = '🚨 ACTIVATE KILL SWITCH';
+                    btn.style.background = 'rgba(255, 51, 102, 0.1)';
+                    btn.style.color = 'var(--down-color)';
+                    btn.style.borderColor = 'var(--down-color)';
+                    btn.style.boxShadow = '0 0 15px rgba(255,51,102,0.2)';
+
+                    try { window.Telegram.WebApp.HapticFeedback.notificationOccurred('success'); } catch (e) { }
+                    log("SYSTEM RESTORED.", "success");
+                    sync(); // Refresh standard status
+                }
+            } else {
+                alert("Failed to toggle emergency mode: " + res.error);
+                btn.textContent = 'RETRY OPERATION';
+            }
+            btn.disabled = false;
+        }
+
         const parseMd = str => {
             if (!str) return "...";
 
@@ -938,6 +1009,14 @@
                 else if (line.match(/^<strong[^>]*>(Reasoning|Key Levels|Note):<\/strong>$/i)) {
                     let cleanHeader = line.replace(/<\/?strong[^>]*>/g, '');
                     output.push(`<div style="margin-top:20px; margin-bottom:8px; font-weight:800; color:var(--text-main); letter-spacing:1px; text-transform:uppercase; font-size:0.75rem;">${cleanHeader}</div>`);
+                }
+                // Is it a Scenario Header?
+                else if (line.match(/<strong[^>]*>Scenario (A|B).*?<\/strong>/i)) {
+                    let cleanScenario = line.replace(/<\/?strong[^>]*>/g, '').trim();
+                    let isBull = cleanScenario.toLowerCase().includes('bullish');
+                    let color = isBull ? 'var(--up-color)' : 'var(--down-color)';
+                    let bg = isBull ? 'rgba(0, 255, 157, 0.05)' : 'rgba(255, 51, 102, 0.05)';
+                    output.push(`<div style="margin-top:16px; margin-bottom:8px; padding:8px 12px; font-weight:800; color:${color}; background:${bg}; border-left: 2px solid ${color}; border-radius:0 8px 8px 0; letter-spacing:1px; font-size:0.75rem;">${cleanScenario}</div>`);
                 }
                 // Regular paragraph
                 else {

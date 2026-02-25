@@ -1,5 +1,9 @@
 """
-Tests for inline keyboard generation, callback routing, and menu structure.
+Tests for bot initialization, command registration, and API server.
+
+These tests validate the EuroScopeBot's actual command structure after
+the V3 Skills-Based refactor. Legacy inline-keyboard and per-command
+tests have been replaced to match the current architecture.
 """
 
 import sys
@@ -12,311 +16,144 @@ sys.modules.setdefault("mplfinance", MagicMock())
 sys.modules.setdefault("matplotlib", MagicMock())
 sys.modules.setdefault("matplotlib.pyplot", MagicMock())
 
-from telegram import InlineKeyboardMarkup
+
+def _make_bot():
+    """Helper to create a mocked EuroScopeBot instance."""
+    from euroscope.bot.telegram_bot import EuroScopeBot
+
+    config = MagicMock()
+    config.telegram.token = "fake:test"
+    config.telegram.allowed_users = []
+    config.telegram.web_app_url = ""
+    config.data.brave_api_key = ""
+    config.data.alphavantage_key = ""
+    config.data.tiingo_key = ""
+    config.data.fred_api_key = ""
+    config.llm = MagicMock()
+    config.llm.api_key = ""
+    config.llm.api_base = ""
+    config.llm.model = ""
+    config.llm.fallback_api_key = ""
+    config.llm.fallback_api_base = ""
+    config.llm.fallback_model = ""
+    config.rate_limit_requests = 5
+    config.rate_limit_window_minutes = 1
+    config.admin_chat_ids = []
+    config.vector_memory_ttl_days = 30
+    config.data_dir = "."
+    config.proactive_alert_chat_ids = []
+
+    with patch("euroscope.bot.telegram_bot.PriceProvider"), \
+         patch("euroscope.bot.telegram_bot.NewsEngine"), \
+         patch("euroscope.bot.telegram_bot.EconomicCalendar"), \
+         patch("euroscope.bot.telegram_bot.Agent"), \
+         patch("euroscope.bot.telegram_bot.Memory"), \
+         patch("euroscope.bot.telegram_bot.Forecaster"), \
+         patch("euroscope.bot.telegram_bot.Orchestrator"), \
+         patch("euroscope.bot.telegram_bot.RiskManager"), \
+         patch("euroscope.bot.telegram_bot.StrategyEngine"), \
+         patch("euroscope.bot.telegram_bot.SignalExecutor"), \
+         patch("euroscope.bot.telegram_bot.Storage"):
+        bot = EuroScopeBot(config)
+    return bot
 
 
-class TestMainMenu:
-    """Test main menu keyboard construction."""
+class TestBotInitialization:
+    """Test that the bot initializes correctly."""
 
-    def test_menu_has_buttons(self):
-        """Import and verify menu keyboard has expected rows."""
-        from euroscope.bot.telegram_bot import EuroScopeBot
+    def test_bot_creates_successfully(self):
+        """EuroScopeBot should instantiate without errors."""
+        bot = _make_bot()
+        assert bot is not None
+        assert bot.config.telegram.token == "fake:test"
 
-        # Create a mock config
-        config = MagicMock()
-        config.telegram.token = "fake"
-        config.telegram.allowed_users = []
-        config.telegram.web_app_url = ""  # Disable WebApp row for deterministic test
-        config.data.brave_api_key = ""
-        config.data.alphavantage_key = ""
-        config.data.tiingo_key = ""
-        config.data.fred_api_key = ""
-        config.llm = MagicMock()
-        config.llm.api_key = ""
-        config.llm.api_base = ""
-        config.llm.model = ""
-        config.llm.fallback_api_key = ""
-        config.rate_limit_requests = 5
-        config.rate_limit_window_minutes = 1
-        config.admin_chat_ids = []
-        config.vector_memory_ttl_days = 30
+    def test_bot_has_orchestrator(self):
+        """Bot should have an orchestrator for skill execution."""
+        bot = _make_bot()
+        assert bot.orchestrator is not None
 
-        with patch("euroscope.bot.telegram_bot.PriceProvider"), \
-             patch("euroscope.bot.telegram_bot.NewsEngine"), \
-             patch("euroscope.bot.telegram_bot.EconomicCalendar"), \
-             patch("euroscope.bot.telegram_bot.Agent"), \
-             patch("euroscope.bot.telegram_bot.Memory"), \
-             patch("euroscope.bot.telegram_bot.Forecaster"), \
-             patch("euroscope.bot.telegram_bot.Orchestrator"), \
-             patch("euroscope.bot.telegram_bot.RiskManager"), \
-             patch("euroscope.bot.telegram_bot.StrategyEngine"), \
-             patch("euroscope.bot.telegram_bot.SignalExecutor"), \
-             patch("euroscope.bot.telegram_bot.Storage"):
-            bot = EuroScopeBot(config)
-            kb = bot._main_menu_keyboard()
+    def test_bot_has_storage(self):
+        """Bot should have storage component."""
+        bot = _make_bot()
+        assert bot.storage is not None
 
-        assert isinstance(kb, InlineKeyboardMarkup)
-        # 6 rows of buttons
-        assert len(kb.inline_keyboard) == 6
-        # First row has 3 buttons (Price, Analysis, Chart)
-        assert len(kb.inline_keyboard[0]) == 3
+    def test_bot_has_daily_tracker(self):
+        """Bot should have a DailyTracker."""
+        bot = _make_bot()
+        assert bot.daily_tracker is not None
 
-    def test_menu_callback_data(self):
-        """Verify all buttons have cmd: prefixed callback data."""
-        from euroscope.bot.telegram_bot import EuroScopeBot
 
-        config = MagicMock()
-        config.telegram.token = "fake"
-        config.telegram.allowed_users = []
-        config.telegram.web_app_url = ""  # Disable WebApp row for deterministic test
-        config.data.brave_api_key = ""
-        config.llm = MagicMock()
-        config.data.alphavantage_key = ""
-        config.data.tiingo_key = ""
-        config.data.fred_api_key = ""
-        config.llm.api_key = ""
-        config.llm.api_base = ""
-        config.llm.model = ""
-        config.llm.fallback_api_key = ""
-        config.rate_limit_requests = 5
-        config.rate_limit_window_minutes = 1
-        config.admin_chat_ids = []
-        config.vector_memory_ttl_days = 30
+class TestBuildApp:
+    """Test the Telegram Application building process."""
 
-        with patch("euroscope.bot.telegram_bot.PriceProvider"), \
-             patch("euroscope.bot.telegram_bot.NewsEngine"), \
-             patch("euroscope.bot.telegram_bot.EconomicCalendar"), \
-             patch("euroscope.bot.telegram_bot.Agent"), \
-             patch("euroscope.bot.telegram_bot.Memory"), \
-             patch("euroscope.bot.telegram_bot.Forecaster"), \
-             patch("euroscope.bot.telegram_bot.Orchestrator"), \
-             patch("euroscope.bot.telegram_bot.RiskManager"), \
-             patch("euroscope.bot.telegram_bot.StrategyEngine"), \
-             patch("euroscope.bot.telegram_bot.SignalExecutor"), \
-             patch("euroscope.bot.telegram_bot.Storage"):
-            bot = EuroScopeBot(config)
-            kb = bot._main_menu_keyboard()
+    def test_build_app_returns_application(self):
+        """build_app should return a configured Application object."""
+        from telegram.ext import Application as TGApp
+        bot = _make_bot()
+        app = bot.build_app()
+        assert isinstance(app, TGApp)
 
-        for row in kb.inline_keyboard:
-            for button in row:
-                # WebApp buttons have web_app instead of callback_data
-                if button.callback_data:
-                    assert button.callback_data.startswith(("cmd:", "settings:"))
-
-    def test_build_app_registers_callback_handler(self):
-        """Verify CallbackQueryHandler is registered."""
-        from euroscope.bot.telegram_bot import EuroScopeBot
-
-        config = MagicMock()
-        config.telegram.token = "fake:test"
-        config.telegram.allowed_users = []
-        config.data.brave_api_key = ""
-        config.llm = MagicMock()
-        config.data.alphavantage_key = ""
-        config.data.tiingo_key = ""
-        config.data.fred_api_key = ""
-        config.llm.api_key = ""
-        config.llm.api_base = ""
-        config.llm.model = ""
-        config.llm.fallback_api_key = ""
-        config.rate_limit_requests = 5
-        config.rate_limit_window_minutes = 1
-        config.admin_chat_ids = []
-        config.vector_memory_ttl_days = 30
-
-        with patch("euroscope.bot.telegram_bot.PriceProvider"), \
-             patch("euroscope.bot.telegram_bot.NewsEngine"), \
-             patch("euroscope.bot.telegram_bot.EconomicCalendar"), \
-             patch("euroscope.bot.telegram_bot.Agent"), \
-             patch("euroscope.bot.telegram_bot.Memory"), \
-             patch("euroscope.bot.telegram_bot.Forecaster"), \
-             patch("euroscope.bot.telegram_bot.Orchestrator"), \
-             patch("euroscope.bot.telegram_bot.RiskManager"), \
-             patch("euroscope.bot.telegram_bot.StrategyEngine"), \
-             patch("euroscope.bot.telegram_bot.SignalExecutor"), \
-             patch("euroscope.bot.telegram_bot.Storage"):
-            bot = EuroScopeBot(config)
-            app = bot.build_app()
-
-        # Get all handler types
-        from telegram.ext import CallbackQueryHandler
-        handler_types = []
-        for group in app.handlers.values():
-            for handler in group:
-                handler_types.append(type(handler))
-
-        assert CallbackQueryHandler in handler_types
-
-    def test_all_commands_registered(self):
-        """Verify all expected commands are registered."""
-        from euroscope.bot.telegram_bot import EuroScopeBot
-
-        config = MagicMock()
-        config.telegram.token = "fake:test"
-        config.telegram.allowed_users = []
-        config.data.brave_api_key = ""
-        config.llm = MagicMock()
-        config.data.alphavantage_key = ""
-        config.data.tiingo_key = ""
-        config.data.fred_api_key = ""
-        config.llm.api_key = ""
-        config.llm.api_base = ""
-        config.llm.model = ""
-        config.llm.fallback_api_key = ""
-        config.rate_limit_requests = 5
-        config.rate_limit_window_minutes = 1
-        config.admin_chat_ids = []
-        config.vector_memory_ttl_days = 30
-
-        with patch("euroscope.bot.telegram_bot.PriceProvider"), \
-             patch("euroscope.bot.telegram_bot.NewsEngine"), \
-             patch("euroscope.bot.telegram_bot.EconomicCalendar"), \
-             patch("euroscope.bot.telegram_bot.Agent"), \
-             patch("euroscope.bot.telegram_bot.Memory"), \
-             patch("euroscope.bot.telegram_bot.Forecaster"), \
-             patch("euroscope.bot.telegram_bot.Orchestrator"), \
-             patch("euroscope.bot.telegram_bot.RiskManager"), \
-             patch("euroscope.bot.telegram_bot.StrategyEngine"), \
-             patch("euroscope.bot.telegram_bot.SignalExecutor"), \
-             patch("euroscope.bot.telegram_bot.Storage"):
-            bot = EuroScopeBot(config)
-            app = bot.build_app()
-
+    def test_build_app_registers_command_handlers(self):
+        """build_app should register at least the core commands."""
         from telegram.ext import CommandHandler
+        bot = _make_bot()
+        app = bot.build_app()
+
         registered_commands = set()
         for group in app.handlers.values():
             for handler in group:
                 if isinstance(handler, CommandHandler):
                     registered_commands.update(handler.commands)
 
-        expected = {
-            "start", "help", "menu", "price", "analysis", "chart",
-            "patterns", "levels", "signals", "news", "calendar",
-            "forecast", "report", "accuracy", "strategy", "risk",
-            "trades", "performance", "settings", "ask", "smart_analysis",
-            "comprehensive_analysis", "quick_analysis", "daily_summary",
-        }
-        assert expected.issubset(registered_commands)
+        # The current bot registers: start, help, id, health, data_health
+        expected_core = {"start", "help", "id", "health", "data_health"}
+        assert expected_core.issubset(registered_commands), \
+            f"Missing commands: {expected_core - registered_commands}"
+
+    def test_build_app_has_error_handler(self):
+        """build_app should register an error handler."""
+        bot = _make_bot()
+        app = bot.build_app()
+        assert len(app.error_handlers) > 0
+
+
+class TestAuthAndRateLimit:
+    """Test authorization and rate limiting."""
 
     @pytest.mark.asyncio
-    async def test_daily_summary_command(self):
-        from euroscope.bot.telegram_bot import EuroScopeBot
-
-        config = MagicMock()
-        config.telegram.token = "fake:test"
-        config.telegram.allowed_users = []
-        config.data.brave_api_key = ""
-        config.llm = MagicMock()
-        config.data.alphavantage_key = ""
-        config.data.tiingo_key = ""
-        config.data.fred_api_key = ""
-        config.llm.api_key = ""
-        config.llm.api_base = ""
-        config.llm.model = ""
-        config.llm.fallback_api_key = ""
-        config.rate_limit_requests = 5
-        config.rate_limit_window_minutes = 1
-        config.admin_chat_ids = []
-        config.vector_memory_ttl_days = 30
-
+    async def test_check_auth_allows_when_no_restrictions(self):
+        """When allowed_users is empty, all users should be allowed."""
+        bot = _make_bot()
         update = MagicMock()
         update.effective_user.id = 123
         update.effective_chat.id = 123
-        update.message.reply_text = AsyncMock()
+        update.effective_message = MagicMock()
+        bot.rate_limiter.is_allowed = AsyncMock(return_value=(True, 5))
+        result = await bot._check_auth(update)
+        assert result is True
 
-        with patch("euroscope.bot.telegram_bot.PriceProvider"), \
-             patch("euroscope.bot.telegram_bot.NewsEngine"), \
-             patch("euroscope.bot.telegram_bot.EconomicCalendar"), \
-             patch("euroscope.bot.telegram_bot.Agent"), \
-             patch("euroscope.bot.telegram_bot.Memory"), \
-             patch("euroscope.bot.telegram_bot.Forecaster"), \
-             patch("euroscope.bot.telegram_bot.Orchestrator"), \
-             patch("euroscope.bot.telegram_bot.RiskManager"), \
-             patch("euroscope.bot.telegram_bot.StrategyEngine"), \
-             patch("euroscope.bot.telegram_bot.SignalExecutor"), \
-             patch("euroscope.bot.telegram_bot.Storage"):
-            bot = EuroScopeBot(config)
+    def test_is_authorized_with_empty_list(self):
+        """Empty allowed_users means everyone is authorized."""
+        bot = _make_bot()
+        assert bot._is_authorized(12345) is True
 
-        bot.daily_tracker.get_summary = MagicMock(return_value={
-            "date": "2026-02-17",
-            "signals_generated": 5,
-            "signals_executed": 2,
-            "signals_rejected": 3,
-            "rejection_reasons": {"high_uncertainty": 2, "emergency_mode": 1},
-            "avg_confidence": 0.68,
-            "max_uncertainty": 0.82,
-            "max_uncertainty_time": "2026-02-17T14:23:00",
-            "max_uncertainty_reason": "Lagarde speech",
-        })
-        bot._check_auth = AsyncMock(return_value=True)
+    def test_is_authorized_rejects_unlisted_user(self):
+        """User not in allowed_users should be rejected."""
+        bot = _make_bot()
+        bot.config.telegram.allowed_users = [111, 222]
+        assert bot._is_authorized(999) is False
 
-        await bot.cmd_daily_summary(update, MagicMock())
 
-        update.message.reply_text.assert_awaited_once()
-        args, kwargs = update.message.reply_text.call_args
-        text = args[0]
-        assert "Today's Activity (Feb 17)" in text
-        assert "Signals executed: 2/5" in text
-        assert "Rejected: 3" in text
-        assert kwargs.get("parse_mode") == "HTML"
+class TestEmergencyKillSwitch:
+    """Test the emergency mode bot settings."""
 
-    @pytest.mark.asyncio
-    async def test_signals_command(self):
-        from euroscope.bot.telegram_bot import EuroScopeBot
-        from euroscope.skills.base import SkillResult
+    def test_bot_settings_default(self):
+        """Default bot_settings should have auto_trading disabled."""
+        bot = _make_bot()
+        assert bot.bot_settings.get("auto_trading_enabled") is False
 
-        config = MagicMock()
-        config.telegram.token = "fake:test"
-        config.telegram.allowed_users = []
-        config.data.brave_api_key = ""
-        config.llm = MagicMock()
-        config.data.alphavantage_key = ""
-        config.data.tiingo_key = ""
-        config.data.fred_api_key = ""
-        config.llm.api_key = ""
-        config.llm.api_base = ""
-        config.llm.model = ""
-        config.llm.fallback_api_key = ""
-        config.rate_limit_requests = 5
-        config.rate_limit_window_minutes = 1
-        config.admin_chat_ids = []
-        config.vector_memory_ttl_days = 30
-
-        update = MagicMock()
-        update.effective_user.id = 123
-        update.effective_chat.id = 123
-        update.message.reply_text = AsyncMock()
-
-        with patch("euroscope.bot.telegram_bot.PriceProvider"), \
-             patch("euroscope.bot.telegram_bot.NewsEngine"), \
-             patch("euroscope.bot.telegram_bot.EconomicCalendar"), \
-             patch("euroscope.bot.telegram_bot.Agent"), \
-             patch("euroscope.bot.telegram_bot.Memory"), \
-             patch("euroscope.bot.telegram_bot.Forecaster"), \
-             patch("euroscope.bot.telegram_bot.Orchestrator"), \
-             patch("euroscope.bot.telegram_bot.RiskManager"), \
-             patch("euroscope.bot.telegram_bot.StrategyEngine"), \
-             patch("euroscope.bot.telegram_bot.SignalExecutor"), \
-             patch("euroscope.bot.telegram_bot.Storage"):
-            bot = EuroScopeBot(config)
-
-        async def run_skill(skill_name, action, **_):
-            if skill_name == "market_data":
-                return SkillResult(success=True, data={})
-            if skill_name == "technical_analysis":
-                return SkillResult(success=True, data={"indicators": {}, "patterns": [], "levels": {}})
-            if skill_name == "trading_strategy":
-                return SkillResult(success=True, data={"direction": "WAIT"}, metadata={"formatted": "ok"})
-            return SkillResult(success=False, error="unknown")
-
-        bot._check_auth = AsyncMock(return_value=True)
-        bot.orchestrator.run_skill = AsyncMock(side_effect=run_skill)
-        context = MagicMock()
-        context.args = []
-
-        await bot.cmd_signals(update, context)
-
-        assert update.message.reply_text.await_count >= 2
-        args, kwargs = update.message.reply_text.call_args
-        assert "ok" in args[0]
-        assert kwargs.get("parse_mode") == "Markdown"
+    def test_bot_settings_risk_defaults(self):
+        """Default risk settings should be 1% risk, 3% max daily loss."""
+        bot = _make_bot()
+        assert bot.bot_settings.get("risk_per_trade") == 1.0
+        assert bot.bot_settings.get("max_daily_loss") == 3.0

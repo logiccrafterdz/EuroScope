@@ -2,7 +2,7 @@
 Multi-Source Data Provider
 
 Aggregates price data from multiple sources with automatic failover.
-Primary: yfinance | Fallback: Alpha Vantage
+Primary: OANDA | Secondary: yfinance | Fallback: Alpha Vantage
 """
 
 import asyncio
@@ -14,6 +14,7 @@ import pandas as pd
 from .provider import PriceProvider
 from .alpha_vantage import AlphaVantageProvider
 from .tiingo import TiingoProvider
+from .oanda import OandaProvider
 
 logger = logging.getLogger("euroscope.data.multi")
 
@@ -22,14 +23,15 @@ class MultiSourceProvider:
     """
     Unified price provider that tries multiple data sources.
 
-    Tries yfinance first, then Tiingo, then Alpha Vantage.
+    Tries OANDA first, then yfinance, then Tiingo, then Alpha Vantage.
     """
 
-    def __init__(self, alphavantage_key: str = "", tiingo_key: str = ""):
+    def __init__(self, alphavantage_key: str = "", tiingo_key: str = "", oanda_key: str = "", oanda_account: str = "", oanda_practice: bool = True):
+        self.oanda = OandaProvider(oanda_key, oanda_account, oanda_practice) if oanda_key else None
         self.primary = PriceProvider()
         self.tiingo = TiingoProvider(tiingo_key) if tiingo_key else None
         self.fallback = AlphaVantageProvider(alphavantage_key) if alphavantage_key else None
-        self._last_source = "yfinance"
+        self._last_source = "oanda" if oanda_key else "yfinance"
 
     @property
     def last_source(self) -> str:
@@ -38,7 +40,16 @@ class MultiSourceProvider:
 
     async def get_price(self) -> dict:
         """Get current EUR/USD price with automatic failover."""
-        # Try primary (yfinance)
+        # Try OANDA
+        if self.oanda:
+            result = await self.oanda.get_price()
+            if "error" not in result:
+                self._last_source = "oanda"
+                result["source"] = "oanda"
+                return result
+            logger.warning(f"OANDA price failed: {result.get('error')}, trying yfinance...")
+
+        # Try yfinance
         result = await self.primary.get_price()
         if "error" not in result:
             self._last_source = "yfinance"
@@ -67,7 +78,18 @@ class MultiSourceProvider:
 
     async def get_candles(self, timeframe: str = "H1", count: int = 100) -> Optional[pd.DataFrame]:
         """Get OHLCV candles with automatic failover."""
-        # Try primary
+        # Try OANDA
+        if self.oanda:
+            df = await self.oanda.get_candles(timeframe, count)
+            if df is not None and not df.empty:
+                df = self._validate_data(df)
+                if df is not None:
+                    self._last_source = "oanda"
+                    return df
+                logger.error(f"OANDA data failed validation for {timeframe}")
+            logger.warning(f"OANDA candles failed for {timeframe}, trying yfinance...")
+
+        # Try yfinance
         df = await self.primary.get_candles(timeframe, count)
         if df is not None and not df.empty:
             df = self._validate_data(df)
@@ -180,6 +202,8 @@ class MultiSourceProvider:
 
     def clear_cache(self):
         """Clear all caches."""
+        if self.oanda:
+            self.oanda.clear_cache()
         self.primary.clear_cache()
         if self.fallback:
             self.fallback.clear_cache()

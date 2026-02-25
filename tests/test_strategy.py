@@ -183,18 +183,16 @@ class TestFormatting:
 class TestTradingStrategyFallback:
 
     @pytest.mark.asyncio
-    async def test_llm_timeout_triggers_fallback(self):
+    async def test_emergency_mode_triggers_fallback(self):
+        """When emergency_mode is active, skill should use technical_fallback without calling LLM."""
         skill = TradingStrategySkill()
         skill.set_agent(object())
 
-        async def slow_llm(*args, **kwargs):
-            await asyncio.sleep(3)
-            return None
-
-        skill._generate_llm_signal = slow_llm
+        skill._generate_llm_signal = AsyncMock(return_value=None)
         skill._llm_refine_strategy = AsyncMock(return_value=None)
 
         ctx = SkillContext()
+        ctx.metadata["emergency_mode"] = True
         ctx.analysis["indicators"] = {
             "overall_bias": "bullish",
             "indicators": {
@@ -205,13 +203,11 @@ class TestTradingStrategyFallback:
         }
         ctx.analysis["levels"] = {"current_price": 1.0950}
 
-        start = time.perf_counter()
         result = await skill._detect(ctx)
-        elapsed = time.perf_counter() - start
 
-        assert elapsed < 1.6
         assert result.success
         assert result.data.get("source") == "technical_fallback"
+        assert skill._generate_llm_signal.await_count == 0
 
     @pytest.mark.asyncio
     async def test_emergency_mode_skips_llm(self):
@@ -272,3 +268,4 @@ class TestTradingStrategyFallback:
         assert result.success
         assert result.data.get("strategy") == "NEUTRAL"
         assert result.data.get("direction") == "WAIT"
+

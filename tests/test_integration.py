@@ -172,7 +172,7 @@ class TestDataFlowPipeline:
             return SkillResult(success=True, data={})
 
         async def set_candles(ctx, action, **_params):
-            times = pd.date_range("2026-01-06 06:00", periods=30, freq="H")
+            times = pd.date_range("2026-01-06 06:00", periods=30, freq="h")
             df = pd.DataFrame(
                 {
                     "Open": [1.1000] * 30,

@@ -75,25 +75,6 @@ class TradingStrategySkill(BaseSkill):
             signal = self.engine.detect_strategy(
                 ind, levels, patterns, uncertainty=uncertainty, macro_data=macro_data
             )
-            if self._agent:
-                try:
-                    llm_signal = await asyncio.wait_for(
-                        self._generate_llm_signal(context, ind, levels, patterns),
-                        timeout=1.5,
-                    )
-                except asyncio.TimeoutError:
-                    fallback_signal, regime, strength = self._fallback_to_technical_only(context, ind, levels)
-                    return self._build_from_fallback(context, fallback_signal, regime, strength)
-                if llm_signal:
-                    signal = llm_signal
-                try:
-                    signal = await asyncio.wait_for(
-                        self._llm_refine_strategy(signal, context, ind, levels, patterns),
-                        timeout=1.5,
-                    )
-                except asyncio.TimeoutError:
-                    fallback_signal, regime, strength = self._fallback_to_technical_only(context, ind, levels)
-                    return self._build_from_fallback(context, fallback_signal, regime, strength)
 
             if isinstance(signal, TradingSignal):
                 return self._build_from_fallback(
@@ -135,56 +116,6 @@ class TradingStrategySkill(BaseSkill):
             )
         except Exception as e:
             return SkillResult(success=False, error=str(e))
-
-    async def _generate_llm_signal(self, context: SkillContext, indicators: dict,
-                                   levels: dict, patterns: list) -> StrategySignal | None:
-        if not self._agent:
-            return None
-        prompt = (
-            "Generate a concise trading signal using these inputs:\n"
-            f"Indicators: {indicators}\n"
-            f"Levels: {levels}\n"
-            f"Patterns: {patterns}\n"
-            "Return direction BUY/SELL/WAIT and confidence 0-100."
-        )
-        response = await self._agent.chat(prompt)
-        parsed = self._parse_llm_response(response)
-        if not parsed:
-            return None
-        direction, confidence = parsed
-        regime = self._infer_regime_from_adx(indicators.get("adx"))
-        return StrategySignal(
-            strategy="llm_signal",
-            direction=direction,
-            confidence=confidence,
-            reasoning=response,
-            regime=regime,
-        )
-
-    async def _llm_refine_strategy(self, signal: StrategySignal, context: SkillContext,
-                                   indicators: dict, levels: dict, patterns: list) -> StrategySignal:
-        if not self._agent:
-            return signal
-        prompt = (
-            "Refine this trading signal with direction and confidence only.\n"
-            f"Current: {signal}\n"
-            f"Indicators: {indicators}\n"
-            f"Levels: {levels}\n"
-            f"Patterns: {patterns}\n"
-            "Return direction BUY/SELL/WAIT and confidence 0-100."
-        )
-        response = await self._agent.chat(prompt)
-        parsed = self._parse_llm_response(response)
-        if not parsed:
-            return signal
-        direction, confidence = parsed
-        return StrategySignal(
-            strategy=signal.strategy,
-            direction=direction,
-            confidence=confidence,
-            reasoning=response,
-            regime=signal.regime,
-        )
 
     def _fallback_to_technical_only(self, context: SkillContext, indicators: dict,
                                     levels: dict) -> tuple[TradingSignal, str, str]:

@@ -5,7 +5,7 @@ from euroscope.skills.liquidity_awareness import LiquidityAwarenessSkill
 from euroscope.skills.base import SkillContext
 
 
-def _make_df(prices, start="2026-01-06 06:00", freq="H"):
+def _make_df(prices, start="2026-01-06 06:00", freq="h"):
     times = pd.date_range(start, periods=len(prices), freq=freq)
     df = pd.DataFrame(
         {

@@ -6,6 +6,7 @@ and triggers alerts on status changes.
 """
 
 import asyncio
+import inspect
 import logging
 import time
 from datetime import datetime, timezone
@@ -107,7 +108,7 @@ class HeartbeatService:
         for name, check_fn in self._checks.items():
             try:
                 start = time.monotonic()
-                if asyncio.iscoroutinefunction(check_fn):
+                if inspect.iscoroutinefunction(check_fn):
                     result = await check_fn()
                 else:
                     result = check_fn()
@@ -152,7 +153,7 @@ class HeartbeatService:
         logger.warning(f"Status change: {component} {old} → {new}")
         for listener in self._listeners:
             try:
-                if asyncio.iscoroutinefunction(listener):
+                if inspect.iscoroutinefunction(listener):
                     await listener(event)
                 else:
                     listener(event)
