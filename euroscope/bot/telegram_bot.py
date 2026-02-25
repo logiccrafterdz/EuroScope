@@ -145,7 +145,7 @@ class EuroScopeBot:
         
         # Inject dependencies into the skills system
         self.orchestrator.inject_dependencies(
-            price_provider=self.price_provider,
+            provider=self.price_provider,       # CHANGED: 'provider' matches 'set_provider' in skills
             macro_provider=self.macro_provider,
             news_engine=self.news_engine,
             calendar=self.calendar,
