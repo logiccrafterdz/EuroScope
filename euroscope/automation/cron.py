@@ -389,7 +389,7 @@ class CronScheduler:
                     vm = VectorMemory()
                     for fc in resolved:
                         if hasattr(fc, "_lesson_text") and fc._lesson_text:
-                            await vm.store_analysis(
+                            vm.store_analysis(
                                 text=fc._lesson_text,
                                 metadata={"skill": fc.skill, "outcome": fc.outcome, "type": "learning_lesson"}
                             )

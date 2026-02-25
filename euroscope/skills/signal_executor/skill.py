@@ -241,7 +241,7 @@ class SignalExecutorSkill(BaseSkill):
                         f"Entry: {trade.entry_price}, Exit: {trade.exit_price} (SL: {trade.stop_loss}, TP: {trade.take_profit}). "
                         f"Outcome: {outcome} with a PnL of {trade.pnl_pips:+.1f} pips."
                     )
-                    await vm.store_analysis(
+                    vm.store_analysis(
                         text=lesson,
                         metadata={"strategy": trade.strategy, "outcome": outcome, "type": "trade_lesson"}
                     )
