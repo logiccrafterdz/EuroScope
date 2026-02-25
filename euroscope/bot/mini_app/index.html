@@ -1084,14 +1084,29 @@
 
             try {
                 const res = await api('/scan_signals');
+                btnText.textContent = "SCAN MARKET";
                 if (res.success && res.signal) {
-                    // Success! Refresh the signals tab to show the new trade
-                    btnText.textContent = "SCAN MARKET";
-                    await sync('signals');
-                    try { tg.HapticFeedback.notificationOccurred('success'); } catch (e) { }
+                    if (res.execution_skipped) {
+                        log(`Signal Found: ${res.signal.direction} @ ${f5(res.signal.entry_price)} (Auto-Trading: OFF)`, 'warn');
+                        btnText.textContent = "SIGNAL FOUND";
+                        btn.style.background = 'var(--accent-primary)';
+                        if (emptyState) {
+                            emptyState.innerHTML = `<div style="text-align:center;"><span style="color:var(--accent-primary); font-size:1.2rem; display:block; margin-bottom:8px;">💡</span>` +
+                                `IDENTIFIED ${res.signal.direction} SIGNAL<br><span style="font-size:0.6rem; color:var(--text-dim);">Auto-trading is currently disabled in settings.</span></div>`;
+                        }
+                        try { tg.HapticFeedback.notificationOccurred('warning'); } catch (e) { }
+                        setTimeout(() => { btnText.textContent = "SCAN MARKET"; btn.style.background = 'var(--accent-primary)'; }, 2000);
+                    } else {
+                        // Success! Refresh the signals tab to show the new trade
+                        log(`Trade Executed: ${res.signal.direction} Position Opened`, 'success');
+                        btnText.textContent = "TRADE EXECUTED";
+                        btn.style.background = 'var(--up-color)';
+                        await sync('signals');
+                        try { tg.HapticFeedback.notificationOccurred('success'); } catch (e) { }
+                        setTimeout(() => { btnText.textContent = "SCAN MARKET"; btn.style.background = 'var(--accent-primary)'; }, 2000);
+                    }
                 } else {
                     // No high confidence signal found
-                    btnText.textContent = "SCAN MARKET";
                     if (emptyState) {
                         emptyState.innerHTML = `<span style="color:var(--warn-color); font-size:1.2rem; display:block; margin-bottom:8px;">⚠️</span>` + (res.message || "NO OPPORTUNITIES AT THE MOMENT. EXERCISE PATIENCE.");
                     }

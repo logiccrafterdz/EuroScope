@@ -82,9 +82,28 @@ class EuroScopeBot:
         self.agent.forecaster = self.forecaster
         self.briefing_engine = BriefingEngine(self.storage)
         self.evolution_tracker = EvolutionTracker(self.storage)
-        self.orchestrator.set_alerts(self.alerts)
+        self.bot_settings = {
+            'risk_per_trade': 1.0,
+            'max_daily_loss': 3.0,
+            'auto_trading_enabled': False
+        }
+        # Load Mini App Settings
+        risk_manager = RiskManager()
+        try:
+            import json, os
+            settings_path = os.path.join(self.config.data_dir, 'bot_settings.json')
+            if os.path.exists(settings_path):
+                with open(settings_path, 'r') as f:
+                    s_data = json.load(f)
+                    self.bot_settings.update(s_data)
+                    risk_manager.config.risk_per_trade = float(self.bot_settings.get('risk_per_trade', 1.0))
+                    risk_manager.config.max_daily_loss = float(self.bot_settings.get('max_daily_loss', 3.0))
+                    logger.debug(f"Bot: Loaded persistent settings (Risk: {risk_manager.config.risk_per_trade}%, Max Loss: {risk_manager.config.max_daily_loss}%, AutoTrade: {self.bot_settings.get('auto_trading_enabled')})")
+        except Exception as e:
+            logger.warning(f"Bot: Error loading bot_settings.json: {e}")
+
         market_data_skill = self.registry.get('market_data')
-        self.orchestrator.inject_dependencies(provider=self.price_provider, macro_provider=self.macro_provider, news_engine=self.news_engine, calendar=self.calendar, storage=self.storage, agent=self.agent, vector_memory=self.vector_memory, pattern_tracker=self.pattern_tracker, adaptive_tuner=self.adaptive_tuner, risk_manager=RiskManager(), event_bus=self.bus, heartbeat=self.heartbeat, market_data_skill=market_data_skill, global_context=self.orchestrator.global_context, config=self.config)
+        self.orchestrator.inject_dependencies(provider=self.price_provider, macro_provider=self.macro_provider, news_engine=self.news_engine, calendar=self.calendar, storage=self.storage, agent=self.agent, vector_memory=self.vector_memory, pattern_tracker=self.pattern_tracker, adaptive_tuner=self.adaptive_tuner, risk_manager=risk_manager, event_bus=self.bus, heartbeat=self.heartbeat, market_data_skill=market_data_skill, global_context=self.orchestrator.global_context, config=self.config)
         signal_executor_skill = self.registry.get('signal_executor')
         self._signal_executor_subscriber = SignalExecutorSubscriber(signal_executor_skill)
         self._alert_suppression_subscriber = AlertSuppressionSubscriber(self.alerts)
@@ -536,12 +555,15 @@ class EuroScopeBot:
                 if not risk_res.success:
                     return web.json_response({'success': False, 'error': f'Risk calculation failed: {risk_res.error}'})
                     
-                # 4. Execute the paper trade
-                exec_res = await self.orchestrator.run_skill('signal_executor', 'open_trade', context=ctx)
-                if exec_res.success:
-                    return web.json_response({'success': True, 'signal': exec_res.data, 'message': f'Found {direction} opportunity!'})
+                # 4. Execute the paper trade IF auto-trading is enabled
+                if self.bot_settings.get('auto_trading_enabled'):
+                    exec_res = await self.orchestrator.run_skill('signal_executor', 'open_trade', context=ctx)
+                    if exec_res.success:
+                        return web.json_response({'success': True, 'signal': exec_res.data, 'message': f'Found {direction} opportunity и execution successful!'})
+                    else:
+                        return web.json_response({'success': False, 'error': f'Signal generation aborted by guardrails: {exec_res.error}', 'signal': signal_data})
                 else:
-                    return web.json_response({'success': False, 'error': f'Signal generation aborted by guardrails: {exec_res.error}', 'signal': signal_data})
+                    return web.json_response({'success': True, 'signal': signal_data, 'execution_skipped': True, 'message': f'Found {direction} opportunity! (Auto-trading is DISABLED)'})
             else:
                 return web.json_response({'success': False, 'message': 'No high-confidence opportunities currently available. Please exercise patience.'})
         except Exception as e:
@@ -723,6 +745,7 @@ class EuroScopeBot:
                     data.update(json.load(f))
                     
             data.update(new_data)
+            self.bot_settings.update(data)
             
             # Ensure dir exists
             os.makedirs(self.config.data_dir, exist_ok=True)
