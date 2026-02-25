@@ -241,10 +241,9 @@ class SignalExecutorSkill(BaseSkill):
                         f"Entry: {trade.entry_price}, Exit: {trade.exit_price} (SL: {trade.stop_loss}, TP: {trade.take_profit}). "
                         f"Outcome: {outcome} with a PnL of {trade.pnl_pips:+.1f} pips."
                     )
-                    await vm.add_document(
-                        content=lesson,
-                        category="trade_lesson",
-                        metadata={"strategy": trade.strategy, "outcome": outcome}
+                    await vm.store_analysis(
+                        text=lesson,
+                        metadata={"strategy": trade.strategy, "outcome": outcome, "type": "trade_lesson"}
                     )
                 except Exception as e:
                     import logging
