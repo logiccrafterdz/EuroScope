@@ -1487,7 +1487,8 @@ class EuroScopeBot:
                 tick_job, 
                 interval=self.cron.tick_interval, 
                 first=self.cron.tick_interval,
-                name="euroscope_cron_ticker"
+                name="euroscope_cron_ticker",
+                job_kwargs={"misfire_grace_time": 10}
             )
             logger.info("Cron ticking delegated to JobQueue")
         else:

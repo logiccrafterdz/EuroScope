@@ -101,8 +101,13 @@ class NewsEngine:
                 from duckduckgo_search import DDGS
 
             def _search():
-                with DDGS() as ddgs:
-                    return list(ddgs.news(query, max_results=count))
+                import os
+                import warnings
+                os.environ["RUST_LOG"] = "error"
+                with warnings.catch_warnings():
+                    warnings.filterwarnings("ignore", category=UserWarning, module="primp")
+                    with DDGS() as ddgs:
+                        return list(ddgs.news(query, max_results=count))
 
             raw_results = await asyncio.to_thread(_search)
 
