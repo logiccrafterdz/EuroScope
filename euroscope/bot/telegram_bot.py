@@ -638,6 +638,64 @@ class EuroScopeBot:
             logger.error(f'API: Briefing error: {e}')
             return web.json_response({'success': False, 'error': str(e)})
 
+    async def _api_patterns(self, request):
+        """API endpoint for detected chart patterns."""
+        logger.debug('API: Fetching active patterns...')
+        try:
+            from .telegram_bot import SkillContext
+        except ImportError:
+            from ..skills.base import SkillContext
+        try:
+            ctx = SkillContext()
+            result = await self.orchestrator.run_skill('technical_analysis', 'analyze', context=ctx, timeframe='H1')
+            if not result.success:
+                return web.json_response({'success': False, 'error': result.error})
+            
+            # The pattern skill output is nested in the technical analysis result
+            ta_data = result.data
+            patterns = ta_data.get('patterns', [])
+            return web.json_response({'success': True, 'data': patterns})
+        except Exception as e:
+            logger.error(f'API: Patterns error: {e}')
+            return web.json_response({'success': False, 'error': str(e)})
+
+    async def _api_levels(self, request):
+        """API endpoint for support/resistance levels."""
+        logger.debug('API: Fetching key levels...')
+        try:
+            from .telegram_bot import SkillContext
+        except ImportError:
+            from ..skills.base import SkillContext
+        try:
+            ctx = SkillContext()
+            result = await self.orchestrator.run_skill('technical_analysis', 'analyze', context=ctx, timeframe='H1')
+            if not result.success:
+                return web.json_response({'success': False, 'error': result.error})
+            
+            ta_data = result.data
+            levels = ta_data.get('levels', {})
+            return web.json_response({'success': True, 'data': levels})
+        except Exception as e:
+            logger.error(f'API: Levels error: {e}')
+            return web.json_response({'success': False, 'error': str(e)})
+            
+    async def _api_settings(self, request):
+        """API endpoint to get or update user settings/risk parameters."""
+        # For simplicity in V4, global risk params
+        if request.method == 'GET':
+            try:
+                # Stubbing settings API - integrating properly in the next steps
+                return web.json_response({'success': True, 'data': {
+                    'risk_per_trade': 1.0,
+                    'max_daily_loss': 3.0,
+                    'auto_trading_enabled': False
+                }})
+            except Exception as e:
+                return web.json_response({'success': False, 'error': str(e)})
+        else:
+            return web.json_response({'success': False, 'error': 'Method not allowed'})
+
+
     async def _api_health(self, request):
         """Standard health check endpoint."""
         return web.Response(text='OK', content_type='text/plain')
@@ -653,7 +711,28 @@ class EuroScopeBot:
         """Run the AIOHTTP server as a background task with robust error handling."""
         try:
             app = web.Application(middlewares=[self._cors_middleware])
-            app.add_routes([web.get('/', self._serve_mini_app), web.get('/app', self._serve_mini_app), web.get('/healthz', self._api_health), web.get('/api/summary', self._api_summary), web.get('/api/signals', self._api_signals), web.get('/api/scan_signals', self._api_scan_signals), web.get('/api/alerts', self._api_alerts), web.get('/api/analysis', self._api_analysis), web.get('/api/candles', self._api_candles), web.get('/api/status', self._api_status), web.get('/api/forecast', self._api_forecast), web.get('/api/macro', self._api_macro), web.get('/api/backtest', self._api_backtest), web.get('/api/performance', self._api_performance), web.get('/api/briefing', self._api_briefing), web.get('/api/trades', self._api_trades), web.get('/api/history', self._api_history)])
+            app.add_routes([
+                web.get('/', self._serve_mini_app), 
+                web.get('/app', self._serve_mini_app), 
+                web.get('/healthz', self._api_health), 
+                web.get('/api/summary', self._api_summary), 
+                web.get('/api/signals', self._api_signals), 
+                web.get('/api/scan_signals', self._api_scan_signals), 
+                web.get('/api/alerts', self._api_alerts), 
+                web.get('/api/analysis', self._api_analysis), 
+                web.get('/api/candles', self._api_candles), 
+                web.get('/api/status', self._api_status), 
+                web.get('/api/forecast', self._api_forecast), 
+                web.get('/api/macro', self._api_macro), 
+                web.get('/api/backtest', self._api_backtest), 
+                web.get('/api/performance', self._api_performance), 
+                web.get('/api/briefing', self._api_briefing), 
+                web.get('/api/trades', self._api_trades), 
+                web.get('/api/history', self._api_history),
+                web.get('/api/patterns', self._api_patterns),
+                web.get('/api/levels', self._api_levels),
+                web.get('/api/settings', self._api_settings)
+            ])
             port = int(os.getenv('PORT', 8080))
             runner = web.AppRunner(app)
             await runner.setup()
