@@ -525,6 +525,12 @@ class EuroScopeBot:
             direction = signal_data.get('direction', 'WAIT')
             confidence = signal_data.get('confidence', 0)
             if direction in ('BUY', 'SELL') and confidence >= 50:
+                # 3. Calculate Risk Parameters (Entry, SL, TP) based on the specific direction
+                risk_res = await self.orchestrator.run_skill('risk_management', 'assess_trade', context=ctx)
+                if not risk_res.success:
+                    return web.json_response({'success': False, 'error': f'Risk calculation failed: {risk_res.error}'})
+                    
+                # 4. Execute the paper trade
                 exec_res = await self.orchestrator.run_skill('signal_executor', 'open_trade', context=ctx)
                 if exec_res.success:
                     return web.json_response({'success': True, 'signal': exec_res.data, 'message': f'Found {direction} opportunity!'})
