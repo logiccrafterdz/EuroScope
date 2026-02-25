@@ -303,8 +303,6 @@ class EuroScopeBot:
         commands = {'start': self.cmd_start, 'help': self.cmd_help, 'id': self.cmd_id, 'health': self.cmd_health, 'data_health': self.cmd_data_health}
         for cmd, handler in commands.items():
             app.add_handler(CommandHandler(cmd, handler))
-        app.add_handler(CallbackQueryHandler(self.callback_handler))
-        app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_message))
         app.add_error_handler(self._error_handler)
         return app
 
