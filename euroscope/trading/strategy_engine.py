@@ -141,30 +141,39 @@ class StrategyEngine:
     def _trend_following(self, indicators: dict, levels: dict,
                          patterns: list) -> StrategySignal:
         """
-        Trend Following strategy — ride the trend with EMAs.
+        Trend Following strategy — ride the trend with Market Structure & Momentum.
 
-        Entry: EMA crossover + ADX confirmation
-        Exit: EMA cross back or trailing stop
+        Entry: Break of Structure (BOS) / Moving Averages alignment + Volume + ADX.
+        Exit: CHoCH (Change of Character) or trailing stop.
         """
         bias = indicators.get("overall_bias", "neutral")
         adx = indicators.get("adx", 0)
         rsi = indicators.get("rsi", 50)
         macd = indicators.get("macd", {})
+        volume_status = indicators.get("volume_profile", "normal") # Example structure
 
         confidence = 40.0
         entry_rules = []
         exit_rules = []
         direction = "WAIT"
 
-        # Determine direction
+        # Determine direction using Market Structure / EMAs
         if bias == "bullish":
             direction = "BUY"
-            entry_rules.append("Price above EMA 20 & 50 (uptrend aligned)")
+            entry_rules.append("Market Structure: Bullish (BOS detected / Price > EMA 50)")
             confidence += 15
         elif bias == "bearish":
             direction = "SELL"
-            entry_rules.append("Price below EMA 20 & 50 (downtrend aligned)")
+            entry_rules.append("Market Structure: Bearish (BOS detected / Price < EMA 50)")
             confidence += 15
+
+        # Volume Confirmation
+        if volume_status == "high_volume_node":
+            entry_rules.append("Volume Profile: Supporting strong momentum")
+            confidence += 10
+        elif volume_status == "low_volume_node":
+            entry_rules.append("Volume Profile: Low liquidity zone, careful of fake-outs")
+            confidence -= 5
 
         # ADX confirmation
         if adx > 30:
@@ -194,7 +203,7 @@ class StrategyEngine:
 
         exit_rules = [
             "Trailing stop: 1.5× ATR below/above entry",
-            "EMA 20 crosses back against direction",
+            "Change of Character (CHoCH): Price breaks swing point against direction",
             "ADX drops below 20 (trend weakening)",
         ]
 
@@ -318,11 +327,16 @@ class StrategyEngine:
                 entry_rules.append(f"Price broke above resistance {nearest_r}")
                 confidence += 20
 
-                # Momentum confirmation
+                # Momentum & Volume confirmation
                 hist = macd.get("histogram_latest")
+                volume_status = indicators.get("volume_profile", "normal")
                 if hist and hist > 0:
                     entry_rules.append("MACD momentum confirms breakout")
                     confidence += 10
+                
+                if volume_status == "high_volume_spike":
+                    entry_rules.append("Volume spike validates breakout (Smart Money)")
+                    confidence += 15
 
                 if rsi > 50:
                     entry_rules.append(f"RSI bullish ({rsi:.0f})")
@@ -337,9 +351,14 @@ class StrategyEngine:
                 confidence += 20
 
                 hist = macd.get("histogram_latest")
+                volume_status = indicators.get("volume_profile", "normal")
                 if hist and hist < 0:
                     entry_rules.append("MACD momentum confirms breakdown")
                     confidence += 10
+                
+                if volume_status == "high_volume_spike":
+                    entry_rules.append("Volume spike validates breakdown (Smart Money)")
+                    confidence += 15
 
                 if rsi < 50:
                     entry_rules.append(f"RSI bearish ({rsi:.0f})")
