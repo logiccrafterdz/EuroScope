@@ -25,6 +25,8 @@ aiosqlite>=0.20.0
 ddgs>=8.1.1
 transformers>=4.40.0
 torch>=2.2.0
+optimum[onnxruntime]>=1.19.0
+onnxruntime>=1.17.0
 
 # System Monitoring
 psutil>=5.9.0

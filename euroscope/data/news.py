@@ -41,64 +41,20 @@ BEARISH_KEYWORDS = [
 ]
 
 
-# Global pipeline instance for lazy loading
-_sentiment_pipeline = None
-
-def get_sentiment_pipeline():
-    """Lazy load the FinBERT pipeline to avoid slow startups if unused."""
-    global _sentiment_pipeline
-    if _sentiment_pipeline is None:
-        try:
-            from transformers import pipeline
-            logger.info("Loading ProsusAI/finbert sentiment model...")
-            _sentiment_pipeline = pipeline(
-                "sentiment-analysis",
-                model="ProsusAI/finbert",
-                device=-1 # CPU by default, change to 0 for GPU if available
-            )
-        except ImportError:
-            logger.error("transformers not installed. Fallback to keyword sentiment.")
-            _sentiment_pipeline = "fallback"
-        except Exception as e:
-            logger.error(f"Failed to load FinBERT: {e}")
-            _sentiment_pipeline = "fallback"
-    return _sentiment_pipeline
-
+# Global pipeline instance for fallback
+_fallback_pipeline = None
 
 def analyze_sentiment(text: str) -> dict:
     """
-    Analyze sentiment of text using ProsusAI/finbert with forex-specific fallback.
-
-    Returns:
-        {"sentiment": "bullish|bearish|neutral", "score": float (-1 to 1)}
+    Analyze sentiment using ONNX Runtime (FinBERT) with keyword fallback.
     """
-    pipe = get_sentiment_pipeline()
+    from .sentiment import analyze_sentiment_onnx
+    result = analyze_sentiment_onnx(text)
     
-    if pipe != "fallback":
-        try:
-            # FinBERT limits to 512 tokens. Truncate rough char limit.
-            truncated_text = text[:1500] 
-            result = pipe(truncated_text)[0]
-            label = result["label"].lower() # positive, negative, neutral
-            score = result["score"] # 0 to 1 confidence
-            
-            # Map FinBERT labels to forex terminology
-            if label == "positive":
-                sentiment = "bullish"
-                final_score = score
-            elif label == "negative":
-                sentiment = "bearish"
-                final_score = -score
-            else:
-                sentiment = "neutral"
-                final_score = 0.0
-                
-            return {"sentiment": sentiment, "score": round(final_score, 3)}
-        except Exception as e:
-            logger.warning(f"FinBERT inference failed: {e}. Using fallback.")
-
-    # ------ Keyword-Only Fallback ------
-    # Forex-specific keyword boosting
+    if result.get("provider") != "none":
+        return result
+        
+    # ------ Keyword-Only Fallback (If ONNX fails) ------
     text_lower = text.lower()
     boost = 0.0
     for kw in BULLISH_KEYWORDS:
@@ -118,7 +74,9 @@ def analyze_sentiment(text: str) -> dict:
     else:
         sentiment = "neutral"
 
-    return {"sentiment": sentiment, "score": round(final_score, 3)}
+    return {"sentiment": sentiment, "score": round(final_score, 3), "provider": "keyword_fallback"}
+
+
 
 
 class NewsEngine:
