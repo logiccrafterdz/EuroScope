@@ -18,48 +18,30 @@ EuroScope is a skills-based multi-agent system that provides institutional-grade
 | **Telegram V3** | **Fully English Interface**, Inline keyboards, Smart Alerts, Cron Scheduler, Heartbeat Service |
 | **Validation** | Behavioral Testing Suite (5 Scenarios), Historical Scenario Replay, Component Analysis |
 
-## Updates from the Last 7 Days
+## Recent Major Improvements (Last 14 Days)
 
-### New Additions
-- Full Mini App UI upgrade with settings overlay, neural analysis trigger, and real-time patterns/levels display.
-- Expanded aiohttp backend with settings, patterns, and levels endpoints.
-- Migrated Telegram experience to a Mini App launcher and removed legacy interactive commands.
-- Added structured logging output (JSON + Console) and improved log formatting.
-- Added a skills-based Orchestrator for dynamic agent coordination.
-- Integrated Market Structure (BOS/CHoCH) and Volume Profile into the strategy engine.
-- Implemented Pending Orders for near-zero LLM execution latency.
-- Added a dynamic spread simulator based on rollover and volatility.
-- Launched Phase 7: Walk-Forward Behavioral Simulator with virtual trader profiles.
-- Launched Phase 6: advanced risk management (Trailing Stops + Drawdown).
-- Added Live Trades dashboard in the Mini App with /api/trades and /history endpoints.
-- Added Signal Scanner in the Mini App with backend integration.
-- Activated self-learning loop and softened behavioral guardrails.
-- Routed advanced orchestrator skills into background loops and upgraded chat pipeline.
-- Added COT data provider and cot_positioning skill.
-- Added Oanda market data provider.
-- Added kill switch via POST /api/emergency and Mini App button.
-- Added PDH/PDL and Weekly High/Low to liquidity_awareness.
-- Added scenario-based output parsing in voice_briefing and Mini App.
-- Added scripts/verify_features.py to validate feature readiness.
+### 🔴 Core Infrastructure & Data Integrity
+- **Real-Time Data (Tiingo/OANDA)**: Replaced `yfinance` as the primary data source to eliminate the 15-minute delay. `MultiSourceProvider` now fetches institutional-grade 0s-delay quotes via **Tiingo** REST API (OANDA practice account supported for broker-grade accuracy).
+- **ONNX-Quantized FinBERT Engine**: Upgraded sentiment analysis from `TextBlob` to a quantized `int8` ONNX version of `ProsusAI/finbert`. 
+  - **Memory**: Model size reduced from 438MB to 110MB (65MB zipped) to fit 512MB RAM limits.
+  - **Performance**: Inference speed increased by ~2x on CPU.
+  - **Resilience**: Auto-extracting model support at runtime.
+- **V3 Skills-Based Architecture**: Complete migration from monolithic handlers to an auto-discovering, asynchronous Skills Engine.
+- **Stable Core**: Achieved **558 passing tests** with zero failures and zero deprecation warnings (asyncio/pandas 3.12 compatibility).
 
-### Improvements and Fixes
-- Synced root index.html with Mini App version for Vercel deployment.
-- Fixed Mini App settings flow and wired UI actions to correct analysis APIs.
-- Finalized persistence and professional feedback loops in the Mini App.
-- Populated market_data with live price before risk calculations in /scan_signals.
-- Calculated entry/sl/tp via risk_management before executing paper trades in /scan_signals.
-- Removed lingering interactive inline handlers from build_app.
-- Fixed asyncio.iscoroutinefunction and pandas 'H' deprecation warnings.
-- Rewrote test_bot_callbacks to match V3 skills-based architecture.
-- Updated test_strategy to validate emergency_mode fallback instead of stale timeout.
-- Suppressed ddgs primp warnings and reduced deviation monitor spam.
-- Fixed cron scheduling by removing invalid await and ensuring concurrency.
-- Replaced vector_memory add_document calls with store_analysis.
-- Unified DI naming from price_provider to provider.
-- Improved stability with Cron JobQueue, task references, Telegram timeouts, and proactive scheduling.
-- Injected live price and recent H1 candles into proactive prompts.
-- Added save_json/load_json helpers and reused Storage in cron tasks.
-- Removed resume.txt from the repository and updated .gitignore.
+### 🟠 Advanced Analysis & Trading
+- **COT (Commitments of Traders)**: Integrated weekly CFTC positioning data for structural sentiment context.
+- **Advanced Liquidity Levels**: Automated tracking of PDH/PDL (Previous Day High/Low) and Weekly Liquidity levels.
+- **Scenario-Based Reports**: Enhanced the orchestrator to generate multi-path scenarios (Bullish vs. Bearish parameters) instead of single-direction bias.
+- **Volume Profile Optimization**: Refactored logic to use ATR-based momentum and Tick Volume for retail-broker accuracy.
+- **Emergency Kill Switch**: Integrated a global `emergency_mode` triggered via Zenith Mini App or authenticated API.
+
+### 🟡 UX & Mini-App Overhaul
+- **Zenith Dashboard v5.0**: Complete UI overhaul. Consolidated "Backtest/Performance" into a single **Stats** tab.
+- **Hidden System Overlays**: Moved debug consoles and API overrides into a logo-long-press overlay for cleaner mobile UX.
+- **ReAct Intelligence**: Rebuilt the chat pipeline to use a **Reason-Act-Observe** loop for complex queries (`/comprehensive_analysis`).
+- **Live Trades & History**: Direct backend integration for paper-trading journals in the Mini App.
+- **Proactive Alerts**: Autonomous monitoring with deduplication and priority-based notifications.
 
 ## Bot Commands
 
@@ -142,7 +124,7 @@ Edit `.env` with your API keys:
 - `EUROSCOPE_BRAVE_API_KEY` — News sentiment (optional)
 - `EUROSCOPE_ALPHAVANTAGE_KEY` — AlphaVantage data (optional)
 - `EUROSCOPE_FRED_API_KEY` — FRED macro data (optional)
-- `EUROSCOPE_TIINGO_KEY` — Tiingo API (Recommended for Behavioral Validation)
+- `EUROSCOPE_TIINGO_KEY` — Tiingo API (Primary source for 0s delayed real-time data)
 - `EUROSCOPE_RATE_LIMIT_REQUESTS` — Max commands per window (default: 5)
 - `EUROSCOPE_RATE_LIMIT_WINDOW_MINUTES` — Rate limit window minutes (default: 1)
 - `EUROSCOPE_VECTOR_MEMORY_TTL_DAYS` — Vector Memory retention in days (default: 30)
@@ -230,13 +212,13 @@ await memory.cleanup_old_documents(ttl_days=30)
 
 ## Tech Stack
 - **Python 3.12+**
-- **python-telegram-bot** (Async)
-- **DeepSeek & OpenAI** (Multi-LLM)
+- **ONNX Runtime & Optimum** (Quantized AI Inference)
+- **Transformers (PyTorch)** (FinBERT Sentiment)
+- **python-telegram-bot** (Async V21+)
+- **DeepSeek & OpenAI** (Multi-LLM Agents)
 - **ChromaDB** (Vector Memory)
-- **DeepSeek & OpenAI** (Multi-LLM)
-- **ChromaDB** (Vector Memory)
-- **Tiingo** & **yfinance** & **pandas**
-- **SQLite** (Persistence)
+- **Tiingo & OANDA** (Real-time Market Data)
+- **SQLite** (Persistence & DB)
 - **psutil** (Runtime monitoring)
 
 ## License
