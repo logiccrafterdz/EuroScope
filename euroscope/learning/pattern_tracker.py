@@ -46,13 +46,13 @@ class PatternTracker:
         self.storage = storage or Storage()
         self._last_causal_similarity: Optional[float] = None
 
-    def record_detection(self, pattern_name: str, timeframe: str,
+    async def record_detection(self, pattern_name: str, timeframe: str,
                          predicted_direction: str,
                          price_at_detection: float,
                          causal_chain: Optional[dict] = None) -> int:
         """Record a newly detected pattern."""
         causal_payload = self._normalize_causal_chain(causal_chain)
-        pid = self.storage.save_pattern_detection(
+        pid = await self.storage.save_pattern_detection(
             pattern_name=pattern_name,
             timeframe=timeframe,
             predicted_direction=predicted_direction,
@@ -62,11 +62,11 @@ class PatternTracker:
         logger.info(f"Pattern #{pid}: {pattern_name} ({timeframe}) → {predicted_direction}")
         return pid
 
-    def save_pattern(self, pattern_name: str, timeframe: str,
+    async def save_pattern(self, pattern_name: str, timeframe: str,
                      predicted_direction: str,
                      price_at_detection: float,
                      causal_chain: Optional[dict] = None) -> int:
-        return self.record_detection(
+        return await self.record_detection(
             pattern_name=pattern_name,
             timeframe=timeframe,
             predicted_direction=predicted_direction,
@@ -74,21 +74,21 @@ class PatternTracker:
             causal_chain=causal_chain,
         )
 
-    def resolve(self, pattern_id: int, actual_outcome: str,
+    async def resolve(self, pattern_id: int, actual_outcome: str,
                 price_at_resolution: float, is_success: bool):
         """Resolve a pattern detection with actual outcome."""
-        self.storage.resolve_pattern(
+        await self.storage.resolve_pattern(
             pattern_id, actual_outcome, price_at_resolution, is_success
         )
         icon = "✅" if is_success else "❌"
         logger.info(f"Pattern #{pattern_id} resolved: {icon} {actual_outcome}")
 
-    def resolve_pending(self, current_price: float):
+    async def resolve_pending(self, current_price: float):
         """
         Check all unresolved patterns against the current price.
         Simple logic: if price moved in predicted direction, it's a success.
         """
-        unresolved = self.get_unresolved(limit=100)
+        unresolved = await self.get_unresolved(limit=100)
         for p in unresolved:
             signal = (p.get("predicted_direction") or "NONE").upper()
             entry = p.get("price_at_detection")
@@ -120,16 +120,16 @@ class PatternTracker:
             else:
                 continue
 
-            self.resolve(
+            await self.resolve(
                 pattern_id=p["id"],
                 actual_outcome=outcome,
                 price_at_resolution=current_price,
                 is_success=is_success
             )
 
-    def get_recent_lessons(self, limit: int = 5) -> str:
+    async def get_recent_lessons(self, limit: int = 5) -> str:
         """Summarize recent resolved patterns into a natural language string."""
-        resolved = self.storage.get_resolved_patterns(limit=limit)
+        resolved = await self.storage.get_resolved_patterns(limit=limit)
         if not resolved:
             return "No recent patterns resolved yet. I am continuously monitoring market structure for new opportunities."
         
@@ -140,11 +140,11 @@ class PatternTracker:
         
         return "\n".join(parts)
 
-    def get_success_rates(self) -> dict:
+    async def get_success_rates(self) -> dict:
         """Get success rates grouped by pattern + timeframe."""
-        return self.storage.get_pattern_success_rates()
+        return await self.storage.get_pattern_success_rates()
 
-    def get_confidence_multiplier(self, pattern_name: str,
+    async def get_confidence_multiplier(self, pattern_name: str,
                                    timeframe: str) -> float:
         """
         Get a confidence multiplier for a pattern/timeframe combo.
@@ -152,7 +152,7 @@ class PatternTracker:
         Returns:
             1.0 if no data, >1.0 for high-success patterns, <1.0 for poor ones
         """
-        rates = self.get_success_rates()
+        rates = await self.get_success_rates()
         key = f"{pattern_name}_{timeframe}"
         entry = rates.get(key)
 
@@ -163,11 +163,11 @@ class PatternTracker:
         # Map 0-100% to 0.5-1.5 multiplier
         return round(0.5 + rate / 100.0, 2)
 
-    def get_unresolved(self, limit: int = 50) -> list[dict]:
+    async def get_unresolved(self, limit: int = 50) -> list[dict]:
         """Get patterns waiting for resolution."""
-        return self.storage.get_unresolved_patterns(limit)
+        return await self.storage.get_unresolved_patterns(limit)
 
-    def match_causal_pattern(self, current_context: dict) -> float:
+    async def match_causal_pattern(self, current_context: dict) -> float:
         self._last_causal_similarity = None
         if not current_context:
             return 1.0
@@ -179,7 +179,7 @@ class PatternTracker:
 
         pattern_name = current_context.get("pattern_name") or current_context.get("pattern")
         timeframe = current_context.get("timeframe")
-        candidates = self.storage.get_similar_patterns(
+        candidates = await self.storage.get_similar_patterns(
             pattern_name=pattern_name,
             timeframe=timeframe,
             min_similarity=0.7,
@@ -256,7 +256,7 @@ class PatternTracker:
             return "ASIAN"
         return "OTHER"
 
-    def get_confidence_multiplier(self, pattern_name: str,
+    async def get_confidence_multiplier(self, pattern_name: str,
                                    timeframe: str,
                                    current_regime: Optional[str] = None,
                                    current_session: Optional[str] = None) -> float:
@@ -264,7 +264,7 @@ class PatternTracker:
         Get a confidence multiplier for a pattern/timeframe combo,
         weighted by regime and session reliability.
         """
-        rates = self.get_success_rates()
+        rates = await self.get_success_rates()
         key = f"{pattern_name}_{timeframe}"
         entry = rates.get(key)
 
@@ -406,9 +406,9 @@ class PatternTracker:
         avg = float(df["Volume"].mean())
         return avg > 0 and current < (0.8 * avg)
 
-    def format_report(self) -> str:
+    async def format_report(self) -> str:
         """Generate a human-readable pattern performance report."""
-        rates = self.get_success_rates()
+        rates = await self.get_success_rates()
 
         if not rates:
             return "📊 *Pattern Tracker*\n\nNo resolved patterns yet."

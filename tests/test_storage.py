@@ -1,5 +1,5 @@
 """
-Tests for euroscope.data.storage module.
+Tests for euroscope.data.storage module (async).
 """
 
 import os
@@ -33,161 +33,209 @@ class TestDatabaseInit:
     def test_reinit_is_safe(self, temp_db_path):
         """Re-initializing should not drop existing data."""
         storage = Storage(temp_db_path)
-        storage.set_memory("test_key", "test_value")
+        # Use sync sqlite3 to insert data directly for init test
+        import sqlite3
+        conn = sqlite3.connect(temp_db_path)
+        conn.execute(
+            "INSERT OR REPLACE INTO memory (key, value, updated_at) VALUES (?, ?, ?)",
+            ("test_key", "test_value", "2024-01-01")
+        )
+        conn.commit()
+        conn.close()
 
         # Re-init
         storage2 = Storage(temp_db_path)
-        assert storage2.get_memory("test_key") == "test_value"
+        # Verify data persisted (check via sync sqlite3 since init is sync)
+        conn2 = sqlite3.connect(temp_db_path)
+        row = conn2.execute("SELECT value FROM memory WHERE key=?", ("test_key",)).fetchone()
+        conn2.close()
+        assert row is not None
+        assert row[0] == "test_value"
 
 
 class TestPredictions:
     """Test prediction CRUD."""
 
-    def test_save_and_retrieve(self, temp_db_path):
+    @pytest.mark.asyncio
+    async def test_save_and_retrieve(self, temp_db_path):
         s = Storage(temp_db_path)
-        pid = s.save_prediction("H1", "BULLISH", 75.0, "Test reasoning", 1.0850)
+        pid = await s.save_prediction("H1", "BULLISH", 75.0, "Test reasoning", 1.0850)
         assert pid is not None
         assert pid > 0
+        await s.close()
 
-    def test_unresolved_predictions(self, temp_db_path):
+    @pytest.mark.asyncio
+    async def test_unresolved_predictions(self, temp_db_path):
         s = Storage(temp_db_path)
-        s.save_prediction("H1", "BULLISH", 75.0)
-        s.save_prediction("D1", "BEARISH", 60.0)
+        await s.save_prediction("H1", "BULLISH", 75.0)
+        await s.save_prediction("D1", "BEARISH", 60.0)
 
-        preds = s.get_unresolved_predictions()
+        preds = await s.get_unresolved_predictions()
         assert len(preds) == 2
+        await s.close()
 
-    def test_resolve_prediction(self, temp_db_path):
+    @pytest.mark.asyncio
+    async def test_resolve_prediction(self, temp_db_path):
         s = Storage(temp_db_path)
-        pid = s.save_prediction("H1", "BULLISH", 75.0)
-        s.resolve_prediction(pid, "BULLISH", 1.0)
+        pid = await s.save_prediction("H1", "BULLISH", 75.0)
+        await s.resolve_prediction(pid, "BULLISH", 1.0)
 
-        preds = s.get_unresolved_predictions()
+        preds = await s.get_unresolved_predictions()
         assert len(preds) == 0
+        await s.close()
 
-    def test_accuracy_stats(self, temp_db_path):
+    @pytest.mark.asyncio
+    async def test_accuracy_stats(self, temp_db_path):
         s = Storage(temp_db_path)
-        p1 = s.save_prediction("H1", "BULLISH", 75.0)
-        p2 = s.save_prediction("H1", "BEARISH", 60.0)
-        s.resolve_prediction(p1, "BULLISH", 1.0)
-        s.resolve_prediction(p2, "BULLISH", 0.0)
+        p1 = await s.save_prediction("H1", "BULLISH", 75.0)
+        p2 = await s.save_prediction("H1", "BEARISH", 60.0)
+        await s.resolve_prediction(p1, "BULLISH", 1.0)
+        await s.resolve_prediction(p2, "BULLISH", 0.0)
 
-        stats = s.get_accuracy_stats(30)
+        stats = await s.get_accuracy_stats(30)
         assert stats["total"] == 2
         assert stats["correct"] == 1
         assert stats["accuracy"] == 50.0
+        await s.close()
 
-    def test_no_predictions_stats(self, temp_db_path):
+    @pytest.mark.asyncio
+    async def test_no_predictions_stats(self, temp_db_path):
         s = Storage(temp_db_path)
-        stats = s.get_accuracy_stats(30)
+        stats = await s.get_accuracy_stats(30)
         assert stats["total"] == 0
+        await s.close()
 
 
 class TestAlerts:
     """Test alert CRUD."""
 
-    def test_add_and_get_alerts(self, temp_db_path):
+    @pytest.mark.asyncio
+    async def test_add_and_get_alerts(self, temp_db_path):
         s = Storage(temp_db_path)
-        aid = s.add_alert("above", 1.0900, 12345)
+        aid = await s.add_alert("above", 1.0900, 12345)
         assert aid > 0
 
-        alerts = s.get_active_alerts()
+        alerts = await s.get_active_alerts()
         assert len(alerts) == 1
         assert alerts[0]["condition"] == "above"
+        await s.close()
 
-    def test_trigger_alert(self, temp_db_path):
+    @pytest.mark.asyncio
+    async def test_trigger_alert(self, temp_db_path):
         s = Storage(temp_db_path)
-        aid = s.add_alert("above", 1.0900, 12345)
-        s.trigger_alert(aid)
+        aid = await s.add_alert("above", 1.0900, 12345)
+        await s.trigger_alert(aid)
 
-        alerts = s.get_active_alerts()
+        alerts = await s.get_active_alerts()
         assert len(alerts) == 0
+        await s.close()
 
 
 class TestMemory:
     """Test key-value memory store."""
 
-    def test_set_and_get(self, temp_db_path):
+    @pytest.mark.asyncio
+    async def test_set_and_get(self, temp_db_path):
         s = Storage(temp_db_path)
-        s.set_memory("key1", "value1")
-        assert s.get_memory("key1") == "value1"
+        await s.set_memory("key1", "value1")
+        assert await s.get_memory("key1") == "value1"
+        await s.close()
 
-    def test_overwrite(self, temp_db_path):
+    @pytest.mark.asyncio
+    async def test_overwrite(self, temp_db_path):
         s = Storage(temp_db_path)
-        s.set_memory("key1", "old")
-        s.set_memory("key1", "new")
-        assert s.get_memory("key1") == "new"
+        await s.set_memory("key1", "old")
+        await s.set_memory("key1", "new")
+        assert await s.get_memory("key1") == "new"
+        await s.close()
 
-    def test_missing_key(self, temp_db_path):
+    @pytest.mark.asyncio
+    async def test_missing_key(self, temp_db_path):
         s = Storage(temp_db_path)
-        assert s.get_memory("nonexistent") is None
+        assert await s.get_memory("nonexistent") is None
+        await s.close()
 
-    def test_json_value(self, temp_db_path):
+    @pytest.mark.asyncio
+    async def test_json_value(self, temp_db_path):
         s = Storage(temp_db_path)
-        s.set_memory("data", {"foo": "bar"})
-        result = s.get_memory("data")
+        await s.set_memory("data", {"foo": "bar"})
+        result = await s.get_memory("data")
         assert '"foo"' in result
+        await s.close()
 
 
 class TestMarketNotes:
     """Test market notes."""
 
-    def test_add_and_retrieve(self, temp_db_path):
+    @pytest.mark.asyncio
+    async def test_add_and_retrieve(self, temp_db_path):
         s = Storage(temp_db_path)
-        s.add_note("analysis", "EUR/USD looking bullish")
-        notes = s.get_recent_notes("analysis")
+        await s.add_note("analysis", "EUR/USD looking bullish")
+        notes = await s.get_recent_notes("analysis")
         assert len(notes) == 1
+        await s.close()
 
-    def test_filter_by_category(self, temp_db_path):
+    @pytest.mark.asyncio
+    async def test_filter_by_category(self, temp_db_path):
         s = Storage(temp_db_path)
-        s.add_note("analysis", "Note 1")
-        s.add_note("news", "Note 2")
-        assert len(s.get_recent_notes("analysis")) == 1
-        assert len(s.get_recent_notes()) == 2
+        await s.add_note("analysis", "Note 1")
+        await s.add_note("news", "Note 2")
+        assert len(await s.get_recent_notes("analysis")) == 1
+        assert len(await s.get_recent_notes()) == 2
+        await s.close()
 
 
 class TestTradingSignals:
     """Test trading signal CRUD."""
 
-    def test_save_signal(self, temp_db_path):
+    @pytest.mark.asyncio
+    async def test_save_signal(self, temp_db_path):
         s = Storage(temp_db_path)
-        sid = s.save_signal("BUY", 1.0850, 1.0820, 1.0910, 75.0, "H1",
+        sid = await s.save_signal("BUY", 1.0850, 1.0820, 1.0910, 75.0, "H1",
                             reasoning="Test signal", risk_reward_ratio=2.0)
         assert sid > 0
+        await s.close()
 
-    def test_get_signals(self, temp_db_path):
+    @pytest.mark.asyncio
+    async def test_get_signals(self, temp_db_path):
         s = Storage(temp_db_path)
-        s.save_signal("BUY", 1.0850, 1.0820, 1.0910, 75.0, "H1")
-        s.save_signal("SELL", 1.0900, 1.0930, 1.0840, 60.0, "H4")
+        await s.save_signal("BUY", 1.0850, 1.0820, 1.0910, 75.0, "H1")
+        await s.save_signal("SELL", 1.0900, 1.0930, 1.0840, 60.0, "H4")
 
-        all_signals = s.get_signals()
+        all_signals = await s.get_signals()
         assert len(all_signals) == 2
+        await s.close()
 
-    def test_filter_by_status(self, temp_db_path):
+    @pytest.mark.asyncio
+    async def test_filter_by_status(self, temp_db_path):
         s = Storage(temp_db_path)
-        sid = s.save_signal("BUY", 1.0850, 1.0820, 1.0910, 75.0, "H1")
-        s.update_signal_status(sid, "closed", pnl_pips=30.0)
+        sid = await s.save_signal("BUY", 1.0850, 1.0820, 1.0910, 75.0, "H1")
+        await s.update_signal_status(sid, "closed", pnl_pips=30.0)
 
-        pending = s.get_signals(status="pending")
-        closed = s.get_signals(status="closed")
+        pending = await s.get_signals(status="pending")
+        closed = await s.get_signals(status="closed")
         assert len(pending) == 0
         assert len(closed) == 1
         assert closed[0]["pnl_pips"] == 30.0
+        await s.close()
 
-    def test_closed_has_timestamp(self, temp_db_path):
+    @pytest.mark.asyncio
+    async def test_closed_has_timestamp(self, temp_db_path):
         s = Storage(temp_db_path)
-        sid = s.save_signal("BUY", 1.0850, 1.0820, 1.0910, 75.0, "H1")
-        s.update_signal_status(sid, "closed")
-        closed = s.get_signals(status="closed")
+        sid = await s.save_signal("BUY", 1.0850, 1.0820, 1.0910, 75.0, "H1")
+        await s.update_signal_status(sid, "closed")
+        closed = await s.get_signals(status="closed")
         assert closed[0]["closed_at"] is not None
+        await s.close()
 
 
 class TestNewsEvents:
     """Test news event storage."""
 
-    def test_save_news(self, temp_db_path):
+    @pytest.mark.asyncio
+    async def test_save_news(self, temp_db_path):
         s = Storage(temp_db_path)
-        nid = s.save_news_event(
+        nid = await s.save_news_event(
             title="ECB raises rates",
             source="reuters",
             impact_score=8.5,
@@ -195,26 +243,30 @@ class TestNewsEvents:
             currency_impact="EUR",
         )
         assert nid > 0
+        await s.close()
 
-    def test_get_recent_news(self, temp_db_path):
+    @pytest.mark.asyncio
+    async def test_get_recent_news(self, temp_db_path):
         s = Storage(temp_db_path)
-        s.save_news_event("News 1", "brave", impact_score=5.0)
-        s.save_news_event("News 2", "reuters", impact_score=8.0)
-        s.save_news_event("News 3", "twitter", impact_score=2.0)
+        await s.save_news_event("News 1", "brave", impact_score=5.0)
+        await s.save_news_event("News 2", "reuters", impact_score=8.0)
+        await s.save_news_event("News 3", "twitter", impact_score=2.0)
 
-        all_news = s.get_recent_news()
+        all_news = await s.get_recent_news()
         assert len(all_news) == 3
 
-        high_impact = s.get_recent_news(min_impact=6.0)
+        high_impact = await s.get_recent_news(min_impact=6.0)
         assert len(high_impact) == 1
+        await s.close()
 
 
 class TestPerformanceMetrics:
     """Test performance metrics storage."""
 
-    def test_save_metrics(self, temp_db_path):
+    @pytest.mark.asyncio
+    async def test_save_metrics(self, temp_db_path):
         s = Storage(temp_db_path)
-        mid = s.save_performance_metric(
+        mid = await s.save_performance_metric(
             period="daily",
             total_signals=10,
             winning_signals=7,
@@ -223,53 +275,68 @@ class TestPerformanceMetrics:
             sharpe_ratio=1.5,
         )
         assert mid > 0
+        await s.close()
 
-    def test_get_latest(self, temp_db_path):
+    @pytest.mark.asyncio
+    async def test_get_latest(self, temp_db_path):
         s = Storage(temp_db_path)
-        s.save_performance_metric("daily", total_signals=5, win_rate=60.0)
-        s.save_performance_metric("daily", total_signals=10, win_rate=70.0)
+        await s.save_performance_metric("daily", total_signals=5, win_rate=60.0)
+        await s.save_performance_metric("daily", total_signals=10, win_rate=70.0)
 
-        latest = s.get_latest_metrics("daily")
+        latest = await s.get_latest_metrics("daily")
         assert latest is not None
         assert latest["win_rate"] == 70.0
+        await s.close()
 
-    def test_no_metrics(self, temp_db_path):
+    @pytest.mark.asyncio
+    async def test_no_metrics(self, temp_db_path):
         s = Storage(temp_db_path)
-        assert s.get_latest_metrics("daily") is None
+        assert await s.get_latest_metrics("daily") is None
+        await s.close()
 
 
 class TestUserPreferences:
     """Test user preferences storage."""
 
-    def test_save_preferences(self, temp_db_path):
+    @pytest.mark.asyncio
+    async def test_save_preferences(self, temp_db_path):
         s = Storage(temp_db_path)
-        pid = s.save_user_preferences(12345, risk_tolerance="high")
+        pid = await s.save_user_preferences(12345, risk_tolerance="high")
         assert pid is not None
+        await s.close()
 
-    def test_get_preferences(self, temp_db_path):
+    @pytest.mark.asyncio
+    async def test_get_preferences(self, temp_db_path):
         s = Storage(temp_db_path)
-        s.save_user_preferences(12345, risk_tolerance="high", language="ar")
-        prefs = s.get_user_preferences(12345)
+        await s.save_user_preferences(12345, risk_tolerance="high", language="ar")
+        prefs = await s.get_user_preferences(12345)
         assert prefs is not None
         assert prefs["risk_tolerance"] == "high"
         assert prefs["language"] == "ar"
+        await s.close()
 
-    def test_upsert_preferences(self, temp_db_path):
+    @pytest.mark.asyncio
+    async def test_upsert_preferences(self, temp_db_path):
         s = Storage(temp_db_path)
-        s.save_user_preferences(12345, risk_tolerance="low")
-        s.save_user_preferences(12345, risk_tolerance="high")
-        prefs = s.get_user_preferences(12345)
+        await s.save_user_preferences(12345, risk_tolerance="low")
+        await s.save_user_preferences(12345, risk_tolerance="high")
+        prefs = await s.get_user_preferences(12345)
         assert prefs["risk_tolerance"] == "high"
+        await s.close()
 
-    def test_missing_user(self, temp_db_path):
+    @pytest.mark.asyncio
+    async def test_missing_user(self, temp_db_path):
         s = Storage(temp_db_path)
-        assert s.get_user_preferences(99999) is None
+        assert await s.get_user_preferences(99999) is None
+        await s.close()
 
-    def test_defaults(self, temp_db_path):
+    @pytest.mark.asyncio
+    async def test_defaults(self, temp_db_path):
         s = Storage(temp_db_path)
-        s.save_user_preferences(12345)
-        prefs = s.get_user_preferences(12345)
+        await s.save_user_preferences(12345)
+        prefs = await s.get_user_preferences(12345)
         assert prefs["preferred_timeframe"] == "H1"
         assert prefs["alert_min_confidence"] == 60.0
         assert prefs["daily_report_hour"] == 8
         assert prefs["compact_mode"] == 0
+        await s.close()

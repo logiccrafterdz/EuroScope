@@ -376,11 +376,11 @@ class CronScheduler:
 
                 # 1. Resolve pending patterns
                 pt = PatternTracker(storage=storage)
-                pt.resolve_pending(current_price)
+                await pt.resolve_pending(current_price)
 
                 # 2. Resolve open forecasts
                 ft = ForecastTracker(storage=storage)
-                resolved = ft.resolve_all(current_price)
+                resolved = await ft.resolve_all(current_price)
                 if resolved:
                     logger.info(f"Learning: resolved {len(resolved)} forecasts")
                     
@@ -407,7 +407,7 @@ class CronScheduler:
                     storage = Storage()
 
                 tuner = AdaptiveTuner(storage=storage)
-                report = tuner.format_report()
+                report = await tuner.format_report()
 
                 chat_ids = getattr(self.config, "proactive_alert_chat_ids", [])
                 for chat_id in chat_ids:

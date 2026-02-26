@@ -71,11 +71,11 @@ class ForecastTracker:
         self._weights = dict(DEFAULT_WEIGHTS)
         self._forecasts: list[Forecast] = []
         self._next_id = 1
-        self._load_weights()
+        self._weights_loaded = False
 
     # ── Registration ───────────────────────────────────────────
 
-    def register_forecast(
+    async def register_forecast(
         self,
         skill: str,
         direction: str,
@@ -99,6 +99,7 @@ class ForecastTracker:
             timeframe: Timeframe context
             ttl_hours: Hours until forecast expires
         """
+        await self._ensure_weights_loaded()
         now = datetime.now(UTC)
         forecast = Forecast(
             id=f"fc_{self._next_id:04d}",
@@ -122,7 +123,7 @@ class ForecastTracker:
 
     # ── Resolution ─────────────────────────────────────────────
 
-    def resolve_all(self, current_price: float) -> list[Forecast]:
+    async def resolve_all(self, current_price: float) -> list[Forecast]:
         """
         Check all open forecasts against the current price.
 
@@ -144,7 +145,7 @@ class ForecastTracker:
                 fc.pnl_pips = self._calculate_pnl_pips(fc, current_price)
 
                 # Update skill weight
-                self._update_weight(fc)
+                await self._update_weight(fc)
                 resolved.append(fc)
                 
                 # Push the lesson to Vector Memory
@@ -210,7 +211,7 @@ class ForecastTracker:
 
     # ── Weight Adjustment ──────────────────────────────────────
 
-    def _update_weight(self, fc: Forecast):
+    async def _update_weight(self, fc: Forecast):
         """
         Update skill weight using exponential moving average.
 
@@ -244,7 +245,7 @@ class ForecastTracker:
                 f"(outcome={fc.outcome}, adj={adjustment:+.4f})"
             )
 
-        self._save_weights()
+        await self._save_weights()
 
     # ── Queries ────────────────────────────────────────────────
 
@@ -310,18 +311,24 @@ class ForecastTracker:
 
     # ── Persistence ────────────────────────────────────────────
 
-    def _save_weights(self):
+    async def _save_weights(self):
         """Save weights to storage."""
         try:
-            self.storage.save_json("forecast_weights", self._weights)
+            await self.storage.save_json("forecast_weights", self._weights)
         except Exception as e:
             logger.warning(f"Could not save forecast weights: {e}")
 
-    def _load_weights(self):
+    async def _load_weights(self):
         """Load weights from storage."""
         try:
-            saved = self.storage.load_json("forecast_weights")
+            saved = await self.storage.load_json("forecast_weights")
             if saved and isinstance(saved, dict):
                 self._weights.update(saved)
         except Exception as e:
             logger.debug(f"No saved forecast weights: {e}")
+
+    async def _ensure_weights_loaded(self):
+        """Lazy-load weights on first async access."""
+        if not self._weights_loaded:
+            await self._load_weights()
+            self._weights_loaded = True

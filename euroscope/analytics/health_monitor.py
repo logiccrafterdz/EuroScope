@@ -95,13 +95,13 @@ class HealthMonitor:
 
     # ── Component Checks ─────────────────────────────────────
 
-    def check_database(self) -> ComponentStatus:
+    async def check_database(self) -> ComponentStatus:
         """Check database connectivity."""
         status = ComponentStatus(name="Database")
         start = time.time()
         try:
             # Simple query to verify DB is accessible
-            self.storage.get_accuracy_stats(days=1)
+            await self.storage.get_accuracy_stats(days=1)
             status.healthy = True
             status.response_time_ms = round((time.time() - start) * 1000, 1)
         except Exception as e:
@@ -190,7 +190,7 @@ class HealthMonitor:
 
     # ── Full Health Check ────────────────────────────────────
 
-    def full_check(self, provider=None, agent=None) -> SystemHealth:
+    async def full_check(self, provider=None, agent=None) -> SystemHealth:
         """
         Run all component health checks.
 
@@ -198,7 +198,7 @@ class HealthMonitor:
             SystemHealth with overall status and component details
         """
         components = [
-            self.check_database(),
+            await self.check_database(),
             self.check_price_api(provider),
             self.check_llm(agent),
         ]
@@ -229,7 +229,7 @@ class HealthMonitor:
         Run all component health checks asynchronously.
         """
         components = [
-            self.check_database(),
+            await self.check_database(),
             await self.check_price_api_async(provider),
             self.check_llm(agent),
         ]

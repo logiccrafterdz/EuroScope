@@ -1,8 +1,11 @@
 """
-SQLite Storage Layer
+Async SQLite Storage Layer
 
 Stores predictions, accuracy tracking, alerts, trading signals,
 news events, performance metrics, user preferences, and cached data.
+
+Uses aiosqlite for non-blocking async I/O with WAL mode enabled
+for concurrent read safety.
 """
 
 import json
@@ -12,40 +15,34 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Optional
 
+import aiosqlite
+
 logger = logging.getLogger("euroscope.data.storage")
 
 
 class Storage:
-    """SQLite-based storage for EuroScope."""
+    """Async SQLite-based storage for EuroScope.
+
+    Initialization (table creation) is done synchronously at startup.
+    All runtime read/write methods are async using aiosqlite with WAL mode.
+    """
 
     def __init__(self, db_path: str = "data/euroscope.db"):
         self.db_path = Path(db_path) if db_path != ":memory:" else db_path
         if isinstance(self.db_path, Path):
             self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        
-        self._conn = sqlite3.connect(self.db_path, check_same_thread=False)
-        self._init_db()
 
-    def _query_rows(self, sql: str, params: tuple = ()) -> list[dict]:
-        """Execute a SELECT query and return results as a list of dicts.
-        Uses a dedicated cursor to avoid mutating connection-level row_factory."""
-        cursor = self._conn.cursor()
-        cursor.row_factory = sqlite3.Row
-        rows = cursor.execute(sql, params).fetchall()
-        return [dict(r) for r in rows]
+        # Synchronous init for table creation (runs once at startup)
+        self._sync_init()
 
-    def _query_one(self, sql: str, params: tuple = ()) -> Optional[dict]:
-        """Execute a SELECT query and return one result as dict or None."""
-        cursor = self._conn.cursor()
-        cursor.row_factory = sqlite3.Row
-        row = cursor.execute(sql, params).fetchone()
-        return dict(row) if row else None
+        # Async connection (lazy, opened on first use)
+        self._db: Optional[aiosqlite.Connection] = None
 
-
-    def _init_db(self):
-        """Create tables if they don't exist."""
-        with self._conn:
-            self._conn.executescript("""
+    def _sync_init(self):
+        """Create tables synchronously at startup."""
+        conn = sqlite3.connect(str(self.db_path))
+        try:
+            conn.executescript("""
                 CREATE TABLE IF NOT EXISTS predictions (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     timestamp TEXT NOT NULL,
@@ -204,67 +201,82 @@ class Storage:
                     PRIMARY KEY (chat_id, topic_key)
                 );
             """)
-            self._ensure_user_preferences_columns()
-            self._ensure_pattern_stats_columns()
-            self._ensure_trade_journal_columns()
+            self._ensure_columns_sync(conn)
+            conn.commit()
             logger.info(f"Database initialized at {self.db_path}")
+        finally:
+            conn.close()
 
-    def _ensure_user_preferences_columns(self):
-        cols = {
-            row[1] for row in self._conn.execute("PRAGMA table_info(user_preferences)")
-        }
-        if "compact_mode" not in cols:
-            self._conn.execute(
-                "ALTER TABLE user_preferences ADD COLUMN compact_mode INTEGER DEFAULT 0"
-            )
-        if "backtest_slippage_enabled" not in cols:
-            self._conn.execute(
-                "ALTER TABLE user_preferences ADD COLUMN backtest_slippage_enabled INTEGER DEFAULT 1"
-            )
-
-    def _ensure_pattern_stats_columns(self):
-        cols = {
-            row[1] for row in self._conn.execute("PRAGMA table_info(pattern_stats)")
-        }
-        if "causal_chain" not in cols:
-            self._conn.execute(
-                "ALTER TABLE pattern_stats ADD COLUMN causal_chain TEXT"
-            )
-        self._conn.execute(
+    @staticmethod
+    def _ensure_columns_sync(conn: sqlite3.Connection):
+        """Ensure extra columns exist (migration support)."""
+        for table, column, col_def in [
+            ("user_preferences", "compact_mode", "INTEGER DEFAULT 0"),
+            ("user_preferences", "backtest_slippage_enabled", "INTEGER DEFAULT 1"),
+            ("pattern_stats", "causal_chain", "TEXT"),
+            ("trade_journal", "causal_chain", "TEXT"),
+        ]:
+            cols = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
+            if column not in cols:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {col_def}")
+        conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_pattern_stats_name_time ON pattern_stats(pattern_name, detected_at)"
         )
 
-    def _ensure_trade_journal_columns(self):
-        cols = {
-            row[1] for row in self._conn.execute("PRAGMA table_info(trade_journal)")
-        }
-        if "causal_chain" not in cols:
-            self._conn.execute(
-                "ALTER TABLE trade_journal ADD COLUMN causal_chain TEXT"
-            )
+    # ── Async Connection Management ──────────────────────────
+
+    async def _get_db(self) -> aiosqlite.Connection:
+        """Get or create the async database connection with WAL mode."""
+        if self._db is None:
+            self._db = await aiosqlite.connect(str(self.db_path))
+            self._db.row_factory = aiosqlite.Row
+            await self._db.execute("PRAGMA journal_mode=WAL")
+            await self._db.execute("PRAGMA busy_timeout=5000")
+        return self._db
+
+    async def close(self):
+        """Close the async database connection."""
+        if self._db is not None:
+            await self._db.close()
+            self._db = None
+
+    async def _query_rows(self, sql: str, params: tuple = ()) -> list[dict]:
+        """Execute a SELECT query and return results as a list of dicts."""
+        db = await self._get_db()
+        async with db.execute(sql, params) as cursor:
+            rows = await cursor.fetchall()
+            return [dict(r) for r in rows]
+
+    async def _query_one(self, sql: str, params: tuple = ()) -> Optional[dict]:
+        """Execute a SELECT query and return one result as dict or None."""
+        db = await self._get_db()
+        async with db.execute(sql, params) as cursor:
+            row = await cursor.fetchone()
+            return dict(row) if row else None
 
     # --- Predictions ---
 
-    def save_prediction(self, timeframe: str, direction: str, confidence: float,
+    async def save_prediction(self, timeframe: str, direction: str, confidence: float,
                         reasoning: str = "", target_price: float = None) -> int:
-        with self._conn:
-            cursor = self._conn.execute(
-                """INSERT INTO predictions (timestamp, timeframe, direction, confidence, reasoning, target_price)
-                   VALUES (?, ?, ?, ?, ?, ?)""",
-                (datetime.now(timezone.utc).isoformat(), timeframe, direction, confidence, reasoning, target_price)
-            )
+        db = await self._get_db()
+        async with db.execute(
+            """INSERT INTO predictions (timestamp, timeframe, direction, confidence, reasoning, target_price)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (datetime.now(timezone.utc).isoformat(), timeframe, direction, confidence, reasoning, target_price)
+        ) as cursor:
+            await db.commit()
             return cursor.lastrowid
 
-    def resolve_prediction(self, pred_id: int, outcome: str, accuracy: float):
-        with self._conn:
-            self._conn.execute(
-                """UPDATE predictions SET actual_outcome=?, accuracy_score=?, resolved_at=? WHERE id=?""",
-                (outcome, accuracy, datetime.now(timezone.utc).isoformat(), pred_id)
-            )
+    async def resolve_prediction(self, pred_id: int, outcome: str, accuracy: float):
+        db = await self._get_db()
+        await db.execute(
+            """UPDATE predictions SET actual_outcome=?, accuracy_score=?, resolved_at=? WHERE id=?""",
+            (outcome, accuracy, datetime.now(timezone.utc).isoformat(), pred_id)
+        )
+        await db.commit()
 
-    def get_accuracy_stats(self, days: int = 30) -> dict:
-        curr_time = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
-        rows = self._query_rows(
+    async def get_accuracy_stats(self, days: int = 30) -> dict:
+        rows = await self._query_rows(
             """SELECT direction, accuracy_score FROM predictions
                 WHERE resolved_at IS NOT NULL
                 AND timestamp > datetime('now', ?)""",
@@ -297,64 +309,70 @@ class Storage:
             for d, s in stats.items()
         }
 
-    def get_unresolved_predictions(self) -> list[dict]:
-        return self._query_rows(
+    async def get_unresolved_predictions(self) -> list[dict]:
+        return await self._query_rows(
             "SELECT * FROM predictions WHERE resolved_at IS NULL ORDER BY timestamp DESC"
         )
 
     # --- Alerts ---
 
-    def add_alert(self, condition: str, target_value: float, chat_id: int) -> int:
-        with self._conn:
-            cursor = self._conn.execute(
-                "INSERT INTO alerts (created_at, condition, target_value, chat_id) VALUES (?, ?, ?, ?)",
-                (datetime.now(timezone.utc).isoformat(), condition, target_value, chat_id)
-            )
+    async def add_alert(self, condition: str, target_value: float, chat_id: int) -> int:
+        db = await self._get_db()
+        async with db.execute(
+            "INSERT INTO alerts (created_at, condition, target_value, chat_id) VALUES (?, ?, ?, ?)",
+            (datetime.now(timezone.utc).isoformat(), condition, target_value, chat_id)
+        ) as cursor:
+            await db.commit()
             return cursor.lastrowid
 
-    def get_active_alerts(self) -> list[dict]:
-        return self._query_rows("SELECT * FROM alerts WHERE triggered = 0")
+    async def get_active_alerts(self) -> list[dict]:
+        return await self._query_rows("SELECT * FROM alerts WHERE triggered = 0")
 
-    def get_user_alerts(self, chat_id: int) -> list[dict]:
+    async def get_user_alerts(self, chat_id: int) -> list[dict]:
         """Get all active alerts for a specific user."""
-        return self._query_rows(
+        return await self._query_rows(
             "SELECT * FROM alerts WHERE chat_id = ? AND triggered = 0",
             (chat_id,)
         )
 
-    def trigger_alert(self, alert_id: int):
-        with self._conn:
-            self._conn.execute(
-                "UPDATE alerts SET triggered=1, triggered_at=? WHERE id=?",
-                (datetime.now(timezone.utc).isoformat(), alert_id)
-            )
+    async def trigger_alert(self, alert_id: int):
+        db = await self._get_db()
+        await db.execute(
+            "UPDATE alerts SET triggered=1, triggered_at=? WHERE id=?",
+            (datetime.now(timezone.utc).isoformat(), alert_id)
+        )
+        await db.commit()
 
-    def delete_alert(self, alert_id: int):
+    async def delete_alert(self, alert_id: int):
         """Permanently delete an alert."""
-        with self._conn:
-            self._conn.execute("DELETE FROM alerts WHERE id=?", (alert_id,))
+        db = await self._get_db()
+        await db.execute("DELETE FROM alerts WHERE id=?", (alert_id,))
+        await db.commit()
 
     # --- Memory (key-value for learning) ---
 
-    def set_memory(self, key: str, value: Any):
+    async def set_memory(self, key: str, value: Any):
         data = json.dumps(value) if not isinstance(value, str) else value
-        with self._conn:
-            self._conn.execute(
-                "INSERT OR REPLACE INTO memory (key, value, updated_at) VALUES (?, ?, ?)",
-                (key, data, datetime.now(timezone.utc).isoformat())
-            )
+        db = await self._get_db()
+        await db.execute(
+            "INSERT OR REPLACE INTO memory (key, value, updated_at) VALUES (?, ?, ?)",
+            (key, data, datetime.now(timezone.utc).isoformat())
+        )
+        await db.commit()
 
-    def get_memory(self, key: str) -> Optional[str]:
-        row = self._conn.execute("SELECT value FROM memory WHERE key=?", (key,)).fetchone()
-        return row[0] if row else None
+    async def get_memory(self, key: str) -> Optional[str]:
+        db = await self._get_db()
+        async with db.execute("SELECT value FROM memory WHERE key=?", (key,)) as cursor:
+            row = await cursor.fetchone()
+            return row[0] if row else None
 
-    def save_json(self, key: str, value: Any):
+    async def save_json(self, key: str, value: Any):
         """Save a JSON-serializable value to the memory table."""
-        self.set_memory(key, json.dumps(value))
+        await self.set_memory(key, json.dumps(value))
 
-    def load_json(self, key: str) -> Optional[Any]:
+    async def load_json(self, key: str) -> Optional[Any]:
         """Load a JSON value from the memory table."""
-        raw = self.get_memory(key)
+        raw = await self.get_memory(key)
         if raw is None:
             return None
         try:
@@ -364,88 +382,92 @@ class Storage:
 
     # --- Market Notes ---
 
-    def add_note(self, category: str, content: str, metadata: dict = None):
-        with self._conn:
-            self._conn.execute(
-                "INSERT INTO market_notes (timestamp, category, content, metadata) VALUES (?, ?, ?, ?)",
-                (datetime.now(timezone.utc).isoformat(), category, content,
-                 json.dumps(metadata) if metadata else None)
-            )
+    async def add_note(self, category: str, content: str, metadata: dict = None):
+        db = await self._get_db()
+        await db.execute(
+            "INSERT INTO market_notes (timestamp, category, content, metadata) VALUES (?, ?, ?, ?)",
+            (datetime.now(timezone.utc).isoformat(), category, content,
+             json.dumps(metadata) if metadata else None)
+        )
+        await db.commit()
 
-    def get_recent_notes(self, category: str = None, limit: int = 20) -> list[dict]:
+    async def get_recent_notes(self, category: str = None, limit: int = 20) -> list[dict]:
         if category:
-            return self._query_rows(
+            return await self._query_rows(
                 "SELECT * FROM market_notes WHERE category=? ORDER BY timestamp DESC LIMIT ?",
                 (category, limit)
             )
         else:
-            return self._query_rows(
+            return await self._query_rows(
                 "SELECT * FROM market_notes ORDER BY timestamp DESC LIMIT ?",
                 (limit,)
             )
 
     # --- Trading Signals ---
 
-    def save_signal(self, direction: str, entry_price: float, stop_loss: float,
+    async def save_signal(self, direction: str, entry_price: float, stop_loss: float,
                     take_profit: float, confidence: float, timeframe: str,
                     source: str = "system", reasoning: str = "",
                     risk_reward_ratio: float = 0.0) -> int:
         """Save a new trading signal."""
-        with self._conn:
-            cursor = self._conn.execute(
-                """INSERT INTO trading_signals
-                   (created_at, direction, entry_price, stop_loss, take_profit,
-                    confidence, timeframe, source, reasoning, risk_reward_ratio)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (datetime.now(timezone.utc).isoformat(), direction, entry_price, stop_loss,
-                 take_profit, confidence, timeframe, source, reasoning, risk_reward_ratio)
-            )
+        db = await self._get_db()
+        async with db.execute(
+            """INSERT INTO trading_signals
+               (created_at, direction, entry_price, stop_loss, take_profit,
+                confidence, timeframe, source, reasoning, risk_reward_ratio)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (datetime.now(timezone.utc).isoformat(), direction, entry_price, stop_loss,
+             take_profit, confidence, timeframe, source, reasoning, risk_reward_ratio)
+        ) as cursor:
+            await db.commit()
             return cursor.lastrowid
 
-    def update_signal_status(self, signal_id: int, status: str, pnl_pips: float = 0.0):
+    async def update_signal_status(self, signal_id: int, status: str, pnl_pips: float = 0.0):
         """Update a signal's status (active, closed, cancelled)."""
         closed_at = datetime.now(timezone.utc).isoformat() if status in ("closed", "cancelled") else None
-        with self._conn:
-            self._conn.execute(
-                "UPDATE trading_signals SET status=?, pnl_pips=?, closed_at=? WHERE id=?",
-                (status, pnl_pips, closed_at, signal_id)
-            )
+        db = await self._get_db()
+        await db.execute(
+            "UPDATE trading_signals SET status=?, pnl_pips=?, closed_at=? WHERE id=?",
+            (status, pnl_pips, closed_at, signal_id)
+        )
+        await db.commit()
 
-    def get_signals(self, status: str = None, limit: int = 20) -> list[dict]:
+    async def get_signals(self, status: str = None, limit: int = 20) -> list[dict]:
         """Get trading signals, optionally filtered by status."""
         if status:
-            return self._query_rows(
+            return await self._query_rows(
                 "SELECT * FROM trading_signals WHERE status=? ORDER BY created_at DESC LIMIT ?",
                 (status, limit)
             )
         else:
-            return self._query_rows(
+            return await self._query_rows(
                 "SELECT * FROM trading_signals ORDER BY created_at DESC LIMIT ?",
                 (limit,)
             )
 
     # --- News Events ---
 
-    def save_news_event(self, title: str, source: str, url: str = "",
+    async def save_news_event(self, title: str, source: str, url: str = "",
                         description: str = "", impact_score: float = 0.0,
                         sentiment: str = "neutral", sentiment_score: float = 0.0,
                         currency_impact: str = "", published_at: str = "") -> int:
         """Save a news event."""
-        with self._conn:
-            cursor = self._conn.execute(
-                """INSERT INTO news_events
-                   (title, source, url, description, impact_score, sentiment,
-                    sentiment_score, currency_impact, published_at, fetched_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (title, source, url, description, impact_score, sentiment,
-                 sentiment_score, currency_impact, published_at,
-                 datetime.now(timezone.utc).isoformat())
-            )
+        db = await self._get_db()
+        async with db.execute(
+            """INSERT INTO news_events
+               (title, source, url, description, impact_score, sentiment,
+                sentiment_score, currency_impact, published_at, fetched_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (title, source, url, description, impact_score, sentiment,
+             sentiment_score, currency_impact, published_at,
+             datetime.now(timezone.utc).isoformat())
+        ) as cursor:
+            await db.commit()
             return cursor.lastrowid
 
-    def get_recent_news(self, limit: int = 20, min_impact: float = 0.0) -> list[dict]:
+    async def get_recent_news(self, limit: int = 20, min_impact: float = 0.0) -> list[dict]:
         """Get recent news events, optionally filtered by minimum impact."""
-        return self._query_rows(
+        return await self._query_rows(
             """SELECT * FROM news_events
                 WHERE impact_score >= ?
                 ORDER BY fetched_at DESC LIMIT ?""",
@@ -454,7 +476,7 @@ class Storage:
 
     # --- Performance Metrics ---
 
-    def save_performance_metric(self, period: str, total_signals: int = 0,
+    async def save_performance_metric(self, period: str, total_signals: int = 0,
                                 winning_signals: int = 0, losing_signals: int = 0,
                                 win_rate: float = 0.0, total_pnl_pips: float = 0.0,
                                 avg_pnl_pips: float = 0.0, max_drawdown_pips: float = 0.0,
@@ -463,31 +485,32 @@ class Storage:
                                 worst_trade_pips: float = 0.0,
                                 avg_trade_duration_hours: float = 0.0) -> int:
         """Save a performance metrics snapshot."""
-        with self._conn:
-            cursor = self._conn.execute(
-                """INSERT INTO performance_metrics
-                   (period, total_signals, winning_signals, losing_signals, win_rate,
-                    total_pnl_pips, avg_pnl_pips, max_drawdown_pips, profit_factor,
-                    sharpe_ratio, avg_risk_reward, best_trade_pips, worst_trade_pips,
-                    avg_trade_duration_hours, calculated_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (period, total_signals, winning_signals, losing_signals, win_rate,
-                 total_pnl_pips, avg_pnl_pips, max_drawdown_pips, profit_factor,
-                 sharpe_ratio, avg_risk_reward, best_trade_pips, worst_trade_pips,
-                 avg_trade_duration_hours, datetime.now(timezone.utc).isoformat())
-            )
+        db = await self._get_db()
+        async with db.execute(
+            """INSERT INTO performance_metrics
+               (period, total_signals, winning_signals, losing_signals, win_rate,
+                total_pnl_pips, avg_pnl_pips, max_drawdown_pips, profit_factor,
+                sharpe_ratio, avg_risk_reward, best_trade_pips, worst_trade_pips,
+                avg_trade_duration_hours, calculated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (period, total_signals, winning_signals, losing_signals, win_rate,
+             total_pnl_pips, avg_pnl_pips, max_drawdown_pips, profit_factor,
+             sharpe_ratio, avg_risk_reward, best_trade_pips, worst_trade_pips,
+             avg_trade_duration_hours, datetime.now(timezone.utc).isoformat())
+        ) as cursor:
+            await db.commit()
             return cursor.lastrowid
 
-    def get_latest_metrics(self, period: str = "daily") -> Optional[dict]:
+    async def get_latest_metrics(self, period: str = "daily") -> Optional[dict]:
         """Get the most recent performance metrics for a period."""
-        return self._query_one(
+        return await self._query_one(
             "SELECT * FROM performance_metrics WHERE period=? ORDER BY calculated_at DESC LIMIT 1",
             (period,)
         )
 
     # --- User Preferences ---
 
-    def save_user_preferences(self, chat_id: int, **kwargs) -> int:
+    async def save_user_preferences(self, chat_id: int, **kwargs) -> int:
         """Save or update user preferences (upsert)."""
         now = datetime.now(timezone.utc).isoformat()
         defaults = {
@@ -505,45 +528,46 @@ class Storage:
         }
         defaults.update(kwargs)
 
-        with self._conn:
-            cursor = self._conn.execute(
-                """INSERT INTO user_preferences
-                   (chat_id, risk_tolerance, preferred_timeframe, alert_on_signals,
-                    alert_on_news, alert_min_confidence, daily_report_enabled,
-                    daily_report_hour, language, max_signals_per_day, compact_mode,
-                    backtest_slippage_enabled, created_at, updated_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                   ON CONFLICT(chat_id) DO UPDATE SET
-                    risk_tolerance=excluded.risk_tolerance,
-                    preferred_timeframe=excluded.preferred_timeframe,
-                    alert_on_signals=excluded.alert_on_signals,
-                    alert_on_news=excluded.alert_on_news,
-                    alert_min_confidence=excluded.alert_min_confidence,
-                    daily_report_enabled=excluded.daily_report_enabled,
-                    daily_report_hour=excluded.daily_report_hour,
-                    language=excluded.language,
-                    max_signals_per_day=excluded.max_signals_per_day,
-                    compact_mode=excluded.compact_mode,
-                    backtest_slippage_enabled=excluded.backtest_slippage_enabled,
-                    updated_at=excluded.updated_at""",
-                (chat_id, defaults["risk_tolerance"], defaults["preferred_timeframe"],
-                 defaults["alert_on_signals"], defaults["alert_on_news"],
-                 defaults["alert_min_confidence"], defaults["daily_report_enabled"],
-                 defaults["daily_report_hour"], defaults["language"],
-                 defaults["max_signals_per_day"], defaults["compact_mode"],
-                 defaults["backtest_slippage_enabled"], now, now)
-            )
+        db = await self._get_db()
+        async with db.execute(
+            """INSERT INTO user_preferences
+               (chat_id, risk_tolerance, preferred_timeframe, alert_on_signals,
+                alert_on_news, alert_min_confidence, daily_report_enabled,
+                daily_report_hour, language, max_signals_per_day, compact_mode,
+                backtest_slippage_enabled, created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+               ON CONFLICT(chat_id) DO UPDATE SET
+                risk_tolerance=excluded.risk_tolerance,
+                preferred_timeframe=excluded.preferred_timeframe,
+                alert_on_signals=excluded.alert_on_signals,
+                alert_on_news=excluded.alert_on_news,
+                alert_min_confidence=excluded.alert_min_confidence,
+                daily_report_enabled=excluded.daily_report_enabled,
+                daily_report_hour=excluded.daily_report_hour,
+                language=excluded.language,
+                max_signals_per_day=excluded.max_signals_per_day,
+                compact_mode=excluded.compact_mode,
+                backtest_slippage_enabled=excluded.backtest_slippage_enabled,
+                updated_at=excluded.updated_at""",
+            (chat_id, defaults["risk_tolerance"], defaults["preferred_timeframe"],
+             defaults["alert_on_signals"], defaults["alert_on_news"],
+             defaults["alert_min_confidence"], defaults["daily_report_enabled"],
+             defaults["daily_report_hour"], defaults["language"],
+             defaults["max_signals_per_day"], defaults["compact_mode"],
+             defaults["backtest_slippage_enabled"], now, now)
+        ) as cursor:
+            await db.commit()
             return cursor.lastrowid
 
-    def get_user_preferences(self, chat_id: int) -> Optional[dict]:
+    async def get_user_preferences(self, chat_id: int) -> Optional[dict]:
         """Get preferences for a specific user."""
-        return self._query_one(
+        return await self._query_one(
             "SELECT * FROM user_preferences WHERE chat_id=?", (chat_id,)
         )
 
     # ── Trade Journal ─────────────────────────────────────────
 
-    def save_trade_journal(self, direction: str, entry_price: float,
+    async def save_trade_journal(self, direction: str, entry_price: float,
                            stop_loss: float = 0.0, take_profit: float = 0.0,
                            strategy: str = "", timeframe: str = "H1",
                            regime: str = "", confidence: float = 0.0,
@@ -556,36 +580,38 @@ class Storage:
             causal_payload = json.dumps(causal_chain)
         else:
             causal_payload = causal_chain
-        with self._conn:
-            cursor = self._conn.execute(
-                """INSERT INTO trade_journal
-                   (timestamp, direction, entry_price, stop_loss, take_profit,
-                    strategy, timeframe, regime, confidence,
-                    indicators_snapshot, patterns_snapshot, causal_chain, reasoning, status)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (now, direction, entry_price, stop_loss, take_profit,
-                 strategy, timeframe, regime, confidence,
-                 json.dumps(indicators or {}),
-                 json.dumps(patterns or []),
-                 causal_payload,
-                 reasoning,
-                 status)
-            )
+        db = await self._get_db()
+        async with db.execute(
+            """INSERT INTO trade_journal
+               (timestamp, direction, entry_price, stop_loss, take_profit,
+                strategy, timeframe, regime, confidence,
+                indicators_snapshot, patterns_snapshot, causal_chain, reasoning, status)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (now, direction, entry_price, stop_loss, take_profit,
+             strategy, timeframe, regime, confidence,
+             json.dumps(indicators or {}),
+             json.dumps(patterns or []),
+             causal_payload,
+             reasoning,
+             status)
+        ) as cursor:
+            await db.commit()
             return cursor.lastrowid
 
-    def close_trade_journal(self, trade_id: int, exit_price: float,
+    async def close_trade_journal(self, trade_id: int, exit_price: float,
                              pnl_pips: float, is_win: bool):
         """Close a trade journal entry with outcome."""
         now = datetime.now(timezone.utc).isoformat()
-        with self._conn:
-            self._conn.execute(
-                """UPDATE trade_journal SET exit_price=?, pnl_pips=?,
-                   is_win=?, closed_at=?, status='closed'
-                   WHERE id=?""",
-                (exit_price, pnl_pips, 1 if is_win else 0, now, trade_id)
-            )
+        db = await self._get_db()
+        await db.execute(
+            """UPDATE trade_journal SET exit_price=?, pnl_pips=?,
+               is_win=?, closed_at=?, status='closed'
+               WHERE id=?""",
+            (exit_price, pnl_pips, 1 if is_win else 0, now, trade_id)
+        )
+        await db.commit()
 
-    def get_trade_journal(self, strategy: str = None, status: str = None,
+    async def get_trade_journal(self, strategy: str = None, status: str = None,
                           limit: int = 50) -> list[dict]:
         """Get trade journal entries, optionally filtered."""
         query = "SELECT * FROM trade_journal WHERE 1=1"
@@ -599,12 +625,12 @@ class Storage:
         query += " ORDER BY timestamp DESC LIMIT ?"
         params.append(limit)
 
-        trades = self._query_rows(query, tuple(params))
+        trades = await self._query_rows(query, tuple(params))
         for t in trades:
             t["causal_chain"] = self._parse_json_payload(t.get("causal_chain"))
         return trades
 
-    def get_trade_journal_for_date(self, date: str, status: str = None) -> list[dict]:
+    async def get_trade_journal_for_date(self, date: str, status: str = None) -> list[dict]:
         try:
             day = datetime.fromisoformat(date)
         except ValueError:
@@ -619,13 +645,13 @@ class Storage:
             params.append(status)
         query += " ORDER BY timestamp DESC"
 
-        trades = self._query_rows(query, tuple(params))
+        trades = await self._query_rows(query, tuple(params))
         for t in trades:
             t["causal_chain"] = self._parse_json_payload(t.get("causal_chain"))
         return trades
 
-    def get_trade_with_causal(self, trade_id: int) -> Optional[dict]:
-        trade = self._query_one(
+    async def get_trade_with_causal(self, trade_id: int) -> Optional[dict]:
+        trade = await self._query_one(
             "SELECT * FROM trade_journal WHERE id=?",
             (trade_id,),
         )
@@ -634,7 +660,7 @@ class Storage:
         trade["causal_chain"] = self._parse_json_payload(trade.get("causal_chain"))
         return trade
 
-    def get_trade_journal_stats(self, strategy: str = None) -> dict:
+    async def get_trade_journal_stats(self, strategy: str = None) -> dict:
         """Get aggregate stats from trade journal."""
         query = "SELECT * FROM trade_journal WHERE status='closed'"
         params = []
@@ -642,7 +668,7 @@ class Storage:
             query += " AND strategy=?"
             params.append(strategy)
 
-        trades = self._query_rows(query, tuple(params))
+        trades = await self._query_rows(query, tuple(params))
 
         if not trades:
             return {"total": 0, "wins": 0, "losses": 0, "win_rate": 0.0,
@@ -693,40 +719,42 @@ class Storage:
 
     # ── Pattern Stats ─────────────────────────────────────────
 
-    def save_pattern_detection(self, pattern_name: str, timeframe: str,
+    async def save_pattern_detection(self, pattern_name: str, timeframe: str,
                                 predicted_direction: str,
                                 price_at_detection: float,
                                 causal_chain: Optional[dict] = None) -> int:
         """Record a new pattern detection."""
         now = datetime.now(timezone.utc).isoformat()
         causal_payload = json.dumps(causal_chain) if causal_chain else None
-        with self._conn:
-            cursor = self._conn.execute(
-                """INSERT INTO pattern_stats
-                   (pattern_name, timeframe, detected_at, predicted_direction,
-                    price_at_detection, causal_chain)
-                   VALUES (?, ?, ?, ?, ?, ?)""",
-                (pattern_name, timeframe, now, predicted_direction,
-                 price_at_detection, causal_payload)
-            )
+        db = await self._get_db()
+        async with db.execute(
+            """INSERT INTO pattern_stats
+               (pattern_name, timeframe, detected_at, predicted_direction,
+                price_at_detection, causal_chain)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (pattern_name, timeframe, now, predicted_direction,
+             price_at_detection, causal_payload)
+        ) as cursor:
+            await db.commit()
             return cursor.lastrowid
 
-    def resolve_pattern(self, pattern_id: int, actual_outcome: str,
+    async def resolve_pattern(self, pattern_id: int, actual_outcome: str,
                         price_at_resolution: float, is_success: bool):
         """Resolve a pattern detection with actual outcome."""
         now = datetime.now(timezone.utc).isoformat()
-        with self._conn:
-            self._conn.execute(
-                """UPDATE pattern_stats SET actual_outcome=?,
-                   price_at_resolution=?, is_success=?, resolved_at=?
-                   WHERE id=?""",
-                (actual_outcome, price_at_resolution,
-                 1 if is_success else 0, now, pattern_id)
-            )
+        db = await self._get_db()
+        await db.execute(
+            """UPDATE pattern_stats SET actual_outcome=?,
+               price_at_resolution=?, is_success=?, resolved_at=?
+               WHERE id=?""",
+            (actual_outcome, price_at_resolution,
+             1 if is_success else 0, now, pattern_id)
+        )
+        await db.commit()
 
-    def get_pattern_success_rates(self) -> dict:
+    async def get_pattern_success_rates(self) -> dict:
         """Get success rates grouped by pattern_name + timeframe."""
-        rows = self._query_rows(
+        rows = await self._query_rows(
             """SELECT pattern_name, timeframe,
                 COUNT(*) as total,
                 SUM(CASE WHEN is_success=1 THEN 1 ELSE 0 END) as successes
@@ -749,25 +777,25 @@ class Storage:
             }
         return result
 
-    def get_unresolved_patterns(self, limit: int = 50) -> list[dict]:
+    async def get_unresolved_patterns(self, limit: int = 50) -> list[dict]:
         """Get pattern detections that haven't been resolved yet."""
-        return self._query_rows(
+        return await self._query_rows(
             """SELECT * FROM pattern_stats
                 WHERE is_success IS NULL
                 ORDER BY detected_at DESC LIMIT ?""",
             (limit,)
         )
 
-    def get_resolved_patterns(self, limit: int = 50) -> list[dict]:
+    async def get_resolved_patterns(self, limit: int = 50) -> list[dict]:
         """Get recently resolved patterns for reporting."""
-        return self._query_rows(
+        return await self._query_rows(
             """SELECT * FROM pattern_stats
                 WHERE is_success IS NOT NULL
                 ORDER BY resolved_at DESC LIMIT ?""",
             (limit,)
         )
 
-    def get_similar_patterns(
+    async def get_similar_patterns(
         self,
         pattern_name: str,
         timeframe: Optional[str] = None,
@@ -787,26 +815,27 @@ class Storage:
             params.append(timeframe)
         query += " ORDER BY detected_at DESC LIMIT ?"
         params.append(limit)
-        results = self._query_rows(query, tuple(params))
+        results = await self._query_rows(query, tuple(params))
         return [r for r in results if r.get("similarity", 0) >= min_similarity]
 
     # ── Learning Insights ─────────────────────────────────────
 
-    def save_learning_insight(self, trade_id: str, accuracy: float,
+    async def save_learning_insight(self, trade_id: str, accuracy: float,
                               factors: list[str], recommendations: list[str]) -> int:
         """Save a new learning insight extract from a trade."""
         now = datetime.now(timezone.utc).isoformat()
-        with self._conn:
-            cursor = self._conn.execute(
-                """INSERT INTO learning_insights (trade_id, accuracy, factors, recommendations, timestamp)
-                   VALUES (?, ?, ?, ?, ?)""",
-                (trade_id, accuracy, json.dumps(factors), json.dumps(recommendations), now)
-            )
+        db = await self._get_db()
+        async with db.execute(
+            """INSERT INTO learning_insights (trade_id, accuracy, factors, recommendations, timestamp)
+               VALUES (?, ?, ?, ?, ?)""",
+            (trade_id, accuracy, json.dumps(factors), json.dumps(recommendations), now)
+        ) as cursor:
+            await db.commit()
             return cursor.lastrowid
 
-    def get_recent_learning_insights(self, limit: int = 20) -> list[dict]:
+    async def get_recent_learning_insights(self, limit: int = 20) -> list[dict]:
         """Get the most recent learning insights."""
-        rows = self._query_rows(
+        rows = await self._query_rows(
             "SELECT * FROM learning_insights ORDER BY timestamp DESC LIMIT ?",
             (limit,)
         )
@@ -817,34 +846,33 @@ class Storage:
 
     # ─── User Threads (Private Topics) ───────────────────────
 
-    def save_user_thread(self, chat_id: int, topic_key: str, thread_id: int):
+    async def save_user_thread(self, chat_id: int, topic_key: str, thread_id: int):
         """Save or update a thread ID for a user's topic."""
         now = datetime.now(timezone.utc).isoformat()
-        with self._conn:
-            self._conn.execute(
-                """INSERT OR REPLACE INTO user_threads (chat_id, topic_key, thread_id, created_at)
-                   VALUES (?, ?, ?, ?)""",
-                (chat_id, topic_key, thread_id, now)
-            )
+        db = await self._get_db()
+        await db.execute(
+            """INSERT OR REPLACE INTO user_threads (chat_id, topic_key, thread_id, created_at)
+               VALUES (?, ?, ?, ?)""",
+            (chat_id, topic_key, thread_id, now)
+        )
+        await db.commit()
 
-    def get_user_thread(self, chat_id: int, topic_key: str) -> Optional[int]:
+    async def get_user_thread(self, chat_id: int, topic_key: str) -> Optional[int]:
         """Get the thread ID for a specific user topic."""
-        row = self._conn.execute(
+        db = await self._get_db()
+        async with db.execute(
             "SELECT thread_id FROM user_threads WHERE chat_id=? AND topic_key=?",
             (chat_id, topic_key)
-        ).fetchone()
-        return row[0] if row else None
+        ) as cursor:
+            row = await cursor.fetchone()
+            return row[0] if row else None
 
-    def get_all_user_threads(self, chat_id: int) -> dict[str, int]:
+    async def get_all_user_threads(self, chat_id: int) -> dict[str, int]:
         """Get all thread IDs for a specific user."""
-        rows = self._conn.execute(
+        db = await self._get_db()
+        async with db.execute(
             "SELECT topic_key, thread_id FROM user_threads WHERE chat_id=?",
             (chat_id,)
-        ).fetchall()
-        return {row[0]: row[1] for row in rows}
-
-    def __del__(self):
-        """Close connection on deletion."""
-        if hasattr(self, "_conn"):
-            self._conn.close()
-
+        ) as cursor:
+            rows = await cursor.fetchall()
+            return {row[0]: row[1] for row in rows}

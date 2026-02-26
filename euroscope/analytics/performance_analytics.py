@@ -63,11 +63,11 @@ class PerformanceAnalytics:
     def __init__(self, storage: Storage):
         self.storage = storage
 
-    def calculate(self, period: str = "daily") -> PerformanceSnapshot:
+    async def calculate(self, period: str = "daily") -> PerformanceSnapshot:
         """
         Calculate full performance snapshot from closed trades in DB.
         """
-        closed = self.storage.get_signals(status="closed", limit=500)
+        closed = await self.storage.get_signals(status="closed", limit=500)
         snap = self.compute_from_trades(closed)
         snap.period = period
         return snap
@@ -127,9 +127,9 @@ class PerformanceAnalytics:
 
         return snap
 
-    def save_snapshot(self, snap: PerformanceSnapshot) -> int:
+    async def save_snapshot(self, snap: PerformanceSnapshot) -> int:
         """Persist a snapshot to the database."""
-        return self.storage.save_performance_metric(
+        return await self.storage.save_performance_metric(
             period=snap.period,
             total_signals=snap.total_trades,
             winning_signals=snap.wins,
@@ -146,9 +146,9 @@ class PerformanceAnalytics:
             avg_trade_duration_hours=snap.avg_duration_hours,
         )
 
-    def get_latest(self, period: str = "daily") -> Optional[dict]:
+    async def get_latest(self, period: str = "daily") -> Optional[dict]:
         """Get the most recent saved snapshot."""
-        return self.storage.get_latest_metrics(period)
+        return await self.storage.get_latest_metrics(period)
 
     # ── Metric Calculations ──────────────────────────────────
 

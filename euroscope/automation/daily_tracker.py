@@ -27,16 +27,16 @@ class DailyTracker:
         self._storage = storage
 
     async def run(self) -> dict:
-        summary = self.get_summary()
+        summary = await self.get_summary()
         self._append_to_csv(summary)
         return summary
 
-    def get_summary(self, date: Optional[str] = None) -> dict:
+    async def get_summary(self, date: Optional[str] = None) -> dict:
         date_value = date or self._now_fn().strftime("%Y-%m-%d")
         if not self._storage:
             return self._empty_summary(date_value)
 
-        entries = self._storage.get_trade_journal_for_date(date_value)
+        entries = await self._storage.get_trade_journal_for_date(date_value)
         signals_generated = len(entries)
         signals_rejected = 0
         signals_executed = 0

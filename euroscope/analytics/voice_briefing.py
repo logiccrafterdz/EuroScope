@@ -75,7 +75,7 @@ class VoiceBriefingEngine:
             sections.append(ta_section)
 
         # 3. Recent Signals  
-        signal_section = self._get_signal_section()
+        signal_section = await self._get_signal_section()
         if signal_section:
             sections.append(signal_section)
 
@@ -85,12 +85,12 @@ class VoiceBriefingEngine:
             sections.append(scenario_section)
 
         # 5. Performance Summary
-        perf_section = self._get_performance_section()
+        perf_section = await self._get_performance_section()
         if perf_section:
             sections.append(perf_section)
 
         # 6. Risk Alerts
-        risk_section = self._get_risk_section()
+        risk_section = await self._get_risk_section()
         if risk_section:
             sections.append(risk_section)
 
@@ -164,7 +164,7 @@ class VoiceBriefingEngine:
             # but for a fresh briefing, we should trigger a forecast scan
             # However, invoking the full LLM forecaster here might be slow.
             # Fast path: check if we have a recent forecast stored in memory.
-            mem = self.storage.get_memory('active_forecast', {})
+            mem = await self.storage.get_memory('active_forecast', {})
             if mem and mem.get('text'):
                 text = mem.get('text', '')
                 # Just use the raw text, the UI markdown parser will handle scenario formatting.
@@ -180,12 +180,12 @@ class VoiceBriefingEngine:
             logger.debug(f"Scenario section failed: {e}")
         return None
 
-    def _get_signal_section(self) -> Optional[BriefingSection]:
+    async def _get_signal_section(self) -> Optional[BriefingSection]:
         """Get recent trading signals."""
         if not self.storage:
             return None
         try:
-            signals = self.storage.get_signals(limit=3)
+            signals = await self.storage.get_signals(limit=3)
             if signals:
                 count = len(signals)
                 latest = signals[0]
@@ -199,12 +199,12 @@ class VoiceBriefingEngine:
             logger.debug(f"Signal section failed: {e}")
         return None
 
-    def _get_performance_section(self) -> Optional[BriefingSection]:
+    async def _get_performance_section(self) -> Optional[BriefingSection]:
         """Get trading performance stats."""
         if not self.storage:
             return None
         try:
-            stats = self.storage.get_trade_journal_stats()
+            stats = await self.storage.get_trade_journal_stats()
             if stats and stats.get("total", 0) > 0:
                 return BriefingSection(
                     title="Performance",
@@ -219,13 +219,13 @@ class VoiceBriefingEngine:
             logger.debug(f"Performance section failed: {e}")
         return None
 
-    def _get_risk_section(self) -> Optional[BriefingSection]:
+    async def _get_risk_section(self) -> Optional[BriefingSection]:
         """Check for any elevated risk conditions."""
         # Compile risk warnings
         warnings = []
         if self.storage:
             try:
-                alerts = self.storage.get_active_alerts()
+                alerts = await self.storage.get_active_alerts()
                 if alerts and len(alerts) > 2:
                     warnings.append(f"{len(alerts)} active price alerts")
             except Exception:

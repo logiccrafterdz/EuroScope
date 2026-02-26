@@ -20,20 +20,20 @@ class EvolutionTracker:
     def __init__(self, storage: Storage = None):
         self.storage = storage or Storage()
         
-    def get_evolution_report(self) -> str:
+    async def get_evolution_report(self) -> str:
         """
         Generates a summary of how the system has improved over time.
         """
         # 1. Prediction Accuracy Trend (Last 30 days vs 7 days)
-        acc_30d = self.storage.get_accuracy_stats(days=30)
-        acc_7d = self.storage.get_accuracy_stats(days=7)
+        acc_30d = await self.storage.get_accuracy_stats(days=30)
+        acc_7d = await self.storage.get_accuracy_stats(days=7)
         
         # 2. Strategy metrics
-        stats_30d = self.storage.get_trade_journal_stats(days=30)
-        stats_7d = self.storage.get_trade_journal_stats(days=7)
+        stats_30d = await self.storage.get_trade_journal_stats(days=30)
+        stats_7d = await self.storage.get_trade_journal_stats(days=7)
         
         # 3. Insights adoption rate
-        insights = self.storage.get_recent_learning_insights(limit=100)
+        insights = await self.storage.get_recent_learning_insights(limit=100)
         total_insights = len(insights)
         
         # 4. Regime accuracy (mock for now or based on journal)

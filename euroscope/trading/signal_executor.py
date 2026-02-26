@@ -25,7 +25,7 @@ class SignalExecutor:
     def __init__(self, storage: Storage):
         self.storage = storage
 
-    def open_signal(self, direction: str, entry_price: float,
+    async def open_signal(self, direction: str, entry_price: float,
                     stop_loss: float, take_profit: float,
                     strategy: str = "manual", timeframe: str = "H1",
                     confidence: float = 50.0, reasoning: str = "") -> int:
@@ -44,7 +44,7 @@ class SignalExecutor:
         if sl_dist > 0:
             rr = round(tp_dist / sl_dist, 2)
 
-        signal_id = self.storage.save_signal(
+        signal_id = await self.storage.save_signal(
             direction=direction.upper(),
             entry_price=entry_price,
             stop_loss=stop_loss,
@@ -57,7 +57,7 @@ class SignalExecutor:
         )
 
         # Set status to 'open' (default is 'pending')
-        self.storage.update_signal_status(signal_id, "open")
+        await self.storage.update_signal_status(signal_id, "open")
 
         logger.info(
             f"Opened signal #{signal_id}: {direction.upper()} @ {entry_price} "
@@ -66,7 +66,7 @@ class SignalExecutor:
 
         return signal_id
 
-    def create_pending_order(self, direction: str, trigger_price: float,
+    async def create_pending_order(self, direction: str, trigger_price: float,
                              stop_loss: float, take_profit: float,
                              strategy: str = "llm_precalc", timeframe: str = "H1",
                              confidence: float = 75.0, reasoning: str = "Pending Order") -> int:
@@ -80,7 +80,7 @@ class SignalExecutor:
         if sl_dist > 0:
             rr = round(tp_dist / sl_dist, 2)
             
-        signal_id = self.storage.save_signal(
+        signal_id = await self.storage.save_signal(
             direction=direction.upper(),
             entry_price=trigger_price, # Store trigger as entry
             stop_loss=stop_loss,
@@ -95,24 +95,24 @@ class SignalExecutor:
         logger.info(f"Created pending order #{signal_id}: {direction.upper()} at {trigger_price}")
         return signal_id
 
-    def check_signals(self, current_price: float) -> list[dict]:
+    async def check_signals(self, current_price: float) -> list[dict]:
         """
         Check all open signals and pending orders against current price.
         Triggers stop loss, take profit, or activates pending orders.
         """
         # 1. Check Pending Orders -> Open them if triggered
-        pending_signals = self.storage.get_signals(status="pending")
+        pending_signals = await self.storage.get_signals(status="pending")
         for p in pending_signals:
             trigger = p["entry_price"]
             dir = p["direction"]
             # Simplified trigger logic (both Stop and Limit)
             if (dir == "BUY" and current_price >= trigger) or \
                (dir == "SELL" and current_price <= trigger):
-                self.storage.update_signal_status(p["id"], "open")
+                await self.storage.update_signal_status(p["id"], "open")
                 logger.info(f"⚡ INSTANT EXECUTION: Pending order #{p['id']} activated at {current_price} (Zero LLM Latency)")
                 
         # 2. Check Open Signals -> Close them if SL/TP hit
-        open_signals = self.get_open_signals()
+        open_signals = await self.get_open_signals()
         closed = []
 
         for signal in open_signals:
@@ -140,13 +140,13 @@ class SignalExecutor:
                     exit_price = tp
 
             if reason:
-                result = self.close_signal(sig_id, exit_price, reason)
+                result = await self.close_signal(sig_id, exit_price, reason)
                 if result:
                     closed.append(result)
 
         return closed
 
-    def close_signal(self, signal_id: int, exit_price: float,
+    async def close_signal(self, signal_id: int, exit_price: float,
                      reason: str = "manual") -> Optional[dict]:
         """
         Close an open signal and calculate PnL.
@@ -160,7 +160,7 @@ class SignalExecutor:
             Dict with signal details and PnL, or None
         """
         # Find the signal
-        signals = self.storage.get_signals(status="open")
+        signals = await self.storage.get_signals(status="open")
         signal = next((s for s in signals if s["id"] == signal_id), None)
 
         if not signal:
@@ -180,7 +180,7 @@ class SignalExecutor:
         is_win = pnl_pips > 0
 
         # Update in DB — store reason in reasoning via pnl_pips
-        self.storage.update_signal_status(signal_id, "closed", pnl_pips=pnl_pips)
+        await self.storage.update_signal_status(signal_id, "closed", pnl_pips=pnl_pips)
 
         logger.info(
             f"Closed signal #{signal_id}: {direction} "
@@ -198,15 +198,15 @@ class SignalExecutor:
             "strategy": signal.get("source", "unknown"),
         }
 
-    def get_open_signals(self) -> list[dict]:
+    async def get_open_signals(self) -> list[dict]:
         """Get all currently open signals."""
-        return self.storage.get_signals(status="open")
+        return await self.storage.get_signals(status="open")
 
-    def get_closed_signals(self, limit: int = 50) -> list[dict]:
+    async def get_closed_signals(self, limit: int = 50) -> list[dict]:
         """Get recently closed signals."""
-        return self.storage.get_signals(status="closed", limit=limit)
+        return await self.storage.get_signals(status="closed", limit=limit)
 
-    def get_performance(self) -> dict:
+    async def get_performance(self) -> dict:
         """
         Calculate performance metrics from closed trades.
 
@@ -217,7 +217,7 @@ class SignalExecutor:
                 "profit_factor", "consecutive_wins", "consecutive_losses"
             }
         """
-        closed = self.get_closed_signals(limit=200)
+        closed = await self.get_closed_signals(limit=200)
 
         if not closed:
             return {
@@ -272,9 +272,9 @@ class SignalExecutor:
             "consecutive_losses": max_consec_losses,
         }
 
-    def format_open_signals(self) -> str:
+    async def format_open_signals(self) -> str:
         """Format open signals for Telegram."""
-        signals = self.get_open_signals()
+        signals = await self.get_open_signals()
         if not signals:
             return "📋 No open signals."
 
@@ -287,9 +287,9 @@ class SignalExecutor:
             )
         return "\n".join(lines)
 
-    def format_performance(self) -> str:
+    async def format_performance(self) -> str:
         """Format performance report for Telegram."""
-        perf = self.get_performance()
+        perf = await self.get_performance()
 
         if perf["total_trades"] == 0:
             return "📊 *Performance*\n\nNo trades closed yet. Start with /signal!"

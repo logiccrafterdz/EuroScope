@@ -40,19 +40,19 @@ class UserSettings:
     def __init__(self, storage: Storage):
         self.storage = storage
 
-    def get_prefs(self, chat_id: int) -> dict:
+    async def get_prefs(self, chat_id: int) -> dict:
         """Get preferences, creating defaults if needed."""
-        prefs = self.storage.get_user_preferences(chat_id)
+        prefs = await self.storage.get_user_preferences(chat_id)
         if not prefs:
-            self.storage.save_user_preferences(chat_id)
-            prefs = self.storage.get_user_preferences(chat_id)
+            await self.storage.save_user_preferences(chat_id)
+            prefs = await self.storage.get_user_preferences(chat_id)
         return prefs or {}
 
     # ─── Keyboard Builders ───────────────────────────────────
 
-    def build_settings_keyboard(self, chat_id: int) -> tuple[str, InlineKeyboardMarkup]:
+    async def build_settings_keyboard(self, chat_id: int) -> tuple[str, InlineKeyboardMarkup]:
         """Build the main settings message and keyboard."""
-        prefs = self.get_prefs(chat_id)
+        prefs = await self.get_prefs(chat_id)
 
         sig_icon = "✅" if prefs.get("alert_on_signals") else "❌"
         news_icon = "✅" if prefs.get("alert_on_news") else "❌"
@@ -145,80 +145,80 @@ class UserSettings:
             return False
 
         chat_id = query.message.chat_id
-        prefs = self.get_prefs(chat_id)
+        prefs = await self.get_prefs(chat_id)
 
         if data == TOGGLE_SIGNAL_ALERTS:
             new_val = 0 if prefs.get("alert_on_signals") else 1
-            self.storage.save_user_preferences(chat_id, alert_on_signals=new_val)
+            await self.storage.save_user_preferences(chat_id, alert_on_signals=new_val)
 
         elif data == TOGGLE_NEWS_ALERTS:
             new_val = 0 if prefs.get("alert_on_news") else 1
-            self.storage.save_user_preferences(chat_id, alert_on_news=new_val)
+            await self.storage.save_user_preferences(chat_id, alert_on_news=new_val)
 
         elif data == TOGGLE_DAILY_REPORT:
             new_val = 0 if prefs.get("daily_report_enabled") else 1
-            self.storage.save_user_preferences(chat_id, daily_report_enabled=new_val)
+            await self.storage.save_user_preferences(chat_id, daily_report_enabled=new_val)
 
         elif data == TOGGLE_COMPACT_MODE:
             new_val = 0 if prefs.get("compact_mode") else 1
-            self.storage.save_user_preferences(chat_id, compact_mode=new_val)
+            await self.storage.save_user_preferences(chat_id, compact_mode=new_val)
 
         elif data == TOGGLE_BACKTEST_SLIPPAGE:
             new_val = 0 if prefs.get("backtest_slippage_enabled") else 1
-            self.storage.save_user_preferences(chat_id, backtest_slippage_enabled=new_val)
+            await self.storage.save_user_preferences(chat_id, backtest_slippage_enabled=new_val)
 
         elif data == f"{SET_TIMEFRAME}cycle":
             current = prefs.get("preferred_timeframe", "H1")
             idx = TIMEFRAMES.index(current) if current in TIMEFRAMES else 0
             new_tf = TIMEFRAMES[(idx + 1) % len(TIMEFRAMES)]
-            self.storage.save_user_preferences(chat_id, preferred_timeframe=new_tf)
+            await self.storage.save_user_preferences(chat_id, preferred_timeframe=new_tf)
 
         elif data == f"{SET_RISK}cycle":
             current = prefs.get("risk_tolerance", "medium")
             idx = RISK_LEVELS.index(current) if current in RISK_LEVELS else 1
             new_risk = RISK_LEVELS[(idx + 1) % len(RISK_LEVELS)]
-            self.storage.save_user_preferences(chat_id, risk_tolerance=new_risk)
+            await self.storage.save_user_preferences(chat_id, risk_tolerance=new_risk)
 
         elif data == f"{SET_REPORT_HOUR}cycle":
             current = prefs.get("daily_report_hour", 8)
             new_hour = (current + 2) % 24  # Cycle by 2-hour increments
-            self.storage.save_user_preferences(chat_id, daily_report_hour=new_hour)
+            await self.storage.save_user_preferences(chat_id, daily_report_hour=new_hour)
 
         elif data == f"{SET_MIN_CONFIDENCE}cycle":
             current = prefs.get("alert_min_confidence", 60.0)
             confs = [60.0, 70.0, 80.0, 90.0]
             idx = confs.index(current) if current in confs else 0
             new_conf = confs[(idx + 1) % len(confs)]
-            self.storage.save_user_preferences(chat_id, alert_min_confidence=new_conf)
+            await self.storage.save_user_preferences(chat_id, alert_min_confidence=new_conf)
 
         elif data == MANAGE_ALERTS:
-            text, keyboard = self.build_alerts_keyboard(chat_id)
+            text, keyboard = await self.build_alerts_keyboard(chat_id)
             await query.edit_message_text(text, reply_markup=keyboard, parse_mode="Markdown")
             return True
 
         elif data.startswith(DELETE_ALERT):
             alert_id = int(data.split(":")[-1])
-            self.storage.delete_alert(alert_id)
+            await self.storage.delete_alert(alert_id)
             await query.answer("🗑️ Alert Deleted")
-            text, keyboard = self.build_alerts_keyboard(chat_id)
+            text, keyboard = await self.build_alerts_keyboard(chat_id)
             await query.edit_message_text(text, reply_markup=keyboard, parse_mode="Markdown")
             return True
 
         elif data == SETTINGS_BACK:
             # Refresh settings display from sub-menu
-            text, keyboard = self.build_settings_keyboard(chat_id)
+            text, keyboard = await self.build_settings_keyboard(chat_id)
             await query.edit_message_text(text, reply_markup=keyboard, parse_mode="Markdown")
             return True
 
         # Refresh settings display
-        text, keyboard = self.build_settings_keyboard(chat_id)
+        text, keyboard = await self.build_settings_keyboard(chat_id)
         await query.answer("✅ Updated")
         await query.edit_message_text(text, reply_markup=keyboard, parse_mode="Markdown")
         return True
 
-    def build_alerts_keyboard(self, chat_id: int) -> tuple[str, InlineKeyboardMarkup]:
+    async def build_alerts_keyboard(self, chat_id: int) -> tuple[str, InlineKeyboardMarkup]:
         """Build the alerts management keyboard."""
-        alerts = self.storage.get_user_alerts(chat_id)
+        alerts = await self.storage.get_user_alerts(chat_id)
         
         if not alerts:
             text = "🔔 *Price Alerts*\n\nYou have no active price alerts."

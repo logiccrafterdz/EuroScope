@@ -43,7 +43,7 @@ class NotificationManager:
 
     # ─── Scheduled Reports ───────────────────────────────────
 
-    def schedule_daily_reports(self, job_queue, chat_ids: list[int]):
+    async def schedule_daily_reports(self, job_queue, chat_ids: list[int]):
         """
         Schedule daily reports for each user based on their preferences.
 
@@ -52,10 +52,10 @@ class NotificationManager:
             chat_ids: List of authorized user chat IDs
         """
         for chat_id in chat_ids:
-            prefs = self.storage.get_user_preferences(chat_id)
+            prefs = await self.storage.get_user_preferences(chat_id)
             if not prefs:
-                self.storage.save_user_preferences(chat_id)
-                prefs = self.storage.get_user_preferences(chat_id)
+                await self.storage.save_user_preferences(chat_id)
+                prefs = await self.storage.get_user_preferences(chat_id)
 
             if not prefs or not prefs.get("daily_report_enabled"):
                 continue
@@ -104,7 +104,7 @@ class NotificationManager:
         )
 
         try:
-            thread_id = self.storage.get_user_thread(chat_id, "reports")
+            thread_id = await self.storage.get_user_thread(chat_id, "reports")
             await self._bot.send_message(
                 chat_id=chat_id,
                 text=msg,
@@ -124,7 +124,7 @@ class NotificationManager:
         if not self._bot:
             return
 
-        prefs = self.storage.get_user_preferences(chat_id)
+        prefs = await self.storage.get_user_preferences(chat_id)
         if prefs and not prefs.get("alert_on_signals"):
             return
 
@@ -151,7 +151,7 @@ class NotificationManager:
             # Let's use radar for signals too for now, or the main chat if preferred.
             # Approved plan says: "Radar for sweeps and sensitivealerts". 
             # Let's route signals to Radar.
-            thread_id = self.storage.get_user_thread(chat_id, "radar")
+            thread_id = await self.storage.get_user_thread(chat_id, "radar")
             await self._bot.send_message(
                 chat_id=chat_id, text=msg, parse_mode="Markdown",
                 message_thread_id=thread_id
@@ -170,7 +170,7 @@ class NotificationManager:
         if not self._bot:
             return
 
-        prefs = self.storage.get_user_preferences(chat_id)
+        prefs = await self.storage.get_user_preferences(chat_id)
         if prefs and not prefs.get("alert_on_signals"):
             return
 
@@ -189,7 +189,7 @@ class NotificationManager:
         )
 
         try:
-            thread_id = self.storage.get_user_thread(chat_id, "radar")
+            thread_id = await self.storage.get_user_thread(chat_id, "radar")
             await self._bot.send_message(
                 chat_id=chat_id, text=msg, parse_mode="Markdown",
                 message_thread_id=thread_id
@@ -204,7 +204,7 @@ class NotificationManager:
         if not self._bot:
             return
 
-        alerts = self.storage.get_active_alerts()
+        alerts = await self.storage.get_active_alerts()
         for alert in alerts:
             triggered = False
             condition = alert.get("condition", "")
@@ -216,11 +216,11 @@ class NotificationManager:
                 triggered = True
 
             if triggered:
-                self.storage.trigger_alert(alert["id"])
+                await self.storage.trigger_alert(alert["id"])
                 chat_id = alert.get("chat_id")
                 if chat_id:
                     try:
-                        thread_id = self.storage.get_user_thread(chat_id, "radar")
+                        thread_id = await self.storage.get_user_thread(chat_id, "radar")
                         await self._bot.send_message(
                             chat_id=chat_id,
                             text=(
@@ -246,7 +246,7 @@ class NotificationManager:
         if not self._bot:
             return
 
-        prefs = self.storage.get_user_preferences(chat_id)
+        prefs = await self.storage.get_user_preferences(chat_id)
         if prefs and not prefs.get("alert_on_news"):
             return
 
@@ -270,7 +270,7 @@ class NotificationManager:
                 msg += f"\n🔗 [Read more]({article['url']})"
 
             try:
-                thread_id = self.storage.get_user_thread(chat_id, "news")
+                thread_id = await self.storage.get_user_thread(chat_id, "news")
                 await self._bot.send_message(
                     chat_id=chat_id, text=msg,
                     parse_mode="Markdown",
@@ -296,7 +296,7 @@ class NotificationManager:
         # Fallback to all users who have preferences set if no chat_ids provided
         if not chat_ids:
             # We don't have a direct 'get_all_chat_ids' but we can infer from user_preferences table
-            rows = self.storage._query_rows("SELECT chat_id FROM user_preferences")
+            rows = await self.storage._query_rows("SELECT chat_id FROM user_preferences")
             chat_ids = [row["chat_id"] for row in rows]
 
         if not chat_ids:
@@ -319,7 +319,7 @@ class NotificationManager:
         for chat_id in chat_ids:
             try:
                 # Route to 'radar' topic by default for smart alerts
-                thread_id = self.storage.get_user_thread(chat_id, "radar")
+                thread_id = await self.storage.get_user_thread(chat_id, "radar")
                 await self._bot.send_message(
                     chat_id=chat_id,
                     text=msg,

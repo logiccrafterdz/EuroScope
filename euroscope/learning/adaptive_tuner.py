@@ -36,13 +36,13 @@ class AdaptiveTuner:
     def __init__(self, storage: Storage = None):
         self.storage = storage or Storage()
 
-    def analyze(self, strategy: str = None) -> dict:
+    async def analyze(self, strategy: str = None) -> dict:
         """
         Analyze trade performance and generate tuning recommendations.
 
         Returns dict with current stats and adjustment suggestions.
         """
-        stats = self.storage.get_trade_journal_stats(strategy)
+        stats = await self.storage.get_trade_journal_stats(strategy)
 
         if stats["total"] < 5:
             return {
@@ -55,7 +55,7 @@ class AdaptiveTuner:
         recommendations = []
         
         # 1. Qualitative Learning Analysis (Phase 3B)
-        insights = self.storage.get_recent_learning_insights(limit=10)
+        insights = await self.storage.get_recent_learning_insights(limit=10)
         factors_count = {}
         for insight in insights:
             for factor in insight.get("factors", []):
@@ -157,9 +157,9 @@ class AdaptiveTuner:
             new_value = max(bounds[0], min(bounds[1], new_value))
         return round(new_value, 2)
 
-    def format_report(self, strategy: str = None) -> str:
+    async def format_report(self, strategy: str = None) -> str:
         """Generate a human-readable tuning report."""
-        result = self.analyze(strategy)
+        result = await self.analyze(strategy)
 
         if not result["ready"]:
             return f"⚙️ *Adaptive Tuner*\n\n{result['message']}"

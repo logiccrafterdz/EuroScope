@@ -124,7 +124,7 @@ class WorkspaceManager:
             current += new_entry
         self._write("MEMORY.md", current)
 
-    def refresh_memory(self, storage=None):
+    async def refresh_memory(self, storage=None):
         """
         Refresh MEMORY.md with latest learning insights.
 
@@ -146,13 +146,13 @@ class WorkspaceManager:
         ]
 
         # 1. Prediction accuracy
-        learning = memory.get_learning_context()
+        learning = await memory.get_learning_context()
         if learning and "No sufficient" not in learning:
             lines.append("## Prediction Accuracy\n")
             lines.append(learning + "\n")
 
         # 2. Pattern success rates
-        rates = tracker.get_success_rates()
+        rates = await tracker.get_success_rates()
         if rates:
             lines.append("## Pattern Performance\n")
             for key, data in sorted(rates.items(),
@@ -166,7 +166,7 @@ class WorkspaceManager:
             lines.append("")
 
         # 3. Tuning recommendations
-        result = tuner.analyze()
+        result = await tuner.analyze()
         if result["ready"] and result["recommendations"]:
             lines.append("## Tuning Suggestions\n")
             for rec in result["recommendations"]:
@@ -182,7 +182,7 @@ class WorkspaceManager:
         self._write("MEMORY.md", "\n".join(lines))
         logger.info("MEMORY.md refreshed with learning insights")
 
-    def refresh_identity(self, storage=None):
+    async def refresh_identity(self, storage=None):
         from ..learning.pattern_tracker import PatternTracker
         from ..brain.memory import Memory
         from ..data.storage import Storage as _Storage
@@ -190,16 +190,16 @@ class WorkspaceManager:
         storage = storage or _Storage()
         memory = Memory(storage)
         tracker = PatternTracker(storage)
-        stats = storage.get_trade_journal_stats()
+        stats = await storage.get_trade_journal_stats()
 
-        accuracy = storage.get_accuracy_stats(30)
+        accuracy = await storage.get_accuracy_stats(30)
         accuracy_line = (
             f"Prediction accuracy (30d): {accuracy.get('accuracy', 0)}% "
             f"({accuracy.get('total', 0)} predictions)"
         )
 
         top_patterns = []
-        rates = tracker.get_success_rates()
+        rates = await tracker.get_success_rates()
         if rates:
             sorted_rates = sorted(rates.values(), key=lambda x: x["success_rate"], reverse=True)
             top_patterns = sorted_rates[:3]
