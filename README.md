@@ -18,6 +18,49 @@ EuroScope is a skills-based multi-agent system that provides institutional-grade
 | **Telegram V3** | **Fully English Interface**, Inline keyboards, Smart Alerts, Cron Scheduler, Heartbeat Service |
 | **Validation** | Behavioral Testing Suite (5 Scenarios), Historical Scenario Replay, Component Analysis |
 
+## Updates from the Last 7 Days
+
+### New Additions
+- Full Mini App UI upgrade with settings overlay, neural analysis trigger, and real-time patterns/levels display.
+- Expanded aiohttp backend with settings, patterns, and levels endpoints.
+- Migrated Telegram experience to a Mini App launcher and removed legacy interactive commands.
+- Added structured logging output (JSON + Console) and improved log formatting.
+- Added a skills-based Orchestrator for dynamic agent coordination.
+- Integrated Market Structure (BOS/CHoCH) and Volume Profile into the strategy engine.
+- Implemented Pending Orders for near-zero LLM execution latency.
+- Added a dynamic spread simulator based on rollover and volatility.
+- Launched Phase 7: Walk-Forward Behavioral Simulator with virtual trader profiles.
+- Launched Phase 6: advanced risk management (Trailing Stops + Drawdown).
+- Added Live Trades dashboard in the Mini App with /api/trades and /history endpoints.
+- Added Signal Scanner in the Mini App with backend integration.
+- Activated self-learning loop and softened behavioral guardrails.
+- Routed advanced orchestrator skills into background loops and upgraded chat pipeline.
+- Added COT data provider and cot_positioning skill.
+- Added Oanda market data provider.
+- Added kill switch via POST /api/emergency and Mini App button.
+- Added PDH/PDL and Weekly High/Low to liquidity_awareness.
+- Added scenario-based output parsing in voice_briefing and Mini App.
+- Added scripts/verify_features.py to validate feature readiness.
+
+### Improvements and Fixes
+- Synced root index.html with Mini App version for Vercel deployment.
+- Fixed Mini App settings flow and wired UI actions to correct analysis APIs.
+- Finalized persistence and professional feedback loops in the Mini App.
+- Populated market_data with live price before risk calculations in /scan_signals.
+- Calculated entry/sl/tp via risk_management before executing paper trades in /scan_signals.
+- Removed lingering interactive inline handlers from build_app.
+- Fixed asyncio.iscoroutinefunction and pandas 'H' deprecation warnings.
+- Rewrote test_bot_callbacks to match V3 skills-based architecture.
+- Updated test_strategy to validate emergency_mode fallback instead of stale timeout.
+- Suppressed ddgs primp warnings and reduced deviation monitor spam.
+- Fixed cron scheduling by removing invalid await and ensuring concurrency.
+- Replaced vector_memory add_document calls with store_analysis.
+- Unified DI naming from price_provider to provider.
+- Improved stability with Cron JobQueue, task references, Telegram timeouts, and proactive scheduling.
+- Injected live price and recent H1 candles into proactive prompts.
+- Added save_json/load_json helpers and reused Storage in cron tasks.
+- Removed resume.txt from the repository and updated .gitignore.
+
 ## Bot Commands
 
 | Command | Description |
@@ -152,7 +195,7 @@ Each skill lives in its own folder under `skills/` with:
 The `SkillsRegistry` auto-discovers skills at startup. The `Orchestrator` routes requests and assembles multi-skill analysis pipelines.
 
 ## Testing
-**406+ tests** covering all modules:
+**558+ tests** covering all modules:
 ```bash
 python -m pytest tests/
 python -m pytest tests/
