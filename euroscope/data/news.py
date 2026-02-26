@@ -2,7 +2,7 @@
 EUR/USD News Engine
 
 Fetches and filters news relevant to EUR/USD using DuckDuckGo Search.
-Includes TextBlob-based sentiment analysis and DB persistence.
+Includes FinBERT-based sentiment analysis and DB persistence.
 No API key required.
 """
 

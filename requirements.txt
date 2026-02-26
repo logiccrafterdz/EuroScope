@@ -23,7 +23,8 @@ aiosqlite>=0.20.0
 
 # News & Sentiment
 ddgs>=8.1.1
-textblob>=0.18.0
+transformers>=4.40.0
+torch>=2.2.0
 
 # System Monitoring
 psutil>=5.9.0

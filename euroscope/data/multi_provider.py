@@ -28,10 +28,17 @@ class MultiSourceProvider:
 
     def __init__(self, alphavantage_key: str = "", tiingo_key: str = "", oanda_key: str = "", oanda_account: str = "", oanda_practice: bool = True):
         self.oanda = OandaProvider(oanda_key, oanda_account, oanda_practice) if oanda_key else None
-        self.primary = PriceProvider()
         self.tiingo = TiingoProvider(tiingo_key) if tiingo_key else None
+        self.legacy = PriceProvider() # yfinance
         self.fallback = AlphaVantageProvider(alphavantage_key) if alphavantage_key else None
-        self._last_source = "oanda" if oanda_key else "yfinance"
+        
+        # Determine initial preferred source
+        if self.oanda:
+            self._last_source = "oanda"
+        elif self.tiingo:
+            self._last_source = "tiingo"
+        else:
+            self._last_source = "yfinance"
 
     @property
     def last_source(self) -> str:
@@ -49,22 +56,23 @@ class MultiSourceProvider:
                 return result
             logger.warning(f"OANDA price failed: {result.get('error')}, trying yfinance...")
 
-        # Try yfinance
-        result = await self.primary.get_price()
-        if "error" not in result:
-            self._last_source = "yfinance"
-            result["source"] = "yfinance"
-            return result
-
-        logger.warning(f"yfinance price failed: {result.get('error')}, trying Tiingo...")
-
-        # Try Tiingo
+        # Try Tiingo (Institutional Grade REST API - No 15m delay)
         if self.tiingo:
             result = await self.tiingo.get_price()
             if "error" not in result:
                 self._last_source = "tiingo"
+                result["source"] = "tiingo"
                 return result
-            logger.warning(f"Tiingo price failed: {result.get('error')}, trying Alpha Vantage...")
+            logger.warning(f"Tiingo price failed: {result.get('error')}, trying yfinance...")
+
+        # Try yfinance (Legacy/Delayed 15m)
+        result = await self.legacy.get_price()
+        if "error" not in result:
+            self._last_source = "yfinance"
+            result["source"] = "yfinance"
+            if "error" not in result:
+                result["warning"] = "Data delayed 15m (Yahoo Finance Fallback)"
+            return result
 
         # Try fallback (Alpha Vantage)
         if self.fallback:
@@ -89,16 +97,6 @@ class MultiSourceProvider:
                 logger.error(f"OANDA data failed validation for {timeframe}")
             logger.warning(f"OANDA candles failed for {timeframe}, trying yfinance...")
 
-        # Try yfinance
-        df = await self.primary.get_candles(timeframe, count)
-        if df is not None and not df.empty:
-            df = self._validate_data(df)
-            if df is not None:
-                self._last_source = "yfinance"
-                return df
-
-        logger.warning(f"yfinance candles failed for {timeframe}, trying Tiingo...")
-
         # Try Tiingo
         if self.tiingo:
             df = await self.tiingo.get_candles(timeframe, count)
@@ -108,8 +106,17 @@ class MultiSourceProvider:
                     self._last_source = "tiingo"
                     return df
                 logger.error(f"Tiingo data failed validation for {timeframe}")
+            logger.warning(f"Tiingo candles failed for {timeframe}, trying yfinance...")
 
-        logger.warning(f"Tiingo candles failed for {timeframe}, trying Alpha Vantage...")
+        # Try yfinance (Legacy/Delayed 15m)
+        df = await self.legacy.get_candles(timeframe, count)
+        if df is not None and not df.empty:
+            df = self._validate_data(df)
+            if df is not None:
+                self._last_source = "yfinance"
+                return df
+
+        logger.warning(f"yfinance/Tiingo candles failed for {timeframe}, trying Alpha Vantage...")
 
         # Try fallback
         if self.fallback:
@@ -204,6 +211,6 @@ class MultiSourceProvider:
         """Clear all caches."""
         if self.oanda:
             self.oanda.clear_cache()
-        self.primary.clear_cache()
+        self.legacy.clear_cache()
         if self.fallback:
             self.fallback.clear_cache()

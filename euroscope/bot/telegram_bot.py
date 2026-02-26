@@ -68,7 +68,13 @@ class EuroScopeBot:
         self.rate_limiter = RateLimiter(max_requests=config.rate_limit_requests, window_minutes=config.rate_limit_window_minutes)
         self.alerts.register_handler(AlertChannel.TELEGRAM, self._on_alert_triggered)
         from ..data.multi_provider import MultiSourceProvider
-        self.price_provider = MultiSourceProvider(alphavantage_key=config.data.alphavantage_key, tiingo_key=config.data.tiingo_key)
+        self.price_provider = MultiSourceProvider(
+            alphavantage_key=config.data.alphavantage_key,
+            tiingo_key=config.data.tiingo_key,
+            oanda_key=config.data.oanda_api_key,
+            oanda_account=config.data.oanda_account_id,
+            oanda_practice=config.data.oanda_practice
+        )
         self.macro_provider = FundamentalDataProvider(config.data.fred_api_key)
         self.news_engine = NewsEngine(config.data.brave_api_key, self.storage)
         self.calendar = EconomicCalendar()
