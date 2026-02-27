@@ -78,12 +78,14 @@ class TestNewsEngineSentiment:
         formatted = engine.format_news([])
         assert "No EUR/USD news" in formatted
 
-    def test_sentiment_summary_no_storage(self):
+    @pytest.mark.asyncio
+    async def test_sentiment_summary_no_storage(self):
         engine = NewsEngine(api_key="", storage=None)
-        result = engine.get_sentiment_summary()
+        result = await engine.get_sentiment_summary()
         assert "error" in result
 
-    def test_sentiment_summary_with_storage(self):
+    @pytest.mark.asyncio
+    async def test_sentiment_summary_with_storage(self):
         fd, path = tempfile.mkstemp(suffix=".db")
         os.close(fd)
         try:
@@ -91,11 +93,11 @@ class TestNewsEngineSentiment:
             engine = NewsEngine(api_key="", storage=storage)
 
             # Add some mock news
-            storage.save_news_event("Bullish news", "test", sentiment="bullish", sentiment_score=0.5)
-            storage.save_news_event("Bearish news", "test", sentiment="bearish", sentiment_score=-0.5)
-            storage.save_news_event("Neutral news", "test", sentiment="neutral", sentiment_score=0.0)
+            await storage.save_news_event("Bullish news", "test", sentiment="bullish", sentiment_score=0.5)
+            await storage.save_news_event("Bearish news", "test", sentiment="bearish", sentiment_score=-0.5)
+            await storage.save_news_event("Neutral news", "test", sentiment="neutral", sentiment_score=0.0)
 
-            summary = engine.get_sentiment_summary()
+            summary = await engine.get_sentiment_summary()
             assert summary["total"] == 3
             assert summary["bullish"] == 1
             assert summary["bearish"] == 1

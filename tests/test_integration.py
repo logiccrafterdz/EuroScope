@@ -253,7 +253,7 @@ class TestDataFlowPipeline:
         assert r3.data[0]["pnl_pips"] == 50.0
 
     @pytest.mark.asyncio
-    async def test_emergency_mode_blocks_trade_execution(self):
+    async def test_emergency_mode_blocks_trade_execution(self, tmp_path):
         from euroscope.skills.deviation_monitor import DeviationMonitorSkill
         from euroscope.skills.signal_executor import SignalExecutorSkill
 
@@ -271,7 +271,7 @@ class TestDataFlowPipeline:
         ctx = SkillContext()
         ctx.metadata["session_regime"] = "asian"
         bus = EventBus()
-        storage = Storage(":memory:")
+        storage = Storage(str(tmp_path / "test_int.db"))
         monitor = DeviationMonitorSkill(event_bus=bus, market_data_skill=BufferSkill(), storage=storage, global_context=ctx)
 
         await monitor._check_once()
@@ -288,7 +288,7 @@ class TestDataFlowPipeline:
         assert len(ctx.open_positions) == 0
 
     @pytest.mark.asyncio
-    async def test_regime_shift_subscribers_react_and_cooldown(self):
+    async def test_regime_shift_subscribers_react_and_cooldown(self, tmp_path):
         from euroscope.skills.deviation_monitor import DeviationMonitorSkill
         from euroscope.skills.signal_executor import SignalExecutorSkill
 
@@ -308,7 +308,7 @@ class TestDataFlowPipeline:
         bus = EventBus()
         alerts = SmartAlerts()
         executor = SignalExecutorSkill()
-        storage = Storage(":memory:")
+        storage = Storage(str(tmp_path / "test_int.db"))
         send_fn = AsyncMock()
 
         signal_sub = SignalExecutorSubscriber(executor)
@@ -341,11 +341,12 @@ class TestDataFlowPipeline:
         assert telegram_sub._last_triggered == last_telegram
         assert send_fn.await_count == 1
 
-    def test_trades_output_includes_causal_chain(self):
+    @pytest.mark.asyncio
+    async def test_trades_output_includes_causal_chain(self, tmp_path):
         from euroscope.learning.pattern_tracker import PatternTracker
         from euroscope.skills.trade_journal.skill import TradeJournalSkill
 
-        storage = Storage(":memory:")
+        storage = Storage(str(tmp_path / "test_int.db"))
         tracker = PatternTracker(storage=storage)
         chain = {
             "trigger": "macro_event",
@@ -353,19 +354,19 @@ class TestDataFlowPipeline:
             "indicator_response": "confirmed",
             "outcome": "profitable",
         }
-        tracker.record_detection("double_top", "H1", "SELL", 1.0850, causal_chain=chain)
+        await tracker.record_detection("double_top", "H1", "SELL", 1.0850, causal_chain=chain)
 
         ctx = SkillContext()
         ctx.metadata["causal_chain"] = chain
         skill = TradeJournalSkill()
         skill.storage = storage
 
-        result = skill.execute(ctx, "log_trade",
+        result = await skill.execute(ctx, "log_trade",
                                direction="SELL", entry_price=1.0850,
                                strategy="pattern")
         assert result.success
 
-        journal = skill.execute(ctx, "get_journal", status="open")
+        journal = await skill.execute(ctx, "get_journal", status="open")
         assert journal.success
         formatted = journal.metadata.get("formatted", "")
         assert "Causal:" in formatted

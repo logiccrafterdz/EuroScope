@@ -86,8 +86,9 @@ class TestPatternDetector:
 
 
 class TestPatternTrackerCausal:
-    def test_match_causal_pattern_high_confidence(self):
-        storage = Storage(":memory:")
+    @pytest.mark.asyncio
+    async def test_match_causal_pattern_high_confidence(self, tmp_path):
+        storage = Storage(str(tmp_path / "test.db"))
         tracker = PatternTracker(storage=storage)
         chain = {
             "trigger": "macro_event",
@@ -95,10 +96,10 @@ class TestPatternTrackerCausal:
             "indicator_response": "confirmed",
             "outcome": "profitable",
         }
-        pid = tracker.record_detection(
+        pid = await tracker.record_detection(
             "head_and_shoulders", "H1", "SELL", 1.085, causal_chain=chain
         )
-        tracker.resolve(pid, "SUCCESS", 1.08, True)
+        await tracker.resolve(pid, "SUCCESS", 1.08, True)
         context = {
             "trigger": "macro_event",
             "price_reaction": "strong_break",
@@ -106,11 +107,12 @@ class TestPatternTrackerCausal:
             "pattern_name": "head_and_shoulders",
             "timeframe": "H1",
         }
-        multiplier = tracker.match_causal_pattern(context)
+        multiplier = await tracker.match_causal_pattern(context)
         assert multiplier >= 1.1
 
-    def test_match_causal_pattern_macro_mismatch(self):
-        storage = Storage(":memory:")
+    @pytest.mark.asyncio
+    async def test_match_causal_pattern_macro_mismatch(self, tmp_path):
+        storage = Storage(str(tmp_path / "test.db"))
         tracker = PatternTracker(storage=storage)
         chain = {
             "trigger": "quiet_market",
@@ -118,10 +120,10 @@ class TestPatternTrackerCausal:
             "indicator_response": "neutral",
             "outcome": "profitable",
         }
-        pid = tracker.record_detection(
+        pid = await tracker.record_detection(
             "head_and_shoulders", "H1", "SELL", 1.085, causal_chain=chain
         )
-        tracker.resolve(pid, "SUCCESS", 1.08, True)
+        await tracker.resolve(pid, "SUCCESS", 1.08, True)
         context = {
             "trigger": "macro_event",
             "price_reaction": "strong_break",
@@ -129,14 +131,15 @@ class TestPatternTrackerCausal:
             "pattern_name": "head_and_shoulders",
             "timeframe": "H1",
         }
-        multiplier = tracker.match_causal_pattern(context)
+        multiplier = await tracker.match_causal_pattern(context)
         assert multiplier <= 0.5
 
-    def test_match_causal_pattern_without_causal_chain(self):
-        storage = Storage(":memory:")
+    @pytest.mark.asyncio
+    async def test_match_causal_pattern_without_causal_chain(self, tmp_path):
+        storage = Storage(str(tmp_path / "test.db"))
         tracker = PatternTracker(storage=storage)
-        pid = tracker.record_detection("double_top", "H1", "SELL", 1.085)
-        tracker.resolve(pid, "SUCCESS", 1.08, True)
+        pid = await tracker.record_detection("double_top", "H1", "SELL", 1.085)
+        await tracker.resolve(pid, "SUCCESS", 1.08, True)
         context = {
             "trigger": "macro_event",
             "price_reaction": "strong_break",
@@ -144,7 +147,7 @@ class TestPatternTrackerCausal:
             "pattern_name": "double_top",
             "timeframe": "H1",
         }
-        multiplier = tracker.match_causal_pattern(context)
+        multiplier = await tracker.match_causal_pattern(context)
         assert multiplier >= 1.0
 
 

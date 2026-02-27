@@ -197,7 +197,7 @@ class NewsEngine:
         unique.sort(key=lambda x: x.get("relevance", 0), reverse=True)
         return unique[:10]
 
-    def get_sentiment_summary(self) -> dict:
+    async def get_sentiment_summary(self) -> dict:
         """
         Get aggregate sentiment from recently stored news.
         Returns sentiment distribution and overall bias.
@@ -205,7 +205,7 @@ class NewsEngine:
         if not self.storage:
             return {"error": "No storage configured"}
 
-        recent = self.storage.get_recent_news(limit=20)
+        recent = await self.storage.get_recent_news(limit=20)
         if not recent:
             return {"total": 0, "overall": "neutral", "message": "No recent news"}
 

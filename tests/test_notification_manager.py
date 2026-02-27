@@ -39,7 +39,7 @@ class TestSignalAlerts:
     @pytest.mark.asyncio
     async def test_notify_skipped_when_alerts_off(self, manager):
         # Save prefs with signals disabled
-        manager.storage.save_user_preferences(12345, alert_on_signals=0)
+        await manager.storage.save_user_preferences(12345, alert_on_signals=0)
 
         result = {
             "id": 1, "direction": "BUY", "entry_price": 1.0900,
@@ -65,19 +65,19 @@ class TestPriceAlerts:
 
     @pytest.mark.asyncio
     async def test_price_alert_triggered(self, manager):
-        manager.storage.add_alert("above", 1.1000, chat_id=12345)
+        await manager.storage.add_alert("above", 1.1000, chat_id=12345)
         await manager.check_price_alerts(1.1010)
         manager._bot.send_message.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_price_alert_not_triggered(self, manager):
-        manager.storage.add_alert("above", 1.1000, chat_id=12345)
+        await manager.storage.add_alert("above", 1.1000, chat_id=12345)
         await manager.check_price_alerts(1.0990)
         manager._bot.send_message.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_below_alert_triggered(self, manager):
-        manager.storage.add_alert("below", 1.0900, chat_id=12345)
+        await manager.storage.add_alert("below", 1.0900, chat_id=12345)
         await manager.check_price_alerts(1.0890)
         manager._bot.send_message.assert_called_once()
 
@@ -104,7 +104,7 @@ class TestNewsAlerts:
 
     @pytest.mark.asyncio
     async def test_news_skipped_when_disabled(self, manager):
-        manager.storage.save_user_preferences(12345, alert_on_news=0)
+        await manager.storage.save_user_preferences(12345, alert_on_news=0)
         articles = [
             {"title": "Big News", "sentiment": "bullish",
              "sentiment_score": 0.9},

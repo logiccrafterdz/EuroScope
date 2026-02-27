@@ -5,9 +5,8 @@ from euroscope.skills.trade_journal.skill import TradeJournalSkill
 from euroscope.skills.base import SkillContext
 
 @pytest.fixture
-def storage():
-    # Use memory for fast testing
-    return Storage(":memory:")
+def storage(tmp_path):
+    return Storage(str(tmp_path / "test.db"))
 
 @pytest.fixture
 def skill(storage):
@@ -25,7 +24,7 @@ async def test_learning_loop_end_to_end(skill, storage):
         "data_quality": "minimal"
     }
     
-    log_result = skill.execute(
+    log_result = await skill.execute(
         context, 
         "log_trade", 
         direction="BUY", 
@@ -37,7 +36,7 @@ async def test_learning_loop_end_to_end(skill, storage):
     trade_id = log_result.data["trade_id"]
     
     # 2. Close the trade with a loss
-    close_result = skill.execute(
+    close_result = await skill.execute(
         context,
         "close_trade",
         trade_id=trade_id,
@@ -48,7 +47,7 @@ async def test_learning_loop_end_to_end(skill, storage):
     assert close_result.success
     
     # 3. Verify that a learning insight was created
-    insights = storage.get_recent_learning_insights()
+    insights = await storage.get_recent_learning_insights()
     assert len(insights) >= 1
     insight = insights[0]
     assert insight["trade_id"] == str(trade_id)
@@ -59,7 +58,7 @@ async def test_learning_loop_end_to_end(skill, storage):
 async def test_adaptive_tuner_with_insights(skill, storage):
     # 1. Inject some failures into the database
     for i in range(3):
-        storage.save_learning_insight(
+        await storage.save_learning_insight(
             trade_id=f"T{i}",
             accuracy=0.0,
             factors=["regime_misidentification"],
@@ -71,19 +70,13 @@ async def test_adaptive_tuner_with_insights(skill, storage):
     tuner = AdaptiveTuner(storage=storage)
     
     # We need at least 5 trades for the tuner to be 'ready'
-    # Let's mock the trade journal stats
-    storage._conn.execute("""
-        INSERT INTO trade_journal (timestamp, direction, entry_price, status, is_win, pnl_pips)
-        VALUES ('2024-01-01', 'BUY', 1.0, 'closed', 0, -10.0)
-    """)
-    for i in range(5):
-        storage._conn.execute(f"""
-            INSERT INTO trade_journal (timestamp, direction, entry_price, status, is_win, pnl_pips)
-            VALUES ('2024-01-01', 'BUY', 1.0, 'closed', 0, -10.0)
-        """)
-    storage._conn.commit()
+    for i in range(6):
+        tid = await storage.save_trade_journal(
+            direction="BUY", entry_price=1.0, strategy="test"
+        )
+        await storage.close_trade_journal(tid, 1.0, -10.0, False)
 
-    report = tuner.analyze()
+    report = await tuner.analyze()
     assert report["ready"] is True
     
     # Check if qualitative recommendation is present
