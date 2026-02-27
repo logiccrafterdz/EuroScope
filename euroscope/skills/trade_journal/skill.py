@@ -24,18 +24,18 @@ class TradeJournalSkill(BaseSkill):
         super().__init__()
         self.storage = Storage()
 
-    def execute(self, context: SkillContext, action: str, **params) -> SkillResult:
+    async def execute(self, context: SkillContext, action: str, **params) -> SkillResult:
         if action == "log_trade":
-            return self._log_trade(context, **params)
+            return await self._log_trade(context, **params)
         elif action == "close_trade":
-            return self._close_trade(**params)
+            return await self._close_trade(**params)
         elif action == "get_journal":
-            return self._get_journal(**params)
+            return await self._get_journal(**params)
         elif action == "get_stats":
-            return self._get_stats(**params)
+            return await self._get_stats(**params)
         return SkillResult(success=False, error=f"Unknown action: {action}")
 
-    def _log_trade(self, context: SkillContext, **params) -> SkillResult:
+    async def _log_trade(self, context: SkillContext, **params) -> SkillResult:
         """Log a new trade with full context snapshot."""
         try:
             # Enrich from context if available
@@ -43,7 +43,7 @@ class TradeJournalSkill(BaseSkill):
             patterns = params.get("patterns") or context.analysis.get("patterns", [])
             causal_chain = params.get("causal_chain") or context.metadata.get("causal_chain")
 
-            trade_id = self.storage.save_trade_journal(
+            trade_id = await self.storage.save_trade_journal(
                 direction=params.get("direction", "BUY"),
                 entry_price=params.get("entry_price", 0.0),
                 stop_loss=params.get("stop_loss", 0.0),
@@ -65,7 +65,7 @@ class TradeJournalSkill(BaseSkill):
         except Exception as e:
             return SkillResult(success=False, error=str(e))
 
-    def _close_trade(self, **params) -> SkillResult:
+    async def _close_trade(self, **params) -> SkillResult:
         """Close a trade with outcome and extract learning insights."""
         try:
             trade_id = params["trade_id"]
@@ -74,7 +74,7 @@ class TradeJournalSkill(BaseSkill):
             is_win = params.get("is_win", pnl_pips > 0)
 
             # Phase 3B: Continuous Learning Loop
-            trade_data = self.storage.get_trade_with_causal(trade_id)
+            trade_data = await self.storage.get_trade_with_causal(trade_id)
             if trade_data:
                 from ...learning.post_trade_analyzer import PostTradeAnalyzer
                 analyzer = PostTradeAnalyzer()
@@ -104,7 +104,7 @@ class TradeJournalSkill(BaseSkill):
                 }
                 
                 insight = analyzer.analyze_trade_outcome(trade_data, market_context)
-                self.storage.save_learning_insight(
+                await self.storage.save_learning_insight(
                     trade_id=str(trade_id),
                     accuracy=insight.accuracy,
                     factors=insight.key_factors,
@@ -112,7 +112,7 @@ class TradeJournalSkill(BaseSkill):
                 )
                 logger.info(f"Learning insight saved for trade #{trade_id}: {insight.key_factors}")
 
-            self.storage.close_trade_journal(trade_id, exit_price, pnl_pips, is_win)
+            await self.storage.close_trade_journal(trade_id, exit_price, pnl_pips, is_win)
 
             icon = "✅" if is_win else "❌"
             return SkillResult(
@@ -124,10 +124,10 @@ class TradeJournalSkill(BaseSkill):
             logger.error(f"Error closing trade: {e}", exc_info=True)
             return SkillResult(success=False, error=str(e))
 
-    def _get_journal(self, **params) -> SkillResult:
+    async def _get_journal(self, **params) -> SkillResult:
         """Retrieve trade journal entries."""
         try:
-            trades = self.storage.get_trade_journal(
+            trades = await self.storage.get_trade_journal(
                 strategy=params.get("strategy"),
                 status=params.get("status"),
                 limit=params.get("limit", 50),
@@ -158,10 +158,10 @@ class TradeJournalSkill(BaseSkill):
         except Exception as e:
             return SkillResult(success=False, error=str(e))
 
-    def _get_stats(self, **params) -> SkillResult:
+    async def _get_stats(self, **params) -> SkillResult:
         """Get trade journal aggregate stats."""
         try:
-            stats = self.storage.get_trade_journal_stats(
+            stats = await self.storage.get_trade_journal_stats(
                 strategy=params.get("strategy")
             )
 
