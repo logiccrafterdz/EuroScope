@@ -69,23 +69,23 @@ async def test_confidence_filtering():
     assert "New Trading Signal" in bot.send_message.call_args[1]['text']
 
 @pytest.mark.asyncio
-async def test_alert_storage_ops():
-    # 1. Real storage (memory) for logic check
-    storage = Storage(":memory:")
+async def test_alert_storage_ops(tmp_path):
+    # 1. Real storage (file-based) for logic check
+    storage = Storage(str(tmp_path / "test.db"))
     chat_id = 999
     
     # 2. Add alerts
-    storage.add_alert("above", 1.1000, chat_id)
-    storage.add_alert("below", 1.0500, chat_id)
+    await storage.add_alert("above", 1.1000, chat_id)
+    await storage.add_alert("below", 1.0500, chat_id)
     
     # 3. Verify get_user_alerts
-    alerts = storage.get_user_alerts(chat_id)
+    alerts = await storage.get_user_alerts(chat_id)
     assert len(alerts) == 2
     assert alerts[0]['target_value'] == 1.1000
     
     # 4. Delete one
-    storage.delete_alert(alerts[0]['id'])
-    remaining = storage.get_user_alerts(chat_id)
+    await storage.delete_alert(alerts[0]['id'])
+    remaining = await storage.get_user_alerts(chat_id)
     assert len(remaining) == 1
     assert remaining[0]['target_value'] == 1.0500
 

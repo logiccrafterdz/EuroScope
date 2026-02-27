@@ -22,9 +22,10 @@ class TestForecastTracker:
         storage.save_json = MagicMock()
         return ForecastTracker(storage=storage)
 
-    def test_register_forecast(self):
+    @pytest.mark.asyncio
+    async def test_register_forecast(self):
         tracker = self._make_tracker()
-        fc = tracker.register_forecast(
+        fc = await tracker.register_forecast(
             skill="technical_analysis",
             direction="BUY",
             entry_price=1.0850,
@@ -37,23 +38,25 @@ class TestForecastTracker:
         assert fc.skill == "technical_analysis"
         assert not fc.resolved
 
-    def test_resolve_hit_target(self):
+    @pytest.mark.asyncio
+    async def test_resolve_hit_target(self):
         tracker = self._make_tracker()
-        tracker.register_forecast(
+        await tracker.register_forecast(
             skill="technical_analysis",
             direction="BUY",
             entry_price=1.0850,
             target_price=1.0900,
             confidence=70,
         )
-        resolved = tracker.resolve_all(current_price=1.0910)
+        resolved = await tracker.resolve_all(current_price=1.0910)
         assert len(resolved) == 1
         assert resolved[0].outcome == "hit_target"
         assert resolved[0].pnl_pips > 0
 
-    def test_resolve_hit_stop(self):
+    @pytest.mark.asyncio
+    async def test_resolve_hit_stop(self):
         tracker = self._make_tracker()
-        tracker.register_forecast(
+        await tracker.register_forecast(
             skill="technical_analysis",
             direction="BUY",
             entry_price=1.0850,
@@ -61,27 +64,29 @@ class TestForecastTracker:
             stop_price=1.0820,
             confidence=80,
         )
-        resolved = tracker.resolve_all(current_price=1.0810)
+        resolved = await tracker.resolve_all(current_price=1.0810)
         assert len(resolved) == 1
         assert resolved[0].outcome == "hit_stop"
         assert resolved[0].pnl_pips < 0
 
-    def test_resolve_sell_target(self):
+    @pytest.mark.asyncio
+    async def test_resolve_sell_target(self):
         tracker = self._make_tracker()
-        tracker.register_forecast(
+        await tracker.register_forecast(
             skill="correlation_monitor",
             direction="SELL",
             entry_price=1.0850,
             target_price=1.0800,
             confidence=65,
         )
-        resolved = tracker.resolve_all(current_price=1.0790)
+        resolved = await tracker.resolve_all(current_price=1.0790)
         assert len(resolved) == 1
         assert resolved[0].outcome == "hit_target"
 
-    def test_resolve_expired(self):
+    @pytest.mark.asyncio
+    async def test_resolve_expired(self):
         tracker = self._make_tracker()
-        fc = tracker.register_forecast(
+        fc = await tracker.register_forecast(
             skill="multi_timeframe_confluence",
             direction="BUY",
             entry_price=1.0850,
@@ -91,13 +96,14 @@ class TestForecastTracker:
         )
         # Force expiry
         fc.expires_at = datetime.now(UTC) - timedelta(hours=1)
-        resolved = tracker.resolve_all(current_price=1.0840)
+        resolved = await tracker.resolve_all(current_price=1.0840)
         assert len(resolved) == 1
         assert resolved[0].outcome == "expired"
 
-    def test_resolve_partial(self):
+    @pytest.mark.asyncio
+    async def test_resolve_partial(self):
         tracker = self._make_tracker()
-        fc = tracker.register_forecast(
+        fc = await tracker.register_forecast(
             skill="technical_analysis",
             direction="BUY",
             entry_price=1.0850,
@@ -107,28 +113,30 @@ class TestForecastTracker:
         )
         fc.expires_at = datetime.now(UTC) - timedelta(hours=1)
         # Price moved in right direction but didnt hit target
-        resolved = tracker.resolve_all(current_price=1.0870)
+        resolved = await tracker.resolve_all(current_price=1.0870)
         assert len(resolved) == 1
         assert resolved[0].outcome == "partial"
 
-    def test_weight_adjustment_on_success(self):
+    @pytest.mark.asyncio
+    async def test_weight_adjustment_on_success(self):
         tracker = self._make_tracker()
         initial_weight = tracker.get_weight("technical_analysis")
-        tracker.register_forecast(
+        await tracker.register_forecast(
             skill="technical_analysis",
             direction="BUY",
             entry_price=1.0850,
             target_price=1.0900,
             confidence=80,
         )
-        tracker.resolve_all(current_price=1.0910)
+        await tracker.resolve_all(current_price=1.0910)
         new_weight = tracker.get_weight("technical_analysis")
         assert new_weight > initial_weight
 
-    def test_weight_adjustment_on_failure(self):
+    @pytest.mark.asyncio
+    async def test_weight_adjustment_on_failure(self):
         tracker = self._make_tracker()
         initial_weight = tracker.get_weight("technical_analysis")
-        tracker.register_forecast(
+        await tracker.register_forecast(
             skill="technical_analysis",
             direction="BUY",
             entry_price=1.0850,
@@ -136,16 +144,17 @@ class TestForecastTracker:
             stop_price=1.0820,
             confidence=80,
         )
-        tracker.resolve_all(current_price=1.0810)
+        await tracker.resolve_all(current_price=1.0810)
         new_weight = tracker.get_weight("technical_analysis")
         assert new_weight < initial_weight
 
-    def test_weight_bounds(self):
+    @pytest.mark.asyncio
+    async def test_weight_bounds(self):
         from euroscope.learning.forecast_tracker import WEIGHT_MIN, WEIGHT_MAX
         tracker = self._make_tracker()
         # Extreme failures should not go below minimum
         for _ in range(50):
-            tracker.register_forecast(
+            await tracker.register_forecast(
                 skill="bad_skill",
                 direction="BUY",
                 entry_price=1.0850,
@@ -153,41 +162,45 @@ class TestForecastTracker:
                 stop_price=1.0820,
                 confidence=90,
             )
-            tracker.resolve_all(current_price=1.0810)
+            await tracker.resolve_all(current_price=1.0810)
         assert tracker.get_weight("bad_skill") >= WEIGHT_MIN
 
-    def test_get_open_forecasts(self):
+    @pytest.mark.asyncio
+    async def test_get_open_forecasts(self):
         tracker = self._make_tracker()
-        tracker.register_forecast(
+        await tracker.register_forecast(
             skill="a", direction="BUY", entry_price=1.08, target_price=1.09, confidence=50
         )
-        tracker.register_forecast(
+        await tracker.register_forecast(
             skill="b", direction="SELL", entry_price=1.08, target_price=1.07, confidence=50
         )
         assert len(tracker.get_open_forecasts()) == 2
 
-    def test_skill_accuracy(self):
+    @pytest.mark.asyncio
+    async def test_skill_accuracy(self):
         tracker = self._make_tracker()
-        tracker.register_forecast(
+        await tracker.register_forecast(
             skill="technical_analysis", direction="BUY",
             entry_price=1.0850, target_price=1.0900, confidence=70,
         )
-        tracker.resolve_all(current_price=1.0910)
+        await tracker.resolve_all(current_price=1.0910)
         stats = tracker.get_skill_accuracy("technical_analysis")
         assert stats["total"] == 1
         assert stats["accuracy"] == 100.0
 
-    def test_scoreboard(self):
+    @pytest.mark.asyncio
+    async def test_scoreboard(self):
         tracker = self._make_tracker()
-        tracker.register_forecast(
+        await tracker.register_forecast(
             skill="technical_analysis", direction="BUY",
             entry_price=1.0850, target_price=1.0900, confidence=70,
         )
-        tracker.resolve_all(current_price=1.0910)
+        await tracker.resolve_all(current_price=1.0910)
         board = tracker.get_scoreboard()
         assert "technical_analysis" in board
 
-    def test_format_scoreboard(self):
+    @pytest.mark.asyncio
+    async def test_format_scoreboard(self):
         tracker = self._make_tracker()
         text = tracker.format_scoreboard()
         assert "Scoreboard" in text

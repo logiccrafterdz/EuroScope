@@ -32,7 +32,7 @@ class SafetyGuardrail:
                     from datetime import datetime, timezone
                     storage = Storage()
                     today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-                    today_trades = storage.get_trade_journal_for_date(today_str, status="closed")
+                    today_trades = await storage.get_trade_journal_for_date(today_str, status="closed")
                     daily_pnl = sum(t.get("pnl_pips", 0.0) for t in today_trades)
                     
                     if daily_pnl <= -max_dd_pips:

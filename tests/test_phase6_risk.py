@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import patch
+from unittest.mock import patch, AsyncMock
 from euroscope.config import Config
 from euroscope.skills.base import SkillContext
 from euroscope.trading.safety_guardrails import SafetyGuardrail
@@ -11,7 +11,7 @@ async def test_daily_drawdown_guard():
     config.safety_max_daily_drawdown_pips = 50.0
     guard = SafetyGuardrail(config)
     
-    with patch("euroscope.data.storage.Storage.get_trade_journal_for_date") as mock_get:
+    with patch("euroscope.data.storage.Storage.get_trade_journal_for_date", new_callable=AsyncMock) as mock_get:
         # Mock storage to return a negative PnL for today that breaches the 50 pip limit
         mock_get.return_value = [{"pnl_pips": -20.0}, {"pnl_pips": -31.0}]
         
