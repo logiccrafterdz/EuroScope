@@ -16,7 +16,7 @@ chromadb>=0.5.0
 yfinance>=0.2.36
 pandas>=2.2.0
 numpy>=1.26.0
-numba>=0.59.0
+# numba removed — not used in codebase, saves ~500MB
 
 # Database
 aiosqlite>=0.20.0
@@ -24,8 +24,8 @@ aiosqlite>=0.20.0
 # News & Sentiment
 ddgs>=8.1.1
 transformers>=4.40.0
-torch>=2.2.0
-optimum[onnxruntime]>=1.19.0
+# torch removed — ONNX Runtime handles inference, saves ~2GB
+# optimum removed — only needed for model export, not runtime
 onnxruntime>=1.17.0
 
 # System Monitoring

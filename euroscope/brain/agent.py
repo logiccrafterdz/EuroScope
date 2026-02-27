@@ -28,18 +28,48 @@ class Agent:
 
     def __init__(self, config: LLMConfig, router: Optional[LLMRouter] = None,
                  vector_memory: Optional[VectorMemory] = None, orchestrator=None,
-                 forecaster=None):
+                 forecaster=None, cost_tracker=None):
         self.config = config
         self.router = router
         self.vector_memory = vector_memory
         self.orchestrator = orchestrator
         self.forecaster = forecaster
         self.skill_function_enum = SkillFunction  # Resolves Scope/NameError
-        self.conversation_history: list[dict] = []
+        # Per-user conversation histories: {chat_id: {"messages": [...], "last_active": float}}
+        self._histories: dict[int, dict] = {}
         self.max_history = 20
+        self.max_users = 100
+        self.history_ttl = 7200  # 2 hours in seconds
         self.tool_timeout = 10
+        # LLM cost tracking
+        from .cost_tracker import CostTracker
+        self.cost_tracker = cost_tracker or CostTracker()
 
-    async def chat(self, user_message: str, system_override: str = None) -> str:
+    def _get_history(self, chat_id: int) -> list[dict]:
+        """Get or create per-user conversation history with TTL cleanup."""
+        now = time.time()
+        # Evict expired histories
+        expired = [uid for uid, h in self._histories.items()
+                   if now - h["last_active"] > self.history_ttl]
+        for uid in expired:
+            del self._histories[uid]
+        # LRU eviction if at capacity
+        if chat_id not in self._histories and len(self._histories) >= self.max_users:
+            oldest = min(self._histories, key=lambda k: self._histories[k]["last_active"])
+            del self._histories[oldest]
+        # Get or create
+        if chat_id not in self._histories:
+            self._histories[chat_id] = {"messages": [], "last_active": now}
+        self._histories[chat_id]["last_active"] = now
+        return self._histories[chat_id]["messages"]
+
+    def _trim_history(self, chat_id: int):
+        """Trim per-user history to max_history messages."""
+        hist = self._histories.get(chat_id)
+        if hist and len(hist["messages"]) > self.max_history * 2:
+            hist["messages"] = hist["messages"][-self.max_history:]
+
+    async def chat(self, user_message: str, system_override: str = None, chat_id: int = 0) -> str:
         """Send a message to the LLM and get a response."""
         system = system_override or SYSTEM_PROMPT
 
@@ -52,20 +82,20 @@ class Agent:
         # Build messages
         messages = [{"role": "system", "content": system}]
 
-        # Add recent conversation history for context
-        messages.extend(self.conversation_history[-self.max_history:])
+        # Add recent conversation history for this user
+        user_history = self._get_history(chat_id)
+        messages.extend(user_history[-self.max_history:])
         messages.append({"role": "user", "content": user_message})
 
         # Use router if available
         if self.router:
             reply = await self.router.chat(messages)
             if not reply.startswith("❌"):
-                # Save to history
-                self.conversation_history.append({"role": "user", "content": user_message})
-                self.conversation_history.append({"role": "assistant", "content": reply})
-                # Trim history
-                if len(self.conversation_history) > self.max_history * 2:
-                    self.conversation_history = self.conversation_history[-self.max_history:]
+                # Save to per-user history
+                user_history = self._get_history(chat_id)
+                user_history.append({"role": "user", "content": user_message})
+                user_history.append({"role": "assistant", "content": reply})
+                self._trim_history(chat_id)
             return reply
 
         # Fallback to direct call if no router
@@ -92,13 +122,11 @@ class Agent:
 
             reply = data["choices"][0]["message"]["content"]
 
-            # Save to history
-            self.conversation_history.append({"role": "user", "content": user_message})
-            self.conversation_history.append({"role": "assistant", "content": reply})
-
-            # Trim history
-            if len(self.conversation_history) > self.max_history * 2:
-                self.conversation_history = self.conversation_history[-self.max_history:]
+            # Save to per-user history
+            user_history = self._get_history(chat_id)
+            user_history.append({"role": "user", "content": user_message})
+            user_history.append({"role": "assistant", "content": reply})
+            self._trim_history(chat_id)
 
             return reply
 
@@ -156,14 +184,14 @@ class Agent:
             logger.error(f"Stateless LLM call failed: {e}")
             return f"❌ AI unavailable: {str(e)[:100]}"
 
-    async def chat_with_tools(self, user_message: str, max_iterations: int = 3) -> str:
+    async def chat_with_tools(self, user_message: str, max_iterations: int = 3, chat_id: int = 0) -> str:
         """Simple tool-enabled chat with synthesis."""
         system = self._get_system_prompt_with_tools()
         if not self.router or not hasattr(self.router, "chat_with_functions"):
-            return await self.chat(user_message, system_override=system)
+            return await self.chat(user_message, system_override=system, chat_id=chat_id)
 
         messages = [{"role": "system", "content": system}]
-        messages.extend(self.conversation_history[-self.max_history:])
+        messages.extend(self._get_history(chat_id)[-self.max_history:])
         messages.append({"role": "user", "content": user_message})
 
         for _ in range(max_iterations):
@@ -1295,6 +1323,9 @@ class Agent:
         )
         return await self.chat(prompt)
 
-    def clear_history(self):
-        """Clear conversation history."""
-        self.conversation_history.clear()
+    def clear_history(self, chat_id: int = None):
+        """Clear conversation history for a user or all users."""
+        if chat_id is not None:
+            self._histories.pop(chat_id, None)
+        else:
+            self._histories.clear()
