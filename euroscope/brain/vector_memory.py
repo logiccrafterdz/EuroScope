@@ -1,12 +1,14 @@
 """
-Vector Memory — Long-term Context with ChromaDB
+Vector Memory — Lightweight Long-term Context with SQLite FTS5
 
-Stores past analyses, insights, and market events as vector embeddings
-for semantic search and context retrieval.
+Replaced ChromaDB with SQLite FTS5 (built-in full-text search).
+Stores past analyses, insights, and market events with keyword-based
+search. Zero external dependencies.
 """
 
 import logging
-import sys
+import sqlite3
+import os
 from datetime import datetime, timedelta, UTC
 from typing import Optional
 
@@ -15,54 +17,43 @@ logger = logging.getLogger("euroscope.brain.vector_memory")
 
 class VectorMemory:
     """
-    Long-term memory using ChromaDB for semantic search.
+    Long-term memory using SQLite FTS5 for full-text search.
 
-    Falls back gracefully if ChromaDB is not installed.
+    Previously used ChromaDB for vector embeddings; replaced with
+    lightweight FTS5 which is built into SQLite — zero dependencies,
+    works on all Python versions, and sufficient for keyword-based
+    context retrieval in a single-pair trading bot.
     """
 
     def __init__(self, persist_dir: str = "data/vector_db"):
         self.persist_dir = persist_dir
-        self._client = None
-        self._collections: dict = {}
+        self._conn: Optional[sqlite3.Connection] = None
         self._available = False
         self._init_db()
 
     def _init_db(self):
-        """Initialize ChromaDB client and collections."""
+        """Initialize SQLite FTS5 database."""
         try:
-            if sys.version_info >= (3, 14):
-                logger.warning("VectorMemory disabled: ChromaDB is not compatible with Python 3.14+.")
-                self._available = False
-                return
-            import chromadb
-            from chromadb.config import Settings
+            os.makedirs(self.persist_dir, exist_ok=True)
+            db_path = os.path.join(self.persist_dir, "memory.db")
+            self._conn = sqlite3.connect(db_path)
+            self._conn.row_factory = sqlite3.Row
 
-            self._client = chromadb.PersistentClient(
-                path=self.persist_dir,
-                settings=Settings(anonymized_telemetry=False),
-            )
+            # Create FTS5 virtual tables for full-text search
+            self._conn.executescript("""
+                CREATE VIRTUAL TABLE IF NOT EXISTS analyses
+                USING fts5(doc_id, text, stored_at, timestamp, metadata);
 
-            # Create collections
-            self._collections["analyses"] = self._client.get_or_create_collection(
-                name="analyses",
-                metadata={"description": "Past EUR/USD analyses"},
-            )
-            self._collections["insights"] = self._client.get_or_create_collection(
-                name="insights",
-                metadata={"description": "Learning insights and lessons"},
-            )
-            self._collections["market_events"] = self._client.get_or_create_collection(
-                name="market_events",
-                metadata={"description": "Significant market events"},
-            )
+                CREATE VIRTUAL TABLE IF NOT EXISTS insights
+                USING fts5(doc_id, text, stored_at, timestamp, tags);
 
+                CREATE VIRTUAL TABLE IF NOT EXISTS market_events
+                USING fts5(doc_id, text, stored_at, timestamp, impact, metadata);
+            """)
+            self._conn.commit()
             self._available = True
-            logger.info(f"VectorMemory initialized at {self.persist_dir}")
+            logger.info(f"VectorMemory (SQLite FTS5) initialized at {db_path}")
 
-        except ImportError:
-            logger.warning("chromadb not installed — vector memory disabled. "
-                           "Install with: pip install chromadb")
-            self._available = False
         except Exception as e:
             logger.error(f"VectorMemory init failed: {e}")
             self._available = False
@@ -73,7 +64,7 @@ class VectorMemory:
 
     def store_analysis(self, text: str, metadata: dict = None) -> Optional[str]:
         """
-        Store a past analysis for future semantic search.
+        Store a past analysis for future search.
 
         Args:
             text: The analysis text
@@ -87,20 +78,16 @@ class VectorMemory:
 
         doc_id = f"analysis_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}"
         meta = metadata or {}
-        meta["stored_at"] = datetime.now(UTC).isoformat()
-        meta.setdefault("timestamp", datetime.now(UTC).isoformat())
-        meta["type"] = "analysis"
-
-        # ChromaDB metadata values must be str, int, float, or bool
-        clean_meta = {k: str(v) if not isinstance(v, (int, float, bool)) else v
-                      for k, v in meta.items()}
+        now_iso = datetime.now(UTC).isoformat()
+        meta_str = str(meta)
 
         try:
-            self._collections["analyses"].add(
-                documents=[text],
-                metadatas=[clean_meta],
-                ids=[doc_id],
+            self._conn.execute(
+                "INSERT INTO analyses (doc_id, text, stored_at, timestamp, metadata) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (doc_id, text, now_iso, meta.get("timestamp", now_iso), meta_str),
             )
+            self._conn.commit()
             logger.debug(f"Stored analysis: {doc_id}")
             return doc_id
         except Exception as e:
@@ -110,12 +97,12 @@ class VectorMemory:
     def search_similar(self, query: str, k: int = 5,
                        collection: str = "analyses") -> list[dict]:
         """
-        Search for similar past entries.
+        Search for similar past entries using FTS5 full-text search.
 
         Args:
             query: Search text
             k: Number of results
-            collection: Which collection to search
+            collection: Which collection to search ("analyses", "insights", "market_events")
 
         Returns:
             List of {"text": str, "metadata": dict, "distance": float}
@@ -123,28 +110,41 @@ class VectorMemory:
         if not self._available:
             return []
 
-        coll = self._collections.get(collection)
-        if not coll:
+        if collection not in ("analyses", "insights", "market_events"):
             return []
 
         try:
-            results = coll.query(query_texts=[query], n_results=k)
+            # Build FTS5 query: use each word as a match term
+            # FTS5 uses implicit AND between terms
+            search_terms = " OR ".join(
+                word for word in query.split() if len(word) > 2
+            )
+            if not search_terms:
+                search_terms = query
+
+            rows = self._conn.execute(
+                f"SELECT doc_id, text, stored_at, timestamp, rank "
+                f"FROM {collection} "
+                f"WHERE {collection} MATCH ? "
+                f"ORDER BY rank "
+                f"LIMIT ?",
+                (search_terms, k),
+            ).fetchall()
 
             items = []
-            documents = results.get("documents", [[]])[0]
-            metadatas = results.get("metadatas", [[]])[0]
-            distances = results.get("distances", [[]])[0]
-
-            for doc, meta, dist in zip(documents, metadatas, distances):
+            for row in rows:
                 items.append({
-                    "text": doc,
-                    "metadata": meta,
-                    "distance": round(dist, 4),
+                    "text": row["text"],
+                    "metadata": {
+                        "stored_at": row["stored_at"],
+                        "timestamp": row["timestamp"],
+                    },
+                    "distance": abs(row["rank"]),  # FTS5 rank (lower = better)
                 })
 
             return items
         except Exception as e:
-            logger.error(f"Vector search failed: {e}")
+            logger.error(f"FTS search failed: {e}")
             return []
 
     def store_insight(self, insight: str, tags: list[str] = None) -> Optional[str]:
@@ -153,19 +153,16 @@ class VectorMemory:
             return None
 
         doc_id = f"insight_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}"
-        meta = {
-            "stored_at": datetime.now(UTC).isoformat(),
-            "timestamp": datetime.now(UTC).isoformat(),
-            "type": "insight",
-            "tags": ",".join(tags) if tags else "",
-        }
+        now_iso = datetime.now(UTC).isoformat()
+        tags_str = ",".join(tags) if tags else ""
 
         try:
-            self._collections["insights"].add(
-                documents=[insight],
-                metadatas=[meta],
-                ids=[doc_id],
+            self._conn.execute(
+                "INSERT INTO insights (doc_id, text, stored_at, timestamp, tags) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (doc_id, insight, now_iso, now_iso, tags_str),
             )
+            self._conn.commit()
             return doc_id
         except Exception as e:
             logger.error(f"Failed to store insight: {e}")
@@ -179,21 +176,16 @@ class VectorMemory:
 
         doc_id = f"event_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}"
         meta = metadata or {}
-        meta.update({
-            "stored_at": datetime.now(UTC).isoformat(),
-            "timestamp": datetime.now(UTC).isoformat(),
-            "type": "market_event",
-            "impact": impact,
-        })
-        clean_meta = {k: str(v) if not isinstance(v, (int, float, bool)) else v
-                      for k, v in meta.items()}
+        now_iso = datetime.now(UTC).isoformat()
+        meta_str = str(meta)
 
         try:
-            self._collections["market_events"].add(
-                documents=[description],
-                metadatas=[clean_meta],
-                ids=[doc_id],
+            self._conn.execute(
+                "INSERT INTO market_events (doc_id, text, stored_at, timestamp, impact, metadata) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (doc_id, description, now_iso, now_iso, impact, meta_str),
             )
+            self._conn.commit()
             return doc_id
         except Exception as e:
             logger.error(f"Failed to store event: {e}")
@@ -234,9 +226,10 @@ class VectorMemory:
             return {"available": False}
 
         stats = {"available": True}
-        for name, coll in self._collections.items():
+        for name in ("analyses", "insights", "market_events"):
             try:
-                stats[name] = coll.count()
+                row = self._conn.execute(f"SELECT COUNT(*) FROM {name}").fetchone()
+                stats[name] = row[0]
             except Exception:
                 stats[name] = 0
         return stats
@@ -249,30 +242,27 @@ class VectorMemory:
         cutoff_iso = cutoff_date.isoformat()
         total_deleted = 0
 
-        for name, coll in self._collections.items():
+        for name in ("analyses", "insights", "market_events"):
             try:
-                before_count = coll.count()
-                # ChromaDB doesn't support $ne: None, so just filter by $lt
-                results = coll.get(
-                    where={"timestamp": {"$lt": cutoff_iso}},
-                    include=["metadatas"],
+                cursor = self._conn.execute(
+                    f"DELETE FROM {name} WHERE timestamp < ?",
+                    (cutoff_iso,),
                 )
-                ids = results.get("ids", []) or []
-                if ids:
-                    batch_size = 100
-                    for i in range(0, len(ids), batch_size):
-                        batch_ids = ids[i:i + batch_size]
-                        coll.delete(ids=batch_ids)
-                        total_deleted += len(batch_ids)
-
-                after_count = coll.count()
-                if before_count != after_count:
-                    logger.info(f"VectorMemory cleanup {name}: {before_count} -> {after_count}")
+                deleted = cursor.rowcount
+                total_deleted += deleted
+                if deleted > 0:
+                    logger.info(f"VectorMemory cleanup {name}: deleted {deleted} docs")
             except Exception as e:
                 logger.error(f"VectorMemory cleanup failed for {name}: {e}")
 
-        if total_deleted > 1000:
-            logger.warning(f"Large cleanup detected ({total_deleted} docs)")
+        if total_deleted > 0:
+            self._conn.commit()
 
         return total_deleted
 
+    def close(self):
+        """Close the database connection."""
+        if self._conn:
+            self._conn.close()
+            self._conn = None
+            self._available = False
