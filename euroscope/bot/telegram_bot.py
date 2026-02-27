@@ -44,6 +44,8 @@ from ..skills.base import SkillContext
 from ..workspace import WorkspaceManager
 from ..automation import HeartbeatService, EventBus, SmartAlerts, AlertChannel, setup_default_alerts, CronScheduler, TaskFrequency, SignalExecutorSubscriber, AlertSuppressionSubscriber, TelegramEmergencySubscriber
 from ..automation.daily_tracker import DailyTracker
+from .api_server import APIServer
+from .handlers.commands import CommandHandlers
 logger = logging.getLogger('euroscope.bot')
 
 class EuroScopeBot:
@@ -54,6 +56,8 @@ class EuroScopeBot:
         self.config = config
         self.storage = Storage()
         self.daily_tracker = DailyTracker(storage=self.storage)
+        self.api = APIServer(self)
+        self.commands = CommandHandlers(self)
         self.orchestrator = Orchestrator()
         self.registry = self.orchestrator.registry
         self.workspace = WorkspaceManager()
@@ -222,24 +226,7 @@ class EuroScopeBot:
                     logger.warning(f'Could not create topic {key} for {chat_id}: {e}')
         return threads
 
-    async def cmd_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle /start — show interactive menu."""
-        if not await self._check_auth(update):
-            return
-        chat_id = update.effective_chat.id
-        await self._ensure_private_topics(chat_id, context.bot)
-        keyboard = None
-        if self.config.telegram.web_app_url:
-            keyboard = InlineKeyboardMarkup([[InlineKeyboardButton('🚀 OPEN EUROSCOPE DASHBOARD', web_app=WebAppInfo(url=self.config.telegram.web_app_url))]])
-        await self._reply(update, f"{rich_header('Welcome to EuroScope Zenith', 'main')}\n\nI am your elite EUR/USD financial intelligence partner. Leveraging neural forecasting and institutional-grade analytics.\n\n{thematic_divider()}\n⚡ *READY FOR EXECUTION*\n\n💡 _Click the button below to launch the Zenith Web Dashboard._", reply_markup=keyboard, parse_mode='Markdown')
-
-    async def cmd_help(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle /help — show all commands."""
-        if not await self._check_auth(update):
-            return
-        help_text = f"{rich_header('EuroScope Help Terminal', 'main')}\n\n├ `/price` — Live Market Pulse\n├ `/analysis` — Deep Tech Analytics\n├ `/forecast` — Neural Directional Insight\n├ `/signals` — High-Conviction IDEAs\n├ `/news` — Macro Intelligence\n├ `/calendar` — Economic Events\n├ `/report` — Daily PDF Dossier\n├ `/settings` — Preference Console\n└ `/menu` — Main Terminal\n\n{thematic_divider()}\n💡 _Just type any market question to chat with the Expert AI!_"
-        await self._reply(update, help_text, parse_mode='Markdown')
-
+        # Command handlers have been moved to handlers/commands.py
     def _format_risk(self, data: dict) -> str:
         lines = ['🛡️ *Risk Assessment*']
         lines.append(f"Approved: {('✅' if data.get('approved') else '❌')}")
@@ -325,7 +312,7 @@ class EuroScopeBot:
     def build_app(self) -> Application:
         """Build and configure the Telegram bot application."""
         app = Application.builder().token(self.config.telegram.token).post_init(self.post_init).post_shutdown(self.post_shutdown).build()
-        commands = {'start': self.cmd_start, 'help': self.cmd_help, 'id': self.cmd_id, 'health': self.cmd_health, 'data_health': self.cmd_data_health}
+        commands = {'start': self.commands.cmd_start, 'help': self.commands.cmd_help, 'id': self.commands.cmd_id, 'health': self.commands.cmd_health, 'data_health': self.commands.cmd_data_health}
         for cmd, handler in commands.items():
             app.add_handler(CommandHandler(cmd, handler))
         app.add_error_handler(self._error_handler)
@@ -368,7 +355,7 @@ class EuroScopeBot:
         self.cron.schedule('weekly_reflection', TaskFrequency.WEEKLY, self._task_weekly_reflection, delay=7200)
         self.cron.schedule('daily_trading_journal', TaskFrequency.DAILY, self.daily_tracker.run, delay=self.cron._seconds_until(23, 55))
         self.cron.schedule('daily_briefing', TaskFrequency.DAILY, self._task_daily_briefing, delay=self.cron._seconds_until(7, 0))
-        api_task = asyncio.create_task(self.start_api_server())
+        api_task = asyncio.create_task(self.api.start())
         self._bg_tasks.add(api_task)
         api_task.add_done_callback(self._bg_tasks.discard)
         logger.info('⚡ Background services & Commands registered.')
@@ -380,31 +367,7 @@ class EuroScopeBot:
         await self.cron.stop()
         logger.info('✅ Background services stopped.')
 
-    async def cmd_health(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle /health — system health and runtime stats."""
-        if not await self._check_auth(update):
-            return
-        result = await self.orchestrator.run_skill('monitoring', 'runtime_stats')
-        text = result.metadata.get('formatted', '⚠️ Could not fetch health stats.')
-        await self._reply(update, safe_markdown(text), parse_mode='Markdown')
-
-    async def cmd_data_health(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Show current data source health status (Phase 2D)."""
-        if not await self._check_auth(update):
-            return
-        ecb_status = '✅ Online' if self.macro_provider.fred_api_key else '❌ Offline (No Key)'
-        fred_status = '✅ Online' if self.macro_provider.fred_api_key else '❌ Offline (No Key)'
-        tiingo_status = '✅ Online' if self.config.data.tiingo_key else '❌ Offline'
-        alphavantage_status = '✅ Online' if self.config.data.alphavantage_key else '❌ Offline'
-        message = f'📊 *Data Source Health Status*\n\n🏦 *FRED API*: {fred_status}\n🇪🇺 *ECB Data*: {ecb_status} (via FRED)\n📈 *Tiingo*: {tiingo_status}\n💹 *AlphaVantage*: {alphavantage_status}\n📰 *News Engine*: ✅ Online\n📅 *Economic Calendar*: ✅ Online\n\n💡 _Detailed logs available in /health_'
-        await self._reply(update, message, parse_mode='Markdown')
-
-    async def cmd_id(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle /id command — show user's chat ID."""
-        chat_id = update.effective_chat.id
-        await update.message.reply_text(f'🆔 *Your Chat ID*: `{chat_id}`\n\nUse this ID in your `.env` file under `EUROSCOPE_PROACTIVE_CHAT_IDS` to receive proactive alerts.', parse_mode='Markdown')
-
-    async def _task_resolve_patterns(self):
+    # Command handlers extracted to handlers/commands.py    async def _task_resolve_patterns(self):
         """Periodically resolve pending patterns using latest price."""
         logger.info('Cron: Running pattern resolution...')
         price_data = await self.price_provider.get_price()
@@ -453,426 +416,7 @@ class EuroScopeBot:
             await self.notifications.broadcast_message(report, chat_ids=chat_ids, parse_mode='HTML')
         logger.info('Cron: Daily briefing sent.')
 
-    @web.middleware
-    async def _cors_middleware(self, request, handler):
-        """Middleware to handle CORS headers and preflight requests."""
-        if request.method == 'OPTIONS':
-            response = web.Response()
-        else:
-            try:
-                response = await handler(request)
-            except Exception as e:
-                logger.error(f'API Error ({request.path}): {e}')
-                response = web.json_response({'success': False, 'error': str(e)}, status=500)
-        response.headers['Access-Control-Allow-Origin'] = '*'
-        response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
-        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Requested-With'
-        return response
-
-    async def _api_summary(self, request):
-        """API endpoint for live price and sentiment summary."""
-        logger.debug('API: Fetching market summary...')
-        result = await self.orchestrator.run_skill('market_data', 'get_price')
-        if not result.success:
-            return web.json_response({'success': False, 'error': result.error})
-        data = result.data
-        resp = {'success': True, 'symbol': 'EUR/USD', 'price': data.get('price', 0), 'change': data.get('change', 0), 'change_pct': data.get('change_pct', 0), 'high': data.get('high'), 'low': data.get('low'), 'open': data.get('open'), 'range_pips': data.get('spread_pips', 0), 'sentiment': 'bullish' if data.get('change', 0) >= 0 else 'bearish', 'timestamp': datetime.now().isoformat()}
-        logger.debug(f"API: Summary response sent for {resp['price']}")
-        return web.json_response(resp)
-
-    async def _api_status(self, request):
-        """API endpoint for market status, sessions and trading hours."""
-        logger.debug('API: Fetching market status and session context...')
-        ctx = SkillContext()
-        result_mkt = await self.orchestrator.run_skill('market_data', 'check_market_status')
-        mkt_data = result_mkt.data if result_mkt.success else {'status': 'Closed'}
-        res_session = await self.orchestrator.run_skill('session_context', 'detect', context=ctx)
-        session_data = res_session.data if res_session.success else {'session_regime': 'unknown'}
-        return web.json_response({'success': True, 'data': {'status': mkt_data.get('status', 'Closed'), 'session': session_data.get('session_regime', 'unknown').upper(), 'rules': session_data.get('session_rules', {}), 'timestamp': datetime.now().isoformat()}})
-
-    async def _api_forecast(self, request):
-        """API endpoint for deep AI forecasting and reasoning."""
-        logger.debug('API: Running deep AI forecast...')
-        try:
-            tf = request.query.get('timeframe', '24 hours')
-            result = await self.forecaster.generate_forecast(tf)
-            return web.json_response({'success': True, 'data': {'direction': result.get('direction', 'NEUTRAL'), 'confidence': result.get('confidence', 0) / 100, 'reasoning': result.get('text', ''), 'timeframe': tf, 'price': result.get('price'), 'timestamp': datetime.now().isoformat()}})
-        except Exception as e:
-            logger.error(f'API forecast error: {e}')
-            return web.json_response({'success': False, 'error': str(e), 'data': {'direction': 'NEUTRAL', 'confidence': 0, 'reasoning': 'Forecasting engine error.'}})
-
-    async def _api_macro(self, request):
-        """API endpoint for fundamental macro data (FRED/ECB)."""
-        logger.debug('API: Fetching fundamental macro overview...')
-        ctx = SkillContext()
-        res = await self.orchestrator.run_skill('fundamental_analysis', 'get_macro', context=ctx)
-        if not res.success:
-            return web.json_response({'success': False, 'partial': True, 'error': res.error, 'data': {'macro_impact': 'NEUTRAL', 'macro_data': {}}})
-        return web.json_response({'success': True, 'data': res.data, 'formatted': res.metadata.get('formatted', '')})
-
-    async def _api_signals(self, request):
-        """API endpoint for recent trading signals."""
-        logger.debug('API: Fetching recent signals...')
-        signals = self.storage.get_signals(limit=5)
-        return web.json_response({'success': True, 'signals': signals})
-
-    async def _api_trades(self, request):
-        """API endpoint for active open trades (Phase 5)."""
-        logger.debug('API: Fetching open trades...')
-        res = await self.orchestrator.run_skill('signal_executor', 'list_trades')
-        if not res.success:
-            return web.json_response({'success': False, 'error': res.error, 'trades': []})
-        return web.json_response({'success': True, 'trades': res.data})
-
-    async def _api_history(self, request):
-        """API endpoint for closed trade history (Phase 5)."""
-        logger.debug('API: Fetching closed trade history...')
-        res = await self.orchestrator.run_skill('signal_executor', 'trade_history')
-        if not res.success:
-            return web.json_response({'success': False, 'error': res.error, 'history': []})
-        history = res.data[-20:] if res.data else []
-        history.sort(key=lambda x: x.get('timestamp', 0), reverse=True)
-        return web.json_response({'success': True, 'history': history})
-
-    async def _api_scan_signals(self, request):
-        """API endpoint to actively scan for and generate new trading signals."""
-        logger.debug('API: Actively scanning for new signals (Mini App request)...')
-        try:
-            if self.bot_settings.get('emergency_mode'):
-                return web.json_response({'success': False, 'error': 'SYSTEM IS IN EMERGENCY MODE. TRADING AND SCANNING HALTED.'})
-
-            from ..skills.base import SkillContext
-            ctx = SkillContext()
-            
-            # 1. Fetch live market price for risk calculations
-            mkt_res = await self.orchestrator.run_skill('market_data', 'get_price', context=ctx)
-            if not mkt_res.success:
-                return web.json_response({'success': False, 'error': f'Market data failed: {mkt_res.error}'})
-                
-            ta_res = await self.orchestrator.run_skill('technical_analysis', 'analyze', context=ctx, timeframe='H1')
-            if not ta_res.success:
-                return web.json_response({'success': False, 'error': f'TA failed: {ta_res.error}'})
-            strat_res = await self.orchestrator.run_skill('trading_strategy', 'detect_signal', context=ctx)
-            if not strat_res.success:
-                return web.json_response({'success': False, 'error': f'Strategy failed: {strat_res.error}'})
-            signal_data = strat_res.data
-            direction = signal_data.get('direction', 'WAIT')
-            confidence = signal_data.get('confidence', 0)
-            if direction in ('BUY', 'SELL') and confidence >= 50:
-                # 3. Calculate Risk Parameters (Entry, SL, TP) based on the specific direction
-                risk_res = await self.orchestrator.run_skill('risk_management', 'assess_trade', context=ctx)
-                if not risk_res.success:
-                    return web.json_response({'success': False, 'error': f'Risk calculation failed: {risk_res.error}'})
-                    
-                # 4. Execute the paper trade IF auto-trading is enabled
-                if self.bot_settings.get('auto_trading_enabled'):
-                    exec_res = await self.orchestrator.run_skill('signal_executor', 'open_trade', context=ctx)
-                    if exec_res.success:
-                        return web.json_response({'success': True, 'signal': exec_res.data, 'message': f'Found {direction} opportunity и execution successful!'})
-                    else:
-                        return web.json_response({'success': False, 'error': f'Signal generation aborted by guardrails: {exec_res.error}', 'signal': signal_data})
-                else:
-                    return web.json_response({'success': True, 'signal': signal_data, 'execution_skipped': True, 'message': f'Found {direction} opportunity! (Auto-trading is DISABLED)'})
-            else:
-                return web.json_response({'success': False, 'message': 'No high-confidence opportunities currently available. Please exercise patience.'})
-        except Exception as e:
-            import traceback
-            logger.error(f'API: Error scanning signals: {e}\n{traceback.format_exc()}')
-            return web.json_response({'success': False, 'error': str(e)})
-
-    async def _api_alerts(self, request):
-        """API endpoint for active price alerts."""
-        logger.debug('API: Fetching active alerts...')
-        alerts = self.storage.get_active_alerts()
-        return web.json_response({'success': True, 'alerts': alerts})
-
-    async def _api_analysis(self, request):
-        """API endpoint for technical analysis snapshot."""
-        logger.debug('API: Running real-time technical analysis...')
-        ctx = SkillContext()
-        res_ta = await self.orchestrator.run_skill('technical_analysis', 'analyze', context=ctx, timeframe='H1')
-        if not res_ta.success:
-            logger.warning(f'API: Analysis skill partial failure: {res_ta.error}')
-            return web.json_response({'success': False, 'partial': True, 'error': res_ta.error, 'data': {'indicators': {}, 'overall_bias': 'NEUTRAL'}})
-        logger.debug('API: Technical analysis snapshot delivered.')
-        return web.json_response({'success': True, 'data': res_ta.data, 'formatted': res_ta.metadata.get('formatted')})
-
-    async def _api_candles(self, request):
-        """API endpoint for chart data (OHLC) with strict time sorting."""
-        timeframe = request.query.get('timeframe', 'H1')
-        logger.debug(f'API: Fetching {timeframe} candles for chart...')
-        try:
-            result = await self.orchestrator.run_skill('market_data', 'get_candles', timeframe=timeframe, count=100)
-            if not result.success:
-                logger.warning(f'API: Candle skill failed: {result.error}')
-                return web.json_response({'success': False, 'candles': [], 'error': result.error})
-            df = result.data
-            if df is None or df.empty:
-                return web.json_response({'success': False, 'candles': [], 'error': 'Empty data'})
-            df = df.sort_index()
-            candles = []
-            for idx, row in df.iterrows():
-                try:
-                    candles.append({'time': int(idx.timestamp()), 'open': float(row['Open']), 'high': float(row['High']), 'low': float(row['Low']), 'close': float(row['Close'])})
-                except (ValueError, TypeError, AttributeError) as e:
-                    logger.debug(f'API: Skipping malformed candle at {idx}: {e}')
-                    continue
-            logger.debug(f'API: Delivered {len(candles)} candles for {timeframe}')
-            return web.json_response({'success': True, 'candles': candles, 'count': len(candles)})
-        except Exception as e:
-            logger.error(f'API: Critical error in _api_candles: {e}')
-            return web.json_response({'success': False, 'error': str(e), 'candles': []})
-
-    async def _api_backtest(self, request):
-        """API endpoint for backtesting dashboard data."""
-        logger.debug('API: Running backtest...')
-        strategy = request.query.get('strategy', None)
-        timeframe = request.query.get('timeframe', 'H1')
-        try:
-            from .telegram_bot import SkillContext
-        except ImportError:
-            from ..skills.base import SkillContext
-        try:
-            ctx = SkillContext()
-            result = await self.orchestrator.run_skill('market_data', 'get_candles', context=ctx, timeframe=timeframe, count=500)
-            if not result.success or result.data is None or result.data.empty:
-                return web.json_response({'success': False, 'error': 'No candle data available'})
-            df = result.data
-            candles = []
-            for _, row in df.iterrows():
-                try:
-                    candles.append({'open': float(row['Open']), 'high': float(row['High']), 'low': float(row['Low']), 'close': float(row['Close']), 'volume': float(row.get('Volume', 0))})
-                except (ValueError, TypeError):
-                    continue
-            if len(candles) < 60:
-                return web.json_response({'success': False, 'error': f'Need 60+ candles, have {len(candles)}'})
-            from ..analytics.backtest_engine import BacktestEngine
-            engine = BacktestEngine()
-            bt_result = engine.run(candles, strategy_filter=strategy)
-            return web.json_response({'success': True, 'data': {'strategy': bt_result.strategy, 'total_trades': bt_result.total_trades, 'wins': bt_result.wins, 'losses': bt_result.losses, 'win_rate': round(bt_result.win_rate, 1), 'total_pnl': round(bt_result.total_pnl, 1), 'avg_pnl': round(bt_result.avg_pnl, 1), 'max_drawdown': round(bt_result.max_drawdown, 1), 'profit_factor': round(bt_result.profit_factor, 2), 'sharpe_ratio': round(bt_result.sharpe_ratio, 2), 'best_trade': round(bt_result.best_trade, 1), 'worst_trade': round(bt_result.worst_trade, 1), 'equity_curve': bt_result.equity_curve[-50:], 'bars_tested': bt_result.bars_tested}})
-        except Exception as e:
-            logger.error(f'API: Backtest error: {e}')
-            return web.json_response({'success': False, 'error': str(e)})
-
-    async def _api_performance(self, request):
-        """API endpoint for trading performance dashboard."""
-        logger.debug('API: Fetching performance data...')
-        try:
-            stats = self.storage.get_trade_journal_stats()
-            from ..learning.adaptive_tuner import AdaptiveTuner
-            tuner = AdaptiveTuner(storage=self.storage)
-            tuning = tuner.analyze()
-            return web.json_response({'success': True, 'data': {'stats': stats, 'tuning': tuning}})
-        except Exception as e:
-            logger.error(f'API: Performance error: {e}')
-            return web.json_response({'success': False, 'error': str(e)})
-
-    async def _api_briefing(self, request):
-        """API endpoint for voice briefing."""
-        logger.debug('API: Generating market briefing...')
-        try:
-            from ..analytics.voice_briefing import VoiceBriefingEngine
-            engine = VoiceBriefingEngine(orchestrator=self.orchestrator, storage=self.storage)
-            briefing = await engine.generate_briefing()
-            return web.json_response({'success': True, 'data': engine.format_for_api(briefing)})
-        except Exception as e:
-            logger.error(f'API: Briefing error: {e}')
-            return web.json_response({'success': False, 'error': str(e)})
-
-    async def _api_patterns(self, request):
-        """API endpoint for detected chart patterns."""
-        logger.debug('API: Fetching active patterns...')
-        try:
-            from .telegram_bot import SkillContext
-        except ImportError:
-            from ..skills.base import SkillContext
-        try:
-            ctx = SkillContext()
-            # Feed current market data logic
-            await self.orchestrator.run_skill('market_data', 'get_price', context=ctx)
-            result = await self.orchestrator.run_skill('technical_analysis', 'detect_patterns', context=ctx, timeframe='H1')
-            if not result.success:
-                return web.json_response({'success': False, 'error': result.error})
-            
-            return web.json_response({'success': True, 'data': result.data})
-        except Exception as e:
-            logger.error(f'API: Patterns error: {e}')
-            return web.json_response({'success': False, 'error': str(e)})
-
-    async def _api_levels(self, request):
-        """API endpoint for support/resistance levels."""
-        logger.debug('API: Fetching key levels...')
-        try:
-            from .telegram_bot import SkillContext
-        except ImportError:
-            from ..skills.base import SkillContext
-        try:
-            ctx = SkillContext()
-            # Feed current market data logic
-            await self.orchestrator.run_skill('market_data', 'get_price', context=ctx)
-            result = await self.orchestrator.run_skill('technical_analysis', 'find_levels', context=ctx, timeframe='H1')
-            if not result.success:
-                return web.json_response({'success': False, 'error': result.error})
-            
-            return web.json_response({'success': True, 'data': result.data})
-        except Exception as e:
-            logger.error(f'API: Levels error: {e}')
-            return web.json_response({'success': False, 'error': str(e)})
-            
-    async def _api_settings(self, request):
-        """API endpoint to get user settings/risk parameters."""
-        try:
-            import json, os
-            settings_path = os.path.join(self.config.data_dir, 'bot_settings.json')
-            data = {
-                'risk_per_trade': 1.0,
-                'max_daily_loss': 3.0,
-                'auto_trading_enabled': False
-            }
-            if os.path.exists(settings_path):
-                with open(settings_path, 'r') as f:
-                    data.update(json.load(f))
-            return web.json_response({'success': True, 'data': data})
-        except Exception as e:
-            return web.json_response({'success': False, 'error': str(e)})
-
-    async def _api_settings_update(self, request):
-        """API endpoint to update user settings/risk parameters."""
-        try:
-            import json, os
-            new_data = await request.json()
-            
-            # Persist to disk
-            settings_path = os.path.join(self.config.data_dir, 'bot_settings.json')
-            data = {
-                'risk_per_trade': 1.0,
-                'max_daily_loss': 3.0,
-                'auto_trading_enabled': False
-            }
-            if os.path.exists(settings_path):
-                with open(settings_path, 'r') as f:
-                    data.update(json.load(f))
-                    
-            data.update(new_data)
-            self.bot_settings.update(data)
-            
-            # Ensure dir exists
-            os.makedirs(self.config.data_dir, exist_ok=True)
-            with open(settings_path, 'w') as f:
-                json.dump(data, f)
-                
-            # Update Live Risk Manager
-            try:
-                risk_skill = self.orchestrator.registry.get('risk_management')
-                if risk_skill and hasattr(risk_skill, 'manager'):
-                    risk_skill.manager.config.risk_per_trade = float(data.get('risk_per_trade', 1.0))
-                    risk_skill.manager.config.max_daily_loss = float(data.get('max_daily_loss', 3.0))
-            except Exception as e:
-                logger.warning(f"API: Failed to hot-reload risk manager config: {e}")
-
-            return web.json_response({'success': True, 'data': data})
-        except Exception as e:
-            return web.json_response({'success': False, 'error': str(e)})
-
-    async def _api_health(self, request):
-        """Standard health check endpoint."""
-        return web.Response(text='OK', content_type='text/plain')
-
-    async def _api_emergency(self, request):
-        """API endpoint to trigger the Emergency Kill Switch."""
-        logger.warning('🚨 EMERGENCY KILL SWITCH TRIGGERED VIA API 🚨')
-        try:
-            data = await request.json()
-            is_active = data.get('active', True)
-            
-            import json, os
-            settings_path = os.path.join(self.config.data_dir, 'bot_settings.json')
-            s_data = {
-                'risk_per_trade': 1.0,
-                'max_daily_loss': 3.0,
-                'auto_trading_enabled': False,
-                'emergency_mode': False
-            }
-            if os.path.exists(settings_path):
-                with open(settings_path, 'r') as f:
-                    s_data.update(json.load(f))
-                    
-            s_data['emergency_mode'] = is_active
-            # Force auto-trading off instantly when emergency is triggered
-            if is_active:
-                s_data['auto_trading_enabled'] = False
-                
-            self.bot_settings.update(s_data)
-            
-            # Persist
-            os.makedirs(self.config.data_dir, exist_ok=True)
-            with open(settings_path, 'w') as f:
-                json.dump(s_data, f)
-                
-            status = "ACTIVATED (Trading Halted)" if is_active else "DEACTIVATED"
-            logger.info(f"Emergency Mode: {status}")
-            
-            # Notify Admins
-            chat_ids = self.config.proactive_alert_chat_ids
-            if chat_ids:
-                asyncio.create_task(
-                    self.notifications.broadcast_message(
-                        f"⚠️ *EMERGENCY KILL SWITCH {status}*\nTriggered via Zenith Dashboard.",
-                        chat_ids=chat_ids,
-                        parse_mode="Markdown"
-                    )
-                )
-
-            return web.json_response({'success': True, 'emergency_mode': is_active, 'message': f"Emergency Mode {status}"})
-        except Exception as e:
-            logger.error(f'API: Emergency trigger failed: {e}')
-            return web.json_response({'success': False, 'error': str(e)})
-
-    async def _serve_mini_app(self, request):
-        """Serve the Zenith Terminal Mini App directly from the bot server."""
-        mini_app_path = os.path.join(os.path.dirname(__file__), 'mini_app', 'index.html')
-        if os.path.exists(mini_app_path):
-            return web.FileResponse(mini_app_path, headers={'Content-Type': 'text/html; charset=utf-8'})
-        return web.Response(text='Mini App not found', status=404)
-
-    async def start_api_server(self):
-        """Run the AIOHTTP server as a background task with robust error handling."""
-        try:
-            app = web.Application(middlewares=[self._cors_middleware])
-            app.add_routes([
-                web.get('/', self._serve_mini_app), 
-                web.get('/app', self._serve_mini_app), 
-                web.get('/healthz', self._api_health), 
-                web.get('/api/summary', self._api_summary), 
-                web.get('/api/signals', self._api_signals), 
-                web.get('/api/scan_signals', self._api_scan_signals), 
-                web.get('/api/alerts', self._api_alerts), 
-                web.get('/api/analysis', self._api_analysis), 
-                web.get('/api/candles', self._api_candles), 
-                web.get('/api/status', self._api_status), 
-                web.get('/api/forecast', self._api_forecast), 
-                web.get('/api/macro', self._api_macro), 
-                web.get('/api/backtest', self._api_backtest), 
-                web.get('/api/performance', self._api_performance), 
-                web.get('/api/briefing', self._api_briefing), 
-                web.get('/api/trades', self._api_trades), 
-                web.get('/api/history', self._api_history),
-                web.get('/api/patterns', self._api_patterns),
-                web.get('/api/levels', self._api_levels),
-                web.get('/api/settings', self._api_settings),
-                web.post('/api/settings', self._api_settings_update),
-                web.post('/api/emergency', self._api_emergency)
-            ])
-            port = int(os.getenv('PORT', 8080))
-            runner = web.AppRunner(app)
-            await runner.setup()
-            site = web.TCPSite(runner, '0.0.0.0', port)
-            logger.info(f'📡 Zenith API + Mini App at: http://0.0.0.0:{port}')
-            logger.info(f'📱 Mini App URL: http://0.0.0.0:{port}/app')
-            await site.start()
-        except Exception as e:
-            logger.error(f'❌ API Server CRASH: {e}')
-            logger.error(traceback.format_exc())
+    # API Server endpoints extracted to api_server.py
 
     def run(self):
         """Start the Telegram bot and the integrated API server."""

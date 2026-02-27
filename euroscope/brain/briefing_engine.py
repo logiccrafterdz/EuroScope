@@ -27,7 +27,7 @@ class BriefingEngine:
         logger.info("Generating daily briefing...")
         
         # 1. Overnight Summary (News & Sentiment)
-        overnight_news = self.storage.get_recent_news(limit=5, min_impact=0.7)
+        overnight_news = await self.storage.get_recent_news(limit=5, min_impact=0.7)
         
         # 2. Key Levels (Fetch from technical analysis or storage)
         # For simplicity, we'll assume they are stored or we run a quick scan
@@ -39,8 +39,8 @@ class BriefingEngine:
         
         # 4. Learning Insights & Trade Review (Yesterday)
         yesterday_str = (datetime.now(UTC) - timedelta(days=1)).strftime("%Y-%m-%d")
-        trades_yesterday = self.storage.get_trade_journal_for_date(yesterday_str)
-        insights = self.storage.get_recent_learning_insights(limit=3)
+        trades_yesterday = await self.storage.get_trade_journal_for_date(yesterday_str)
+        insights = await self.storage.get_recent_learning_insights(limit=3)
         
         return self._format_comprehensive_report(
             news=overnight_news,

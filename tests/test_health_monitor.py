@@ -51,8 +51,9 @@ class TestErrorTracking:
 
 class TestComponentChecks:
 
-    def test_database_healthy(self, monitor):
-        status = monitor.check_database()
+    @pytest.mark.asyncio
+    async def test_database_healthy(self, monitor):
+        status = await monitor.check_database()
         assert status.healthy is True
         assert status.name == "Database"
         assert status.response_time_ms >= 0
@@ -70,19 +71,22 @@ class TestComponentChecks:
 
 class TestFullCheck:
 
-    def test_all_healthy(self, monitor):
-        health = monitor.full_check()
+    @pytest.mark.asyncio
+    async def test_all_healthy(self, monitor):
+        health = await monitor.full_check()
         assert health.overall == "healthy"
         assert len(health.components) == 3
         assert all(c.healthy for c in health.components)
 
-    def test_uptime_tracked(self, monitor):
-        health = monitor.full_check()
+    @pytest.mark.asyncio
+    async def test_uptime_tracked(self, monitor):
+        health = await monitor.full_check()
         assert health.uptime_seconds >= 0
 
-    def test_error_rate_included(self, monitor):
+    @pytest.mark.asyncio
+    async def test_error_rate_included(self, monitor):
         monitor.record_error("test", "Error")
-        health = monitor.full_check()
+        health = await monitor.full_check()
         assert health.total_errors == 1
         assert health.error_rate_per_hour >= 0
 
@@ -127,26 +131,30 @@ class TestStatusLogic:
 
 class TestFormatting:
 
-    def test_format_healthy(self, monitor):
-        health = monitor.full_check()
+    @pytest.mark.asyncio
+    async def test_format_healthy(self, monitor):
+        health = await monitor.full_check()
         text = HealthMonitor.format_health(health)
         assert "HEALTHY" in text
         assert "✅" in text
 
-    def test_format_with_errors(self, monitor):
+    @pytest.mark.asyncio
+    async def test_format_with_errors(self, monitor):
         monitor.record_error("test_comp", "Something broke")
-        health = monitor.full_check()
+        health = await monitor.full_check()
         text = HealthMonitor.format_health(health)
         assert "Errors" in text
 
-    def test_uptime_format_minutes(self, monitor):
+    @pytest.mark.asyncio
+    async def test_uptime_format_minutes(self, monitor):
         monitor._start_time = time.time() - 600  # 10 minutes
-        health = monitor.full_check()
+        health = await monitor.full_check()
         text = HealthMonitor.format_health(health)
         assert "min" in text
 
-    def test_uptime_format_hours(self, monitor):
+    @pytest.mark.asyncio
+    async def test_uptime_format_hours(self, monitor):
         monitor._start_time = time.time() - 7200  # 2 hours
-        health = monitor.full_check()
+        health = await monitor.full_check()
         text = HealthMonitor.format_health(health)
         assert "hours" in text

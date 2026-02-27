@@ -28,13 +28,13 @@ class TestVoiceBriefingEngine:
     async def test_generate_briefing_with_storage(self):
         """Briefing with mocked storage should include signal section."""
         storage = MagicMock()
-        storage.get_signals.return_value = [
+        storage.get_signals = AsyncMock(return_value=[
             {"direction": "BUY", "entry_price": 1.085}
-        ]
-        storage.get_trade_journal_stats.return_value = {
+        ])
+        storage.get_trade_journal_stats = AsyncMock(return_value={
             "total": 10, "win_rate": 65.0, "total_pnl": 42.3,
-        }
-        storage.get_active_alerts.return_value = []
+        })
+        storage.get_active_alerts = AsyncMock(return_value=[])
 
         engine = self._make_engine(storage=storage)
         briefing = await engine.generate_briefing()
@@ -46,11 +46,11 @@ class TestVoiceBriefingEngine:
     async def test_risk_alerts_urgency(self):
         """Briefing with many alerts should have 'alert' urgency."""
         storage = MagicMock()
-        storage.get_signals.return_value = []
-        storage.get_trade_journal_stats.return_value = {"total": 0}
-        storage.get_active_alerts.return_value = [
+        storage.get_signals = AsyncMock(return_value=[])
+        storage.get_trade_journal_stats = AsyncMock(return_value={"total": 0})
+        storage.get_active_alerts = AsyncMock(return_value=[
             {"price": 1.08}, {"price": 1.09}, {"price": 1.10}
-        ]
+        ])
 
         engine = self._make_engine(storage=storage)
         briefing = await engine.generate_briefing()
@@ -122,9 +122,9 @@ class TestVoiceBriefingEngine:
     async def test_performance_section_excluded_when_no_trades(self):
         """Performance section should not appear when total is 0."""
         storage = MagicMock()
-        storage.get_signals.return_value = []
-        storage.get_trade_journal_stats.return_value = {"total": 0}
-        storage.get_active_alerts.return_value = []
+        storage.get_signals = AsyncMock(return_value=[])
+        storage.get_trade_journal_stats = AsyncMock(return_value={"total": 0})
+        storage.get_active_alerts = AsyncMock(return_value=[])
 
         engine = self._make_engine(storage=storage)
         briefing = await engine.generate_briefing()

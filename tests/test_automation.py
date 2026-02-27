@@ -172,12 +172,14 @@ class TestProactiveAlerts:
 
 
 class TestDailyTracker:
-    def test_daily_summary_counts(self):
-        storage = Storage(":memory:")
+    @pytest.mark.asyncio
+    async def test_daily_summary_counts(self, tmp_path):
+        db_path = tmp_path / "test.db"
+        storage = Storage(str(db_path))
         tracker = DailyTracker(storage=storage)
         date_value = datetime.now(UTC).strftime("%Y-%m-%d")
 
-        storage.save_trade_journal(
+        await storage.save_trade_journal(
             direction="BUY",
             entry_price=1.1,
             stop_loss=1.09,
@@ -188,7 +190,7 @@ class TestDailyTracker:
             reasoning="paper trade opened",
             status="open",
         )
-        storage.save_trade_journal(
+        await storage.save_trade_journal(
             direction="SELL",
             entry_price=1.09,
             stop_loss=1.095,
@@ -199,7 +201,7 @@ class TestDailyTracker:
             reasoning="paper trade opened",
             status="open",
         )
-        storage.save_trade_journal(
+        await storage.save_trade_journal(
             direction="BUY",
             entry_price=1.12,
             stop_loss=1.11,
@@ -211,7 +213,7 @@ class TestDailyTracker:
             status="rejected",
         )
 
-        summary = tracker.get_summary(date_value)
+        summary = await tracker.get_summary(date_value)
 
         assert summary["signals_generated"] == 3
         assert summary["signals_executed"] == 2
