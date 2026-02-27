@@ -99,13 +99,17 @@ class SmartAlerts:
         alerts.check({"rsi": 25, "price": 1.085})
     """
 
-    def __init__(self):
+    def __init__(self, max_alerts_per_hour: int = 10):
         self._rules: dict[str, AlertRule] = {}
         self._history: list[Alert] = []
         self._handlers: dict[AlertChannel, Callable] = {}
         self._max_history = 200
         self._suppress_until = 0.0
         self._essential_priorities = {AlertPriority.CRITICAL}
+        # Global throttling
+        self._max_alerts_per_hour = max_alerts_per_hour
+        self._hourly_alerts: list[float] = []  # timestamps of alerts this hour
+        self._recent_titles: dict[str, float] = {}  # title -> last_sent_ts (content dedup)
 
     def add_rule(self, name: str, condition: Callable,
                  title: str = "", message_template: str = "",
@@ -154,6 +158,8 @@ class SmartAlerts:
     def check(self, data: dict, source: str = "") -> list[Alert]:
         """
         Check all rules against data and return triggered alerts.
+        Applies per-rule cooldown, global rate limit, content dedup,
+        session suppression, and hourly cap.
         """
         triggered = []
         now = datetime.now(UTC)
@@ -162,14 +168,21 @@ class SmartAlerts:
         session_regime = str(data.get("session_regime", "")).lower()
         is_asian_session = session_regime == "asian"
 
+        # Prune hourly counter (remove entries older than 1 hour)
+        cutoff = now_ts - 3600
+        self._hourly_alerts = [ts for ts in self._hourly_alerts if ts > cutoff]
+
+        # Prune content dedup cache (remove entries older than 15 min)
+        dedup_cutoff = now_ts - 900
+        self._recent_titles = {t: ts for t, ts in self._recent_titles.items() if ts > dedup_cutoff}
+
         for rule in self._rules.values():
             if not rule.enabled:
                 continue
 
-            # Duplicate suppression (handled by rule.cooldown_seconds)
-            # Increase default cooldown to 60 min for non-critical events
+            # Per-rule cooldown (extended during Asian session)
             cooldown = rule.cooldown_seconds
-            if is_asian_session and rule.name != "drawdown_warning": # Exception for critical
+            if is_asian_session and rule.name != "drawdown_warning":
                  cooldown = max(cooldown, 3600)
 
             if now_ts - rule.last_triggered < cooldown:
@@ -180,15 +193,30 @@ class SmartAlerts:
                     alert = rule.alert_template(data)
                     alert.source = source or alert.source
 
-                    # Context-Aware Suppression
+                    # 1. Session-aware suppression
                     if is_asian_session and alert.priority < AlertPriority.HIGH:
-                        logger.debug(f"Suppressing {alert.title} during Asian session (Low Liquidity)")
+                        logger.debug(f"Suppressing {alert.title} during Asian session")
                         continue
 
+                    # 2. Manual suppress window
                     if now_ts < self._suppress_until and alert.priority not in self._essential_priorities:
                         continue
 
+                    # 3. Global hourly cap (CRITICAL always passes)
+                    if len(self._hourly_alerts) >= self._max_alerts_per_hour:
+                        if alert.priority < AlertPriority.CRITICAL:
+                            logger.debug(f"Hourly cap reached ({self._max_alerts_per_hour}), suppressing: {alert.title}")
+                            continue
+
+                    # 4. Content dedup — same title within 15 min
+                    if alert.title in self._recent_titles:
+                        if alert.priority < AlertPriority.CRITICAL:
+                            logger.debug(f"Content dedup: '{alert.title}' already sent recently")
+                            continue
+
                     rule.last_triggered = now_ts
+                    self._hourly_alerts.append(now_ts)
+                    self._recent_titles[alert.title] = now_ts
                     triggered.append(alert)
                     self._history.append(alert)
 

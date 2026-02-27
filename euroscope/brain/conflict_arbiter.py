@@ -19,14 +19,14 @@ class ConflictArbiter:
         """
         Analyzes all tool outputs and produces a coherent decision.
         """
-        # Step 1: Extract all signals from metadata
+        # Step 1: Extract all signals from metadata (once)
         signals = self._collect_signals(context)
         
         # Step 2: Weight signals by reliability (session-aware)
         weighted_signals = self._apply_weights(signals, context)
         
         # Step 3: Resolve conflicts using hierarchy
-        decision = self._synthesize_decision(weighted_signals, context)
+        decision = self._synthesize_decision(signals, weighted_signals, context)
         
         return decision
     
@@ -62,13 +62,13 @@ class ConflictArbiter:
         session = context.metadata.get("session_regime", "unknown").lower()
         regime = context.metadata.get("regime", "unknown").lower()
         
-        # Base weights
+        # Base weights (normalized to sum ≈ 1.0)
         weights = {
-            "liquidity_awareness": 0.35,   # Always highest — market intent > indicators
+            "liquidity_awareness": 0.30,   # Market intent > indicators
             "technical_analysis": 0.25,
-            "pattern_detection": 0.20,
-            "fundamental_analysis": 0.20,
-            "trading_strategy": 0.30
+            "pattern_detection": 0.15,
+            "fundamental_analysis": 0.10,
+            "trading_strategy": 0.20,
         }
         
         # Filter weights based on available signals
@@ -103,7 +103,7 @@ class ConflictArbiter:
             
         return {k: v/total for k, v in active_weights.items()}
     
-    def _synthesize_decision(self, weighted_signals: Dict[str, float], context: SkillContext) -> Dict[str, Any]:
+    def _synthesize_decision(self, signals: Dict[str, str], weighted_signals: Dict[str, float], context: SkillContext) -> Dict[str, Any]:
         """
         Synthesize weighted signals into final decision using voting logic.
         """
@@ -119,9 +119,9 @@ class ConflictArbiter:
         # Count weighted votes for each direction
         votes = {"BUY": 0.0, "SELL": 0.0, "NEUTRAL": 0.0}
         
-        # Map signals to our voting structure (normalize to BUY/SELL/NEUTRAL)
+        # Use the signals passed as parameter (not re-collected)
         for tool, weight in weighted_signals.items():
-            raw_signal = self._collect_signals(context).get(tool, "NEUTRAL")
+            raw_signal = signals.get(tool, "NEUTRAL")
             
             direction = "NEUTRAL"
             if "BUY" in raw_signal or "BULLISH" in raw_signal:
@@ -134,6 +134,11 @@ class ConflictArbiter:
         # Determine winner
         final_direction = max(votes, key=votes.get)
         confidence = votes[final_direction]
+
+        # Minimum confidence threshold — prevent acting on weak consensus
+        if confidence < 0.35:
+            final_direction = "NEUTRAL"
+            logger.info(f"Confidence too low ({confidence:.0%}), returning NEUTRAL")
         
         # Build reasoning
         primary_evidence = self._explain_decision(final_direction, weighted_signals, context)
