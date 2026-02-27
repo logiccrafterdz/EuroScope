@@ -9,13 +9,16 @@ import pytest
 
 from euroscope.data.storage import Storage
 from euroscope.trading.signal_executor import SignalExecutor
+from euroscope.trading.execution_simulator import ExecutionSimulator, ExecutionConfig
 
 
 @pytest.fixture
 def executor(tmp_path):
     db_path = str(tmp_path / "test_signals.db")
     storage = Storage(db_path)
-    return SignalExecutor(storage)
+    # Disable execution simulation for deterministic testing
+    sim = ExecutionSimulator(config=ExecutionConfig(enabled=False))
+    return SignalExecutor(storage, execution_sim=sim)
 
 
 # ── Open Signals ─────────────────────────────────────────

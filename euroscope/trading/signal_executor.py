@@ -10,6 +10,7 @@ from datetime import datetime
 from typing import Optional
 
 from ..data.storage import Storage
+from .execution_simulator import ExecutionSimulator
 
 logger = logging.getLogger("euroscope.trading.signal_executor")
 
@@ -22,31 +23,46 @@ class SignalExecutor:
     and tracks performance via Storage.save_signal / get_signals.
     """
 
-    def __init__(self, storage: Storage):
+    def __init__(self, storage: Storage, execution_sim: ExecutionSimulator = None):
         self.storage = storage
+        self.execution_sim = execution_sim or ExecutionSimulator()
 
     async def open_signal(self, direction: str, entry_price: float,
                     stop_loss: float, take_profit: float,
                     strategy: str = "manual", timeframe: str = "H1",
-                    confidence: float = 50.0, reasoning: str = "") -> int:
+                    confidence: float = 50.0, reasoning: str = "",
+                    atr: float = None) -> int:
         """
         Open a new trading signal (paper trade).
 
+        Applies realistic execution simulation (spread + slippage)
+        to the entry price.
+
         Args:
             strategy: stored in the 'source' column of trading_signals
+            atr: Current ATR for volatility-adaptive execution
 
         Returns:
-            Signal ID
+            Signal ID, or -1 if order rejected
         """
+        # Simulate execution
+        exec_result = self.execution_sim.simulate_entry(direction, entry_price, atr=atr)
+        if not exec_result.filled:
+            logger.warning(f"Signal REJECTED: {direction} @ {entry_price} ({exec_result.details})")
+            return -1
+
+        # Use simulated fill price
+        fill_price = exec_result.fill_price
+
         rr = 0.0
-        sl_dist = abs(entry_price - stop_loss)
-        tp_dist = abs(take_profit - entry_price)
+        sl_dist = abs(fill_price - stop_loss)
+        tp_dist = abs(take_profit - fill_price)
         if sl_dist > 0:
             rr = round(tp_dist / sl_dist, 2)
 
         signal_id = await self.storage.save_signal(
             direction=direction.upper(),
-            entry_price=entry_price,
+            entry_price=fill_price,
             stop_loss=stop_loss,
             take_profit=take_profit,
             confidence=confidence,
@@ -60,7 +76,8 @@ class SignalExecutor:
         await self.storage.update_signal_status(signal_id, "open")
 
         logger.info(
-            f"Opened signal #{signal_id}: {direction.upper()} @ {entry_price} "
+            f"Opened signal #{signal_id}: {direction.upper()} @ {fill_price} "
+            f"(requested {entry_price}, {exec_result.details}) "
             f"SL={stop_loss} TP={take_profit} ({strategy})"
         )
 
@@ -95,10 +112,11 @@ class SignalExecutor:
         logger.info(f"Created pending order #{signal_id}: {direction.upper()} at {trigger_price}")
         return signal_id
 
-    async def check_signals(self, current_price: float) -> list[dict]:
+    async def check_signals(self, current_price: float, atr: float = None) -> list[dict]:
         """
         Check all open signals and pending orders against current price.
         Triggers stop loss, take profit, or activates pending orders.
+        Applies execution simulation to exit fills.
         """
         # 1. Check Pending Orders -> Open them if triggered
         pending_signals = await self.storage.get_signals(status="pending")
@@ -140,8 +158,19 @@ class SignalExecutor:
                     exit_price = tp
 
             if reason:
-                result = await self.close_signal(sig_id, exit_price, reason)
+                # Apply execution simulation to exit
+                exec_result = self.execution_sim.simulate_exit(
+                    direction, exit_price, reason, atr=atr
+                )
+                result = await self.close_signal(sig_id, exec_result.fill_price, reason)
                 if result:
+                    result["execution"] = {
+                        "requested_price": exit_price,
+                        "fill_price": exec_result.fill_price,
+                        "slippage_pips": exec_result.slippage_pips,
+                        "spread_cost_pips": exec_result.spread_cost_pips,
+                        "quality": exec_result.execution_quality,
+                    }
                     closed.append(result)
 
         return closed
@@ -306,5 +335,14 @@ class SignalExecutor:
             f"🔥 Max Win Streak: {perf['consecutive_wins']}",
             f"❄️ Max Loss Streak: {perf['consecutive_losses']}",
         ]
+
+        # Add execution quality stats
+        exec_stats = self.execution_sim.get_execution_stats()
+        if exec_stats["total_orders"] > 0:
+            lines.append(f"\n⚡ *Execution Quality*")
+            lines.append(f"Fill Rate: {exec_stats['fill_rate']}%")
+            lines.append(f"Avg Slippage: {exec_stats['avg_slippage_pips']} pips")
+            lines.append(f"Avg Spread: {exec_stats['avg_spread_cost_pips']} pips")
+            lines.append(f"Total Exec Cost: {exec_stats['total_execution_cost_pips']} pips")
 
         return "\n".join(lines)
