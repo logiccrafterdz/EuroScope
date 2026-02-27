@@ -13,6 +13,15 @@ logger = logging.getLogger("euroscope.trading.strategy_engine")
 
 
 @dataclass
+class RegimeInfo:
+    """Market regime classification with strength and evidence."""
+    regime: str          # "trending", "ranging", "breakout"
+    strength: float      # 0.0 - 1.0 (confidence in the classification)
+    direction: str       # "bullish", "bearish", "neutral"
+    details: dict = field(default_factory=dict)  # supporting evidence
+
+
+@dataclass
 class StrategySignal:
     """Strategy recommendation with entry/exit rules."""
     strategy: str                    # "trend_following", "mean_reversion", "breakout"
@@ -22,6 +31,7 @@ class StrategySignal:
     exit_rules: list[str] = field(default_factory=list)
     reasoning: str = ""
     regime: str = ""                 # "trending", "ranging", "breakout"
+    regime_strength: float = 0.0     # 0.0 - 1.0
 
 
 class StrategyEngine:
@@ -48,15 +58,20 @@ class StrategyEngine:
         Returns:
             StrategySignal with recommended action
         """
-        regime = self._detect_regime(indicators)
+        regime_info = self._detect_regime(indicators)
         patterns = patterns or []
 
-        if regime == "trending":
+        if regime_info.regime == "trending":
             sig = self._trend_following(indicators, levels, patterns)
-        elif regime == "breakout":
+        elif regime_info.regime == "breakout":
             sig = self._breakout_strategy(indicators, levels, patterns)
         else:
             sig = self._mean_reversion(indicators, levels, patterns)
+
+        # Attach regime metadata to signal
+        sig.regime_strength = regime_info.strength
+        if regime_info.strength < 0.4:
+            sig.confidence *= 0.85  # Lower confidence in ambiguous regimes
 
         if uncertainty:
             sig = self._apply_uncertainty(sig, uncertainty, macro_data or {})
@@ -101,40 +116,131 @@ class StrategyEngine:
             return True
         return False
 
-    def _detect_regime(self, indicators: dict) -> str:
+    def _detect_regime(self, indicators: dict) -> RegimeInfo:
         """
-        Determine market regime from indicators.
+        Determine market regime using multi-factor scoring.
 
-        - trending: ADX > 25, clear EMA alignment
-        - ranging: ADX < 20, price between BBands
-        - breakout: price at extremes with momentum
+        Returns RegimeInfo with regime type, strength (0-1), direction,
+        and supporting evidence. Uses ADX + slope, EMA alignment,
+        Bollinger Band squeeze, MACD histogram, and RSI.
         """
         adx = indicators.get("adx")
+        adx_prev = indicators.get("adx_prev")  # Previous ADX for slope
         rsi = indicators.get("rsi")
         bb = indicators.get("bollinger", {})
+        macd = indicators.get("macd", {})
         overall_bias = indicators.get("overall_bias", "neutral")
+        ema_20 = indicators.get("ema_20")
+        ema_50 = indicators.get("ema_50")
 
-        # Strong trend
-        if adx is not None and adx > 25:
-            return "trending"
+        # ── Score each regime ──
+        trend_score = 0.0
+        breakout_score = 0.0
+        ranging_score = 0.05  # Baseline: assume ranging until proven otherwise
+        details = {}
 
-        # Check for breakout conditions
+        # --- ADX analysis (with slope) ---
+        adx_rising = None  # None = unknown slope
+        if adx is not None:
+            if adx_prev is not None:
+                adx_rising = adx > adx_prev
+                details["adx_slope"] = "rising" if adx_rising else "falling"
+
+            if adx > 30:
+                # Rising: 0.35, Unknown: 0.28, Falling: 0.20
+                trend_score += 0.35 if adx_rising else (0.20 if adx_rising is False else 0.28)
+                slope_icon = '↑' if adx_rising else ('↓' if adx_rising is False else '→')
+                details["adx"] = f"{adx:.0f} (strong{slope_icon})"
+            elif adx > 25:
+                # Rising: 0.25, Unknown: 0.20, Falling: 0.12
+                trend_score += 0.25 if adx_rising else (0.12 if adx_rising is False else 0.20)
+                slope_icon = '↑' if adx_rising else ('↓' if adx_rising is False else '→')
+                details["adx"] = f"{adx:.0f} (moderate{slope_icon})"
+            elif adx < 20:
+                ranging_score += 0.25
+                details["adx"] = f"{adx:.0f} (weak — favors ranging)"
+            else:
+                # ADX 20-25: ambiguous zone
+                ranging_score += 0.10
+                details["adx"] = f"{adx:.0f} (ambiguous)"
+
+        # --- EMA alignment ---
+        if ema_20 is not None and ema_50 is not None:
+            if ema_20 > ema_50:
+                trend_score += 0.20
+                details["ema_alignment"] = "bullish (EMA20 > EMA50)"
+            elif ema_20 < ema_50:
+                trend_score += 0.20
+                details["ema_alignment"] = "bearish (EMA20 < EMA50)"
+            else:
+                ranging_score += 0.10
+                details["ema_alignment"] = "flat"
+
+        # --- MACD histogram momentum ---
+        hist = macd.get("histogram_latest")
+        if hist is not None:
+            if abs(hist) > 0.0003:  # Meaningful momentum for EUR/USD
+                trend_score += 0.15
+                details["macd"] = f"strong ({'bullish' if hist > 0 else 'bearish'})"
+            else:
+                ranging_score += 0.10
+                details["macd"] = "flat"
+
+        # --- Bollinger Band analysis ---
         bb_upper = bb.get("upper")
         bb_lower = bb.get("lower")
         current = bb.get("current_price", 0)
 
         if bb_upper and bb_lower and current:
             bb_width = (bb_upper - bb_lower) / current * 100 if current else 0
-            if bb_width < 0.3:  # Tight squeeze
-                return "breakout"
+            details["bb_width"] = f"{bb_width:.3f}%"
+
+            if bb_width < 0.3:  # Tight squeeze → breakout loading
+                breakout_score += 0.30
+                details["bb_squeeze"] = True
+            elif bb_width < 0.5:
+                breakout_score += 0.15
+            else:
+                ranging_score += 0.05
+
             if current > bb_upper or current < bb_lower:
-                return "breakout"
+                breakout_score += 0.25
+                details["bb_breakout"] = "above" if current > bb_upper else "below"
 
-        # RSI extremes can signal breakout too
-        if rsi is not None and (rsi > 75 or rsi < 25):
-            return "breakout"
+        # --- RSI extremes ---
+        if rsi is not None:
+            if rsi > 75 or rsi < 25:
+                breakout_score += 0.15
+                details["rsi_extreme"] = f"{rsi:.0f}"
+            elif 40 < rsi < 60:
+                ranging_score += 0.10
 
-        return "ranging"
+        # ── Determine direction ──
+        if overall_bias == "bullish" or (ema_20 and ema_50 and ema_20 > ema_50):
+            direction = "bullish"
+        elif overall_bias == "bearish" or (ema_20 and ema_50 and ema_20 < ema_50):
+            direction = "bearish"
+        else:
+            direction = "neutral"
+
+        # ── Pick winning regime ──
+        scores = {
+            "trending": round(trend_score, 3),
+            "breakout": round(breakout_score, 3),
+            "ranging": round(ranging_score, 3),
+        }
+        details["scores"] = scores
+        regime = max(scores, key=scores.get)
+        strength = min(1.0, scores[regime])
+
+        logger.debug(f"Regime detection: {regime} (strength={strength:.2f}) scores={scores}")
+
+        return RegimeInfo(
+            regime=regime,
+            strength=strength,
+            direction=direction,
+            details=details,
+        )
 
     # ─── Trend Following ─────────────────────────────────────
 

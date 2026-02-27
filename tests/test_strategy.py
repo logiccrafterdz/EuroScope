@@ -26,25 +26,36 @@ class TestRegimeDetection:
 
     def test_trending_high_adx(self, engine):
         indicators = {"adx": 30, "rsi": 55, "overall_bias": "bullish"}
-        assert engine._detect_regime(indicators) == "trending"
+        result = engine._detect_regime(indicators)
+        assert result.regime == "trending"
+        assert result.strength > 0.0
 
     def test_ranging_low_adx(self, engine):
         indicators = {"adx": 15, "rsi": 50, "overall_bias": "neutral"}
-        assert engine._detect_regime(indicators) == "ranging"
+        result = engine._detect_regime(indicators)
+        assert result.regime == "ranging"
 
     def test_breakout_bb_squeeze(self, engine):
+        """BB squeeze + RSI extreme + price outside band → solidly breakout."""
         indicators = {
-            "adx": 18, "rsi": 50,
-            "bollinger": {"upper": 1.0910, "lower": 1.0905, "current_price": 1.0908}
+            "adx": 18, "rsi": 80,
+            "bollinger": {"upper": 1.0910, "lower": 1.0905, "current_price": 1.0912}
         }
-        assert engine._detect_regime(indicators) == "breakout"
+        result = engine._detect_regime(indicators)
+        assert result.regime == "breakout"
+        assert result.strength >= 0.3
 
     def test_breakout_extreme_rsi(self, engine):
-        indicators = {"adx": 18, "rsi": 80}
-        assert engine._detect_regime(indicators) == "breakout"
+        """RSI extreme + BB squeeze → breakout even without ADX support."""
+        indicators = {
+            "adx": 18, "rsi": 80,
+            "bollinger": {"upper": 1.0910, "lower": 1.0905, "current_price": 1.0908}
+        }
+        result = engine._detect_regime(indicators)
+        assert result.regime == "breakout"
 
     def test_no_indicators(self, engine):
-        assert engine._detect_regime({}) == "ranging"
+        assert engine._detect_regime({}).regime == "ranging"
 
 
 # ── Trend Following ──────────────────────────────────────

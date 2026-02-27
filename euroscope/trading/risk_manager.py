@@ -59,12 +59,20 @@ class RiskManager:
 
     # ─── Position Sizing ─────────────────────────────────────
 
-    def calculate_position_size(self, stop_pips: float) -> float:
+    def calculate_position_size(
+        self, stop_pips: float, *,
+        atr: float = None, avg_atr: float = None,
+        regime: str = None, regime_strength: float = 0.5,
+    ) -> float:
         """
-        Calculate position size using fixed fractional method.
+        Calculate position size with volatility and regime adaptation.
 
         Args:
             stop_pips: Distance to stop loss in pips
+            atr: Current ATR value (for volatility scaling)
+            avg_atr: Average ATR over lookback (for relative comparison)
+            regime: Market regime ("trending", "ranging", "breakout")
+            regime_strength: Confidence in regime classification (0-1)
 
         Returns:
             Position size in standard lots
@@ -72,12 +80,63 @@ class RiskManager:
         if stop_pips <= 0:
             return 0.0
 
-        risk_amount = self.config.account_balance * (self.config.risk_per_trade / 100)
-        # Position size = Risk $ / (Stop pips × Pip value per lot)
-        lots = risk_amount / (stop_pips * self.config.pip_value)
+        base_risk_pct = self.config.risk_per_trade
 
-        # Round to 2 decimal places (0.01 lot = micro lot)
-        return round(max(0.01, min(lots, 10.0)), 2)
+        # ── ATR volatility scaling ──
+        # High volatility → reduce size; low volatility → normal/slightly larger
+        atr_factor = 1.0
+        if atr and avg_atr and avg_atr > 0:
+            atr_ratio = avg_atr / atr  # < 1 when vol is high, > 1 when low
+            atr_factor = max(0.5, min(1.5, atr_ratio))
+            logger.debug(f"ATR scaling: ratio={atr_ratio:.2f}, factor={atr_factor:.2f}")
+
+        # ── Regime-aware scaling ──
+        regime_factor = 1.0
+        if regime:
+            regime_factors = {
+                "trending": 1.0,    # Full size in confirmed trends
+                "ranging": 0.8,     # Smaller in choppy conditions
+                "breakout": 0.7,    # Smaller on breakout attempts (higher risk)
+            }
+            base_factor = regime_factors.get(regime, 0.8)
+            # Stronger regime confidence → closer to base_factor
+            # Weak confidence → blend toward 0.8 (cautious)
+            regime_factor = base_factor * regime_strength + 0.8 * (1 - regime_strength)
+            logger.debug(f"Regime scaling: {regime} (str={regime_strength:.2f}), factor={regime_factor:.2f}")
+
+        # ── Streak-based de-risking ──
+        streak_factor = 1.0
+        if self._consecutive_losses >= 3:
+            streak_factor = 0.5
+        elif self._consecutive_losses >= 2:
+            streak_factor = 0.75
+
+        # ── Combined adaptive risk ──
+        adjusted_risk_pct = base_risk_pct * atr_factor * regime_factor * streak_factor
+        adjusted_risk_pct = max(0.25, min(adjusted_risk_pct, base_risk_pct * 1.5))  # Clamp
+
+        risk_amount = self.config.account_balance * (adjusted_risk_pct / 100)
+        pip_value = self.calculate_pip_value()
+        lots = risk_amount / (stop_pips * pip_value)
+
+        result = round(max(0.01, min(lots, 10.0)), 2)
+        logger.debug(
+            f"Position size: {result} lots | risk={adjusted_risk_pct:.2f}% "
+            f"(base={base_risk_pct}% × atr={atr_factor:.2f} × regime={regime_factor:.2f} × streak={streak_factor:.2f})"
+        )
+        return result
+
+    @staticmethod
+    def calculate_pip_value(lot_size: float = 1.0) -> float:
+        """
+        Calculate pip value for EUR/USD.
+
+        For EUR/USD (USD quote currency):
+        - Standard lot (1.0): $10.00 per pip
+        - Mini lot (0.1): $1.00 per pip
+        - Micro lot (0.01): $0.10 per pip
+        """
+        return lot_size * 10.0  # $10 per pip per standard lot for EUR/USD
 
     # ─── Stop Loss Calculation ───────────────────────────────
 
@@ -216,8 +275,16 @@ class RiskManager:
         tp_pips = abs(take_profit - entry_price) * 10000
         rr = round(tp_pips / stop_pips, 2) if stop_pips > 0 else 0
 
-        # ── Position sizing ──
-        position_size = self.calculate_position_size(stop_pips)
+        # ── Position sizing (volatility & regime adaptive) ──
+        atr_data = None
+        avg_atr_val = None
+        if atr:
+            atr_data = atr
+            # Use atr as both current and avg if we don't have separate avg
+            avg_atr_val = atr  # Caller can override
+        position_size = self.calculate_position_size(
+            stop_pips, atr=atr, avg_atr=avg_atr_val,
+        )
         risk_amount = round(self.config.account_balance * (self.config.risk_per_trade / 100), 2)
 
         # ── Drawdown checks ──
