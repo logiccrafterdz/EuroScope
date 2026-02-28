@@ -54,24 +54,48 @@ class EuroScopeBot:
 
     def __init__(self, config: Config):
         self.config = config
+        
+        # 1. Base Infrastructure (Shared Storage)
         self.storage = Storage()
-        self.daily_tracker = DailyTracker(storage=self.storage)
-        self.api = APIServer(self)
-        self.commands = CommandHandlers(self)
-        self.orchestrator = Orchestrator()
-        self.registry = self.orchestrator.registry
-        self.workspace = WorkspaceManager()
         self.bus = EventBus()
+        self.registry = SkillsRegistry()
         self.alerts = SmartAlerts()
         setup_default_alerts(self.alerts)
-        self.heartbeat = HeartbeatService(interval=300, event_bus=self.bus)
-        self.cron = CronScheduler(config=config, bot=self)
-        self.user_settings = UserSettings(self.storage)
-        self.notifications = NotificationManager(self.storage)
-        self.notifications.set_orchestrator(self.orchestrator)
-        self.rate_limiter = RateLimiter(max_requests=config.rate_limit_requests, window_minutes=config.rate_limit_window_minutes)
-        self.alerts.register_handler(AlertChannel.TELEGRAM, self._on_alert_triggered)
-        from ..data.multi_provider import MultiSourceProvider
+        self.rate_limiter = RateLimiter(
+            max_requests=config.rate_limit_requests, 
+            window_minutes=config.rate_limit_window_minutes
+        )
+        
+        # 2. Core Brain Components
+        self.memory = Memory(self.storage)
+        self.vector_memory = VectorMemory(storage=self.storage)
+        self.orchestrator = Orchestrator(storage=self.storage, registry=self.registry)
+        
+        self.router = LLMRouter.from_config(
+            primary_key=config.llm.api_key, 
+            primary_base=config.llm.api_base, 
+            primary_model=config.llm.model, 
+            fallback_key=config.llm.fallback_api_key, 
+            fallback_base=config.llm.fallback_api_base, 
+            fallback_model=config.llm.fallback_model
+        )
+        
+        # 3. Intelligence Layers (Order: Agent -> Forecaster)
+        self.agent = Agent(
+            config.llm, 
+            router=self.router, 
+            vector_memory=self.vector_memory, 
+            orchestrator=self.orchestrator
+        )
+        self.forecaster = Forecaster(
+            self.agent, 
+            self.memory, 
+            self.orchestrator, 
+            pattern_tracker=None # Will be set-injected
+        )
+        self.agent.forecaster = self.forecaster
+        
+        # 4. Domain & Data Services
         self.price_provider = MultiSourceProvider(
             alphavantage_key=config.data.alphavantage_key,
             tiingo_key=config.data.tiingo_key,
@@ -89,64 +113,42 @@ class EuroScopeBot:
         ) if config.data.capital_api_key else None
         self.ws_client = CapitalWebsocketClient(self.broker) if self.broker else None
         
-        self.router = LLMRouter.from_config(
-            primary_key=config.llm.api_key, 
-            primary_base=config.llm.api_base, 
-            primary_model=config.llm.model, 
-            fallback_key=config.llm.fallback_api_key, 
-            fallback_base=config.llm.fallback_api_base, 
-            fallback_model=config.llm.fallback_model
-        )
+        self.news_engine = NewsEngine(config.data.brave_api_key, storage=self.storage)
+        self.calendar = EconomicCalendar()
+        self.macro_provider = FundamentalDataProvider(config.data.fred_api_key)
+        self.risk_manager = RiskManager(storage=self.storage)
         
-        # Core Components
-        self.storage = self.storage or Storage()
-        self.registry = SkillsRegistry()
-        self.memory = Memory(self.storage)
-        self.vector_memory = VectorMemory(storage=self.storage)
-        self.orchestrator = Orchestrator(storage=self.storage, registry=self.registry)
-        
-        # Tracking & Learning (Shared Storage)
+        # 5. Tracking & Analytics
         self.pattern_tracker = PatternTracker(storage=self.storage)
         self.adaptive_tuner = AdaptiveTuner(storage=self.storage)
         self.evolution_tracker = EvolutionTracker(storage=self.storage)
         self.daily_tracker = DailyTracker(storage=self.storage)
         self.briefing_engine = BriefingEngine(self.config, storage=self.storage)
         
-        # Domain Services
-        self.price_provider = MultiSourceProvider(
-            alphavantage_key=config.data.alphavantage_key,
-            tiingo_key=config.data.tiingo_key,
-            oanda_key=config.data.oanda_api_key,
-            oanda_account=config.data.oanda_account_id,
-            oanda_practice=config.data.oanda_practice,
-            capital_key=config.data.capital_api_key,
-            capital_identifier=config.data.capital_identifier,
-            capital_password=config.data.capital_password
-        )
-        self.news_engine = NewsEngine(config.data.brave_api_key, storage=self.storage)
-        self.calendar = EconomicCalendar()
-        self.macro_provider = FundamentalDataProvider(config.data.fred_api_key)
-        self.risk_manager = RiskManager(storage=self.storage)
+        # Inject pattern tracker into forecaster now that it exists
+        self.forecaster.pattern_tracker = self.pattern_tracker
         
-        # Bot Logic & UI (Order is critical: Agent first, then components that need it)
-        self.agent = Agent(config.llm, router=self.router, vector_memory=self.vector_memory, orchestrator=self.orchestrator)
-        self.forecaster = Forecaster(self.agent, self.memory, self.orchestrator, pattern_tracker=self.pattern_tracker)
-        self.agent.forecaster = self.forecaster
-        
+        # 6. User Management & Notifications
         self.user_settings = UserSettings(self.storage)
         self.notifications = NotificationManager(self.storage)
+        self.notifications.set_orchestrator(self.orchestrator)
         
-        # Automation & Scheduling
-        self.bus = EventBus()
+        # 7. UI, Interface & Scheduling
+        self.api = APIServer(self)
+        self.commands = CommandHandlers(self)
+        self.workspace = WorkspaceManager()
         self.heartbeat = HeartbeatService(interval=300, event_bus=self.bus)
         self.cron = CronScheduler(config=config, bot=self, storage=self.storage)
+        
+        # 8. Subscription Handlers
+        self.alerts.register_handler(AlertChannel.TELEGRAM, self._on_alert_triggered)
         self.bot_settings = {
             'risk_per_trade': 1.0,
             'max_daily_loss': 3.0,
             'auto_trading_enabled': False
         }
         # Load Mini App Settings
-        risk_manager = RiskManager()
+        # Load Persistent Settings (Risk, AutoTrade)
         try:
             import json, os
             settings_path = os.path.join(self.config.data_dir, 'bot_settings.json')
@@ -154,14 +156,14 @@ class EuroScopeBot:
                 with open(settings_path, 'r') as f:
                     s_data = json.load(f)
                     self.bot_settings.update(s_data)
-                    risk_manager.config.risk_per_trade = float(self.bot_settings.get('risk_per_trade', 1.0))
-                    risk_manager.config.max_daily_loss = float(self.bot_settings.get('max_daily_loss', 3.0))
-                    logger.debug(f"Bot: Loaded persistent settings (Risk: {risk_manager.config.risk_per_trade}%, Max Loss: {risk_manager.config.max_daily_loss}%, AutoTrade: {self.bot_settings.get('auto_trading_enabled')})")
+                    self.risk_manager.config.risk_per_trade = float(self.bot_settings.get('risk_per_trade', 1.0))
+                    self.risk_manager.config.max_daily_loss = float(self.bot_settings.get('max_daily_loss', 3.0))
+                    logger.debug(f"Bot: Loaded persistent settings (Risk: {self.risk_manager.config.risk_per_trade}%, Max Loss: {self.risk_manager.config.max_daily_loss}%, AutoTrade: {self.bot_settings.get('auto_trading_enabled')})")
         except Exception as e:
             logger.warning(f"Bot: Error loading bot_settings.json: {e}")
 
         market_data_skill = self.registry.get('market_data')
-        # Inject shared storage into Orchestrator/Skills Discovery
+        # Inject shared dependencies into Orchestrator/Skills system
         self.orchestrator.inject_dependencies(
             storage=self.storage,
             vector_memory=self.vector_memory,
@@ -175,7 +177,7 @@ class EuroScopeBot:
             agent=self.agent, 
             pattern_tracker=self.pattern_tracker, 
             adaptive_tuner=self.adaptive_tuner, 
-            risk_manager=risk_manager, 
+            risk_manager=self.risk_manager, 
             event_bus=self.bus, 
             heartbeat=self.heartbeat, 
             market_data_skill=market_data_skill, 

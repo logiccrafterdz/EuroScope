@@ -25,8 +25,9 @@ class VectorMemory:
     context retrieval in a single-pair trading bot.
     """
 
-    def __init__(self, db_path: str = "data/euroscope.db", storage=None):
-        self.storage = storage # Assuming 'storage' object will handle db_path internally
+    def __init__(self, storage=None, persist_dir: str = "data"):
+        self.storage = storage
+        self.persist_dir = persist_dir
         self._cache = {}
         self._conn: Optional[sqlite3.Connection] = None
         self._available = False
