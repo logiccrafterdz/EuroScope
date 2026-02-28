@@ -21,13 +21,17 @@ EuroScope is a skills-based multi-agent system that provides institutional-grade
 ## Recent Major Improvements (Last 14 Days)
 
 ### 🔴 Core Infrastructure & Data Integrity
+- **Capital.com Institutional Integration**: 
+  - **REST API**: Full order management with **Secure RSA Encryption** for automated authentication.
+  - **WebSocket Streaming**: Migrated from polling to real-time tick-by-tick market data (Bid/Ask) for instantaneous trade evaluation.
+  - **Zero-Latency Exits**: Integrated a new `SignalExecutor` that triggers SL/TP levels millisecond-perfect against incoming WS ticks.
 - **Real-Time Data (Tiingo/OANDA)**: Replaced `yfinance` as the primary data source to eliminate the 15-minute delay. `MultiSourceProvider` now fetches institutional-grade 0s-delay quotes via **Tiingo** REST API (OANDA practice account supported for broker-grade accuracy).
 - **ONNX-Quantized FinBERT Engine**: Upgraded sentiment analysis from `TextBlob` to a quantized `int8` ONNX version of `ProsusAI/finbert`. 
   - **Memory**: Model size reduced from 438MB to 110MB (65MB zipped) to fit 512MB RAM limits.
   - **Performance**: Inference speed increased by ~2x on CPU.
   - **Resilience**: Auto-extracting model support at runtime.
 - **V3 Skills-Based Architecture**: Complete migration from monolithic handlers to an auto-discovering, asynchronous Skills Engine.
-- **Stable Core**: Achieved **558 passing tests** with zero failures and zero deprecation warnings (asyncio/pandas 3.12 compatibility).
+- **Stable Core**: Achieved **565 passing tests** with zero failures and zero deprecation warnings (asyncio/pandas 3.12 compatibility).
 
 ### 🟠 Advanced Analysis & Trading
 - **COT (Commitments of Traders)**: Integrated weekly CFTC positioning data for structural sentiment context.
@@ -218,8 +222,11 @@ await memory.cleanup_old_documents(ttl_days=30)
 - **DeepSeek & OpenAI** (Multi-LLM Agents)
 - **ChromaDB** (Vector Memory)
 - **Tiingo & OANDA** (Real-time Market Data)
+- **Capital.com** (Institutional REST & WebSocket API)
 - **SQLite** (Persistence & DB)
 - **psutil** (Runtime monitoring)
+- **websockets** (High-performance streaming)
+- **pycryptodome** (RSA/AES Security)
 
 ## License
 Private project.
