@@ -91,15 +91,21 @@ class EuroScopeBot:
         self.macro_provider = FundamentalDataProvider(config.data.fred_api_key)
         self.news_engine = NewsEngine(config.data.brave_api_key, self.storage)
         self.calendar = EconomicCalendar()
-        self.router = LLMRouter.from_config(primary_key=config.llm.api_key, primary_base=config.llm.api_base, primary_model=config.llm.model, fallback_key=config.llm.fallback_api_key, fallback_base=config.llm.fallback_api_base, fallback_model=config.llm.fallback_model)
+        self.router = LLMRouter.from_config(
+            primary_key=config.llm.api_key, 
+            primary_base=config.llm.api_base, 
+            primary_model=config.llm.model, 
+            fallback_key=config.llm.fallback_api_key, 
+            fallback_base=config.llm.fallback_api_base, 
+            fallback_model=config.llm.fallback_model
+        )
+        
         # Core Components
         self.storage = self.storage or Storage()
         self.registry = SkillsRegistry()
         self.memory = Memory(self.storage)
         self.vector_memory = VectorMemory(storage=self.storage)
         self.orchestrator = Orchestrator(storage=self.storage, registry=self.registry)
-        self.llm = LLMRouter.from_config(primary_key=config.llm.api_key, primary_base=config.llm.api_base, primary_model=config.llm.model, fallback_key=config.llm.fallback_api_key, fallback_base=config.llm.fallback_api_base, fallback_model=config.llm.fallback_model)
-        self.llm.set_memory(self.memory)
         
         # Tracking & Learning (Shared Storage)
         self.pattern_tracker = PatternTracker(storage=self.storage)
