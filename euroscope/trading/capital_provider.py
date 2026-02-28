@@ -242,6 +242,42 @@ class CapitalProvider:
             logger.error(f"Trade execution failed: {e}")
             return {"success": False, "error": str(e)}
 
+    async def get_account_info(self) -> Dict[str, Any]:
+        """Fetch account balance, equity, and other financial metrics."""
+        if not self.session_token:
+            if not await self.login(): return {"success": False, "error": "Login failed"}
+            
+        url = f"{self.DEMO_URL}/accounts"
+        headers = {
+            "X-CAP-API-KEY": self.api_key,
+            "CST": self.session_token,
+            "X-SECURITY-TOKEN": self.security_token
+        }
+        
+        try:
+            session = await self._get_session()
+            async with session.get(url, headers=headers) as response:
+                response.raise_for_status()
+                data = await response.json()
+                # Capital.com returns a list of accounts
+                accounts = data.get("accounts", [])
+                for acc in accounts:
+                    if acc.get("accountId") == self.account_id or not self.account_id:
+                        return {
+                            "success": True,
+                            "account_id": acc.get("accountId"),
+                            "account_name": acc.get("accountName"),
+                            "balance": acc.get("balance"),
+                            "equity": acc.get("equity"),
+                            "available": acc.get("available"),
+                            "currency": acc.get("currency"),
+                            "status": acc.get("status")
+                        }
+                return {"success": False, "error": "Account not found"}
+        except Exception as e:
+            logger.error(f"Failed to fetch account info: {e}")
+            return {"success": False, "error": str(e)}
+
     async def close(self):
         if self._session:
             await self._session.close()

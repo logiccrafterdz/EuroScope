@@ -506,6 +506,9 @@
                 <div class="session-info" id="current-session">DETECTING SESSION...</div>
             </div>
             <div id="mkt-status" class="market-badge status-closed">OFFLINE</div>
+            <div id="ws-link" class="market-badge"
+                style="background:rgba(0,0,0,0.3); color:var(--text-dim); border:1px solid var(--border-color); margin-left:8px;">
+                WS: LINKING...</div>
         </header>
 
         <!-- TERMINAL TAB -->
@@ -522,6 +525,17 @@
                     class="text-glow">-.-----</div>
                 <div id="price-change" style="font-size:0.95rem; font-weight:600; font-family:'Fira Code';">--.---
                     (---%)</div>
+            </div>
+
+            <div class="bento">
+                <div class="glass-card" style="padding:16px;">
+                    <div class="label-sm">Broker Balance</div>
+                    <div id="stat-balance" class="val-md">--.--</div>
+                </div>
+                <div class="glass-card" style="padding:16px;">
+                    <div class="label-sm">Account Equity</div>
+                    <div id="stat-equity" class="val-md" style="color:var(--accent-primary);">--.--</div>
+                </div>
             </div>
 
             <div class="bento">
@@ -580,8 +594,11 @@
                 </button>
             </div>
 
-            <div class="glass-card bento-full" style="margin-bottom: 12px;">
-                <div class="label-sm" style="margin-bottom: 16px;">Neural Indicators</div>
+            <div class="glass-card bento-full" style="margin-bottom: 12px; border:1px solid rgba(0,255,157,0.15);">
+                <div class="label-sm" style="margin-bottom: 16px; display:flex; justify-content:space-between;">
+                    <span>Neural Indicators</span>
+                    <span style="font-size:0.5rem; color:var(--text-dim);">PROVIDER: ONNX_QUANTIZED</span>
+                </div>
                 <div id="node-analysis">
                     <div class="empty-state">SYNCING ANALYTICS...</div>
                 </div>
@@ -692,6 +709,19 @@
                     <div style="padding:10px 0;">
                         <div class="label-sm" style="margin-bottom:4px;">Total P/L</div>
                         <div id="perf-pnl" class="val-md">--</div>
+                    </div>
+                </div>
+                <!-- Risk Stats (Fix 13) -->
+                <div class="bento"
+                    style="margin-bottom:0; background:rgba(255,255,255,0.02); border-radius:16px; border:1px solid var(--border-color); padding:10px;">
+                    <div style="padding:5px 0;">
+                        <div class="label-sm" style="margin-bottom:4px; color:var(--accent-primary);">DAILY DRAWDOWN
+                        </div>
+                        <div id="risk-daily-pnl" class="val-md">--.--</div>
+                    </div>
+                    <div style="padding:5px 0;">
+                        <div class="label-sm" style="margin-bottom:4px;">LOSS STREAK</div>
+                        <div id="risk-streak" class="val-md">--</div>
                     </div>
                 </div>
                 <div id="perf-recommendations"
@@ -1107,6 +1137,15 @@
                 const s = res.data.stats || {};
                 document.getElementById('perf-wr').textContent = `${(s.win_rate || 0).toFixed(0)}%`;
                 document.getElementById('perf-pnl').textContent = `${(s.total_pnl || 0).toFixed(1)}p`;
+
+                // Risk Persistence Display
+                const r = res.data.risk || {};
+                const dailyPnl = r.daily_pnl || 0;
+                const dPnlEl = document.getElementById('risk-daily-pnl');
+                dPnlEl.textContent = `${dailyPnl >= 0 ? '+' : ''}${dailyPnl.toFixed(2)}`;
+                dPnlEl.style.color = dailyPnl >= 0 ? 'var(--up-color)' : 'var(--down-color)';
+                document.getElementById('risk-streak').textContent = r.consecutive_losses || 0;
+
                 const t = res.data.tuning || {}; const recs = t.recommendations || [];
                 const recEl = document.getElementById('perf-recommendations');
                 if (recs.length > 0) {
@@ -1212,18 +1251,53 @@
                     if (s.status === 'OPEN') mkt.style.boxShadow = '0 0 15px rgba(0, 255, 157, 0.4)';
                     else mkt.style.boxShadow = 'none';
                     document.getElementById('current-session').textContent = `${s.session} SESSION`;
+
+                    const ws = document.getElementById('ws-link');
+                    if (s.ws_status === 'CONNECTED') {
+                        ws.textContent = 'WS: LIVE';
+                        ws.style.color = 'var(--up-color)';
+                        ws.style.borderColor = 'rgba(0, 255, 157, 0.3)';
+                    } else {
+                        ws.textContent = 'WS: LINKING...';
+                        ws.style.color = 'var(--text-dim)';
+                        ws.style.borderColor = 'var(--border-color)';
+                    }
                 }
             });
 
             api('/summary').then(sum => {
                 if (sum.success) {
-                    document.getElementById('price').textContent = f5(sum.price);
+                    const oldPrice = parseFloat(document.getElementById('price').textContent);
+                    const newPrice = sum.price;
+                    document.getElementById('price').textContent = f5(newPrice);
+
+                    // Live Glow Animation
+                    if (oldPrice && newPrice !== oldPrice) {
+                        const priceEl = document.getElementById('price');
+                        priceEl.style.transition = 'none';
+                        priceEl.style.color = newPrice > oldPrice ? 'var(--up-color)' : 'var(--down-color)';
+                        priceEl.style.textShadow = `0 0 30px ${newPrice > oldPrice ? 'var(--up-color)' : 'var(--down-color)'}`;
+                        setTimeout(() => {
+                            priceEl.style.transition = 'all 1s ease';
+                            priceEl.style.color = '#fff';
+                            priceEl.style.textShadow = '0 0 20px var(--accent-glow)';
+                        }, 100);
+                    }
+
                     const el = document.getElementById('price-change');
                     const sign = (sum.change || 0) >= 0 ? '+' : '';
                     el.textContent = `${sign}${f5(sum.change)} (${sign}${f2(sum.change_pct)}%)`;
                     el.style.color = (sum.change || 0) >= 0 ? 'var(--up-color)' : 'var(--down-color)';
                     document.getElementById('stat-range').textContent = `${(sum.range_pips || 0).toFixed(1)} P`;
                     document.getElementById('stat-hilo').textContent = `${f5(sum.low)} / ${f5(sum.high)}`;
+                }
+            });
+
+            // Fetch Account Info
+            api('/account').then(acc => {
+                if (acc.success) {
+                    document.getElementById('stat-balance').textContent = `${f2(acc.balance)} ${acc.currency}`;
+                    document.getElementById('stat-equity').textContent = `${f2(acc.equity)} ${acc.currency}`;
                 }
             });
 
@@ -1270,9 +1344,14 @@
                     document.getElementById('forecast-dir').textContent = d.direction;
                     document.getElementById('forecast-dir').style.color = d.direction === 'BUY' ? 'var(--up-color)' : d.direction === 'SELL' ? 'var(--down-color)' : 'var(--text-muted)';
                     document.getElementById('forecast-dir').style.textShadow = `0 0 20px ${d.direction === 'BUY' ? 'var(--up-color)' : d.direction === 'SELL' ? 'var(--down-color)' : 'transparent'}`;
-                    document.getElementById('forecast-conf-bar').style.width = `${(d.confidence || 0) * 100}%`;
-                    document.getElementById('forecast-conf-bar').style.backgroundColor = document.getElementById('forecast-dir').style.color;
-                    document.getElementById('forecast-conf-bar').style.color = document.getElementById('forecast-dir').style.color;
+
+                    // Dynamic Gradient for Confidence Bar
+                    const color = d.direction === 'BUY' ? 'var(--up-color)' : d.direction === 'SELL' ? 'var(--down-color)' : 'var(--text-muted)';
+                    const bar = document.getElementById('forecast-conf-bar');
+                    bar.style.width = `${(d.confidence || 0) * 100}%`;
+                    bar.style.background = `linear-gradient(90deg, transparent, ${color})`;
+                    bar.style.boxShadow = `0 0 15px ${color}`;
+
                     document.getElementById('forecast-conf-text').textContent = `${((d.confidence || 0) * 100).toFixed(0)}%`;
                     document.getElementById('forecast-text').innerHTML = parseMd(d.reasoning || "...");
                 } else if (res.error) {
@@ -1283,7 +1362,28 @@
                 if (res.success && res.data) {
                     const ta = res.data; const ind = ta.indicators || {};
                     const b = (ta.overall_bias || 'NEUTRAL').toUpperCase();
-                    document.getElementById('node-analysis').innerHTML = `
+                    const node = document.getElementById('node-analysis');
+                    node.innerHTML = '';
+
+                    // Add Sentiment Card
+                    if (res.sentiment) {
+                        const s = res.sentiment;
+                        const sColor = s.label === 'BULLISH' ? 'var(--up-color)' : s.label === 'BEARISH' ? 'var(--down-color)' : 'var(--text-muted)';
+                        node.innerHTML += `
+                            <div class="info-row" style="background:rgba(255,255,255,0.03); padding:12px; border-radius:12px; margin-bottom:12px; border-left:4px solid ${sColor}">
+                                <div>
+                                    <div class="label-sm" style="margin-bottom:2px;">NEURAL SENTIMENT</div>
+                                    <div style="font-size:0.9rem; font-weight:800; color:${sColor}">${s.label}</div>
+                                </div>
+                                <div style="text-align:right">
+                                    <div class="label-sm" style="margin-bottom:2px;">CONVICTION</div>
+                                    <div style="font-family:'Fira Code'; font-weight:700;">${(s.score * 100).toFixed(1)}%</div>
+                                </div>
+                            </div>
+                        `;
+                    }
+
+                    node.innerHTML += `
                         <div class="info-row"><span class="label">Bias</span><span class="val" style="color:${b === 'BUY' ? 'var(--up-color)' : b === 'SELL' ? 'var(--down-color)' : 'var(--accent-primary)'};text-shadow:0 0 10px currentColor;">${b}</span></div>
                         <div class="info-row"><span class="label">RSI</span><span class="val">${f2(ind.RSI?.value)}</span></div>
                         <div class="info-row"><span class="label">MACD</span><span class="val">${ind.MACD?.signal_text || '---'}</span></div>

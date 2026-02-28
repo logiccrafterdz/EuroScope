@@ -74,10 +74,18 @@ class APIServer:
         mkt_data = result_mkt.data if result_mkt.success else {"status": "Closed"}
         res_session = await self.bot.orchestrator.run_skill("session_context", "detect", context=ctx)
         session_data = res_session.data if res_session.success else {"session_regime": "unknown"}
+        # Check WebSocket connection status
+        ws_status = "DISCONNECTED"
+        if hasattr(self.bot, "ws_client") and self.bot.ws_client:
+            import websockets
+            if self.bot.ws_client.ws and self.bot.ws_client.ws.state.name == "OPEN":
+                ws_status = "CONNECTED"
+
         return web.json_response({
             "success": True,
             "data": {
                 "status": mkt_data.get("status", "Closed"),
+                "ws_status": ws_status,
                 "session": session_data.get("session_regime", "unknown").upper(),
                 "rules": session_data.get("session_rules", {}),
                 "timestamp": datetime.now().isoformat(),
@@ -215,15 +223,31 @@ class APIServer:
         logger.debug("API: Running real-time technical analysis...")
         ctx = SkillContext()
         res_ta = await self.bot.orchestrator.run_skill("technical_analysis", "analyze", context=ctx, timeframe="H1")
-        if not res_ta.success:
-            logger.warning(f"API: Analysis skill partial failure: {res_ta.error}")
-            return web.json_response({
-                "success": False,
-                "partial": True,
-                "error": res_ta.error,
-                "data": {"indicators": {}, "overall_bias": "NEUTRAL"}
-            })
-        return web.json_response({"success": True, "data": res_ta.data, "formatted": res_ta.metadata.get("formatted")})
+        
+        # Add Real-time Sentiment (Optimized ONNX)
+        sentiment_data = {"label": "NEUTRAL", "score": 0.5}
+        try:
+            from ..data.sentiment import analyze_sentiment_onnx
+            if res_ta.success:
+                mood_phrase = f"EURUSD is currently {res_ta.data.get('overall_bias', 'neutral')}."
+            else:
+                mood_phrase = "EURUSD market status is unknown."
+            
+            res_sent = analyze_sentiment_onnx(mood_phrase)
+            sentiment_data = {
+                "label": res_sent["label"],
+                "score": res_sent["score"],
+                "provider": res_sent["provider"]
+            }
+        except Exception as e:
+            logger.warning(f"API: Sentiment analysis failed: {e}")
+
+        return web.json_response({
+            "success": True, 
+            "data": res_ta.data, 
+            "sentiment": sentiment_data,
+            "formatted": res_ta.metadata.get("formatted")
+        })
 
     async def _api_candles(self, request):
         """API endpoint for chart data (OHLC) with strict time sorting."""
@@ -317,11 +341,47 @@ class APIServer:
         try:
             # Await async storage method
             stats = await self.bot.storage.get_trade_journal_stats()
+            
+            # Add RiskManager persisted state
+            risk_state = {}
+            try:
+                risk_skill = self.bot.orchestrator.registry.get("risk_management")
+                if risk_skill and hasattr(risk_skill, "manager"):
+                    rm = risk_skill.manager
+                    risk_state = {
+                        "daily_pnl": rm._daily_pnl,
+                        "daily_pnl_date": rm._daily_pnl_date,
+                        "consecutive_losses": rm._consecutive_losses,
+                        "max_daily_loss_limit": rm.config.max_daily_loss
+                    }
+            except Exception as e:
+                logger.warning(f"API: Failed to get risk state: {e}")
+
             # AdaptiveTuner analyze is async now
             tuning = await self.bot.adaptive_tuner.analyze()
-            return web.json_response({"success": True, "data": {"stats": stats, "tuning": tuning}})
+            return web.json_response({
+                "success": True, 
+                "data": {
+                    "stats": stats, 
+                    "risk": risk_state,
+                    "tuning": tuning
+                }
+            })
         except Exception as e:
             logger.error(f"API: Performance error: {e}")
+            return web.json_response({"success": False, "error": str(e)})
+
+    async def _api_account(self, request):
+        """API endpoint for Capital.com account balance and equity."""
+        logger.debug("API: Fetching account info...")
+        if not hasattr(self.bot, "broker") or not self.bot.broker:
+            return web.json_response({"success": False, "error": "Broker not configured"})
+        
+        try:
+            acc_info = await self.bot.broker.get_account_info()
+            return web.json_response(acc_info)
+        except Exception as e:
+            logger.error(f"API: Account info error: {e}")
             return web.json_response({"success": False, "error": str(e)})
 
     async def _api_briefing(self, request):
@@ -490,6 +550,7 @@ class APIServer:
                 web.get("/api/macro", self._api_macro), 
                 web.get("/api/backtest", self._api_backtest), 
                 web.get("/api/performance", self._api_performance), 
+                web.get("/api/account", self._api_account),
                 web.get("/api/briefing", self._api_briefing), 
                 web.get("/api/trades", self._api_trades), 
                 web.get("/api/history", self._api_history),
