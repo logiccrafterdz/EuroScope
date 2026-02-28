@@ -104,7 +104,7 @@ class DeviationMonitorSkill(BaseSkill):
         context.metadata["deviation_monitor_last_trigger"] = result
 
         await self._emit_event(result)
-        self._log_deviation(result, candles, timeframe)
+        await self._log_deviation(result, candles, timeframe)
 
     def _get_buffer(self) -> Optional[dict]:
         if self._market_data_skill and hasattr(self._market_data_skill, "get_buffer"):
@@ -247,12 +247,12 @@ class DeviationMonitorSkill(BaseSkill):
             return
         await self._bus.emit(Event("market.regime_shift", "deviation_monitor", result))
 
-    def _log_deviation(self, result: dict, candles, timeframe: str):
+    async def _log_deviation(self, result: dict, candles, timeframe: str):
         if not self._storage:
             return
         try:
             close = float(candles["Close"].iloc[-1])
-            self._storage.save_trade_journal(
+            await self._storage.save_trade_journal(
                 direction="ALERT",
                 entry_price=close,
                 strategy="deviation_monitor",

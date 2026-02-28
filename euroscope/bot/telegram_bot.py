@@ -15,6 +15,7 @@ from aiohttp import web
 from telegram import Update, InputFile, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo, MenuButtonWebApp
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
 from telegram import BotCommand
+from telegram.error import Conflict
 from ..config import Config
 from ..brain.agent import Agent
 from ..brain.memory import Memory
@@ -527,6 +528,9 @@ class EuroScopeBot:
             self.notifications.schedule_daily_reports(app.job_queue, self.config.telegram.allowed_users)
         try:
             app.run_polling(drop_pending_updates=True)
+        except Conflict as e:
+            logger.error(f"Telegram polling conflict: {e}")
+            return
         except Exception:
             logger.exception("Telegram polling crashed")
             raise

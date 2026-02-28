@@ -1,5 +1,6 @@
 import logging
 import time
+import tempfile
 from dataclasses import dataclass
 from typing import Optional
 
@@ -8,6 +9,7 @@ from ..base import BaseSkill, SkillCategory, SkillContext, SkillResult
 from ...data.storage import Storage
 from ...config import Config
 from ...trading.safety_guardrails import SafetyGuardrail
+from ...trading.execution_simulator import ExecutionConfig, ExecutionSimulator
 from ...trading.signal_executor import SignalExecutor
 
 logger = logging.getLogger("euroscope.skills.signal_executor")
@@ -48,10 +50,13 @@ class SignalExecutorSkill(BaseSkill):
         self._guardrail = None
         self._broker = None
         self._executor: Optional[SignalExecutor] = None
+        self._temp_db_path = None
+        self._config_injected = False
 
     def set_config(self, config):
         self._config = config
         self._guardrail = SafetyGuardrail(config, storage=self._storage)
+        self._config_injected = True
         value = getattr(config, "paper_trading_only", None)
         if value is None:
             value = getattr(config, "EUROSCOPE_PAPER_TRADING_ONLY", None)
@@ -62,9 +67,25 @@ class SignalExecutorSkill(BaseSkill):
 
     def _init_executor(self):
         """Initialize or update the trading executor."""
+        if not self._config:
+            self._config = Config()
+            self._config_injected = False
+        if not self._storage:
+            if not self._temp_db_path:
+                temp_db = tempfile.NamedTemporaryFile(prefix="euroscope_signal_", suffix=".db", delete=False)
+                self._temp_db_path = temp_db.name
+                temp_db.close()
+            self._storage = Storage(self._temp_db_path)
+        if not self._guardrail:
+            self._guardrail = SafetyGuardrail(self._config, storage=self._storage)
         if self._storage and self._config:
+            if self._config_injected:
+                execution_sim = ExecutionSimulator()
+            else:
+                execution_sim = ExecutionSimulator(ExecutionConfig(enabled=False))
             self._executor = SignalExecutor(
                 storage=self._storage,
+                execution_sim=execution_sim,
                 broker=self._broker,
                 paper_trading=self._paper_trading_only
             )
@@ -86,6 +107,9 @@ class SignalExecutorSkill(BaseSkill):
         self._broker = broker
         self._init_executor()
 
+    def set_event_bus(self, event_bus):
+        self._bus = event_bus
+
     async def execute(self, context: SkillContext, action: str, **params) -> SkillResult:
         if action == "open_trade":
             return await self._open_trade(context, **params)
@@ -104,11 +128,19 @@ class SignalExecutorSkill(BaseSkill):
 
     def start_streaming(self, ws_client):
         """Bind WS client to the internal executor for live ticks."""
+        if not self._executor:
+            self._init_executor()
         if self._executor:
             self._executor.start_streaming(ws_client)
             logger.info("SignalExecutorSkill: WebSocket streaming started.")
         else:
-            logger.error("SignalExecutorSkill: Cannot start streaming, executor not initialized.")
+            missing = []
+            if not self._storage:
+                missing.append("storage")
+            if not self._config:
+                missing.append("config")
+            suffix = f" Missing: {', '.join(missing)}" if missing else ""
+            logger.error(f"SignalExecutorSkill: Cannot start streaming, executor not initialized.{suffix}")
 
     async def _open_trade(self, context: SkillContext, **params) -> SkillResult:
         if self._guardrail is None:
@@ -209,7 +241,7 @@ class SignalExecutorSkill(BaseSkill):
         indicators = self._build_indicators(context)
         patterns = self._build_patterns(context)
         if self._storage:
-            self._storage.save_trade_journal(
+            await self._storage.save_trade_journal(
                 direction=signal.get("direction", "BUY"),
                 entry_price=entry_price,
                 stop_loss=stop_loss,
@@ -252,8 +284,22 @@ class SignalExecutorSkill(BaseSkill):
 
     async def _close_trade(self, context: SkillContext, **params) -> SkillResult:
         signal_id = params.get("signal_id") or params.get("id")
+        trade_id = params.get("trade_id")
+        if not signal_id and trade_id:
+            if isinstance(trade_id, str) and trade_id.startswith("T-"):
+                try:
+                    signal_id = int(trade_id.split("T-")[1])
+                except (ValueError, IndexError):
+                    signal_id = None
+            elif isinstance(trade_id, str):
+                try:
+                    signal_id = int(trade_id)
+                except ValueError:
+                    signal_id = None
         exit_price = params.get("exit_price", 0.0)
         
+        if not self._executor:
+            self._init_executor()
         if not self._executor:
             return SkillResult(success=False, error="Executor not initialized")
 
@@ -270,7 +316,8 @@ class SignalExecutorSkill(BaseSkill):
         
         if not signal_id:
             return SkillResult(success=False, error="signal_id is required")
-            
+        if not self._storage:
+            self._init_executor()
         if self._storage:
             await self._storage.update_signal_levels(signal_id, stop_loss=new_sl, take_profit=new_tp)
             return SkillResult(success=True, data={"id": signal_id, "stop_loss": new_sl, "take_profit": new_tp})
@@ -279,12 +326,16 @@ class SignalExecutorSkill(BaseSkill):
 
     async def _list_trades(self) -> SkillResult:
         if not self._executor:
+            self._init_executor()
+        if not self._executor:
             return SkillResult(success=False, error="Executor not initialized")
         trades = await self._executor.get_open_signals()
         formatted = await self._executor.format_open_signals()
         return SkillResult(success=True, data=trades, metadata={"formatted": formatted})
 
     async def _trade_history(self) -> SkillResult:
+        if not self._executor:
+            self._init_executor()
         if not self._executor:
             return SkillResult(success=False, error="Executor not initialized")
         trades = await self._executor.get_closed_signals()
