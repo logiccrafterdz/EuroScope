@@ -21,7 +21,7 @@ def main():
     """Main entry point."""
     print(r"""
     ╔══════════════════════════════════════╗
-    ║   🌐 EuroScope v3.0.0               ║
+    ║   🌐 EuroScope v5.0.0               ║
     ║   EUR/USD Expert Bot (Skills-Based)  ║
     ╚══════════════════════════════════════╝
     """)
@@ -31,7 +31,7 @@ def main():
     setup_logging(config.log_level)
 
     logger = logging.getLogger("euroscope")
-    logger.info("EuroScope V3 starting up...")
+    logger.info("EuroScope V5 starting up...")
 
     # Validate configuration
     config.print_startup_summary()
