@@ -30,8 +30,8 @@ from ..data.fundamental import FundamentalDataProvider
 from ..data.storage import Storage
 from ..forecast.engine import Forecaster
 from ..trading.risk_manager import RiskManager
-from ..trading.strategy_engine import StrategyEngine
 from ..trading.capital_provider import CapitalProvider
+from ..trading.capital_ws import CapitalWebsocketClient
 from ..utils.charts import generate_chart
 from ..utils.formatting import truncate, safe_markdown, rich_header, thematic_divider, priority_label, progress_bar
 from .rate_limiter import RateLimiter
@@ -87,6 +87,7 @@ class EuroScopeBot:
             identifier=config.data.capital_identifier,
             password=config.data.capital_password
         ) if config.data.capital_api_key else None
+        self.ws_client = CapitalWebsocketClient(self.broker) if self.broker else None
         self.macro_provider = FundamentalDataProvider(config.data.fred_api_key)
         self.news_engine = NewsEngine(config.data.brave_api_key, self.storage)
         self.calendar = EconomicCalendar()
@@ -383,6 +384,20 @@ class EuroScopeBot:
         api_task = asyncio.create_task(self.api.start())
         self._bg_tasks.add(api_task)
         api_task.add_done_callback(self._bg_tasks.discard)
+
+        # Capital.com WebSocket Integration
+        if self.ws_client:
+            logger.info("Starting Capital.com WebSocket Stream...")
+            ws_success = await self.ws_client.connect()
+            if ws_success:
+                await self.ws_client.subscribe(["EURUSD"])
+                signal_executor_skill = self.registry.get('signal_executor')
+                if signal_executor_skill:
+                    signal_executor_skill.start_streaming(self.ws_client)
+                    logger.info("Real-time Tick Stream INTEGRATED with SignalExecutor.")
+            else:
+                logger.error("Failed to connect Capital.com WebSocket stream.")
+
         logger.info('⚡ Background services & Commands registered.')
 
     async def post_shutdown(self, application: Application):

@@ -12,6 +12,7 @@ from typing import Optional
 from ..data.storage import Storage
 from .execution_simulator import ExecutionSimulator
 from .capital_provider import CapitalProvider
+from .capital_ws import CapitalWebsocketClient
 
 logger = logging.getLogger("euroscope.trading.signal_executor")
 
@@ -29,6 +30,56 @@ class SignalExecutor:
         self.execution_sim = execution_sim or ExecutionSimulator()
         self.broker = broker
         self.paper_trading = paper_trading
+        self.ws_client: Optional[CapitalWebsocketClient] = None
+
+    def start_streaming(self, ws_client: CapitalWebsocketClient):
+        """Bind WS client to the executor and register the on_tick callback."""
+        self.ws_client = ws_client
+        self.ws_client.add_callback(self._on_tick)
+        logger.info("SignalExecutor bound to live WebSocket stream.")
+
+    async def _on_tick(self, symbol: str, bid: float, ask: float):
+        """
+        Handle incoming live ticks. Evaluates all open trades instantly.
+        If SL or TP is hit, trade is closed using the exact bid/ask prices.
+        """
+        logger.debug(f"SignalExecutor: Processing tick {symbol} {bid}/{ask}")
+        open_signals = await self.get_open_signals()
+        for signal in open_signals:
+            sig_id = signal["id"]
+            direction = signal["direction"]
+            sl = signal["stop_loss"]
+            tp = signal["take_profit"]
+
+            reason = None
+            exit_price = None
+
+            if direction == "BUY":
+                # For long, we exit by selling at the BID
+                if bid <= sl:
+                    reason = "stop_loss"
+                    exit_price = sl
+                elif bid >= tp:
+                    reason = "take_profit"
+                    exit_price = tp
+            elif direction == "SELL":
+                # For short, we exit by buying at the ASK
+                if ask >= sl:
+                    reason = "stop_loss"
+                    exit_price = sl
+                elif ask <= tp:
+                    reason = "take_profit"
+                    exit_price = tp
+
+            if reason:
+                logger.warning(f"⚡ WS TICK TRIGGER: Signal #{sig_id} {reason.upper()} hit at {bid}/{ask}")
+                # Execute the exit
+                exec_result = self.execution_sim.simulate_exit(
+                    direction, exit_price, reason, atr=None # Simplified execution on live tick
+                )
+                result = await self.close_signal(sig_id, exec_result.fill_price, reason)
+                if result:
+                    logger.info(f"Signal #{sig_id} closed instantly via Tick Stream. Slippage: {exec_result.slippage_pips} pips.")
 
     async def open_signal(self, direction: str, entry_price: float,
                     stop_loss: float, take_profit: float,
