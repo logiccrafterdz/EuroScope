@@ -50,12 +50,45 @@ class RiskManager:
     and drawdown control.
     """
 
-    def __init__(self, config: RiskConfig = None):
+    def __init__(self, config: RiskConfig = None, storage: Optional['Storage'] = None):
         self.config = config or RiskConfig()
+        self.storage = storage
         self._daily_pnl: float = 0.0
         self._daily_pnl_date: str = ""
         self._consecutive_losses: int = 0
         self._open_trade_count: int = 0
+
+    async def load_state(self):
+        """Load risk state from storage."""
+        if not self.storage:
+            return
+
+        state = await self.storage.load_json("risk_manager_state")
+        if state:
+            today = datetime.now(UTC).strftime("%Y-%m-%d")
+            if state.get("daily_pnl_date") == today:
+                self._daily_pnl = state.get("daily_pnl", 0.0)
+                self._daily_pnl_date = today
+            else:
+                self._daily_pnl = 0.0
+                self._daily_pnl_date = today
+                
+            self._consecutive_losses = state.get("consecutive_losses", 0)
+            logger.info(f"RiskManager state loaded: PnL={self._daily_pnl:.2f}, Streak={self._consecutive_losses}")
+
+    async def save_state(self):
+        """Save risk state to storage."""
+        if not self.storage:
+            return
+
+        state = {
+            "daily_pnl": self._daily_pnl,
+            "daily_pnl_date": self._daily_pnl_date,
+            "consecutive_losses": self._consecutive_losses,
+            "updated_at": datetime.now(UTC).isoformat()
+        }
+        await self.storage.save_json("risk_manager_state", state)
+        logger.debug("RiskManager state saved.")
 
     # ─── Position Sizing ─────────────────────────────────────
 
@@ -355,14 +388,21 @@ class RiskManager:
 
     # ─── Trade Result Tracking ───────────────────────────────
 
-    def record_trade_result(self, pnl: float):
+    async def record_trade_result(self, pnl: float):
         """Record a closed trade's PnL for drawdown tracking."""
+        today = datetime.now(UTC).strftime("%Y-%m-%d")
+        if self._daily_pnl_date != today:
+            self._daily_pnl = 0.0
+            self._daily_pnl_date = today
+            
         self._daily_pnl += pnl
 
         if pnl < 0:
             self._consecutive_losses += 1
         else:
             self._consecutive_losses = 0
+            
+        await self.save_state()
 
     def update_open_count(self, count: int):
         """Update the number of currently open trades."""

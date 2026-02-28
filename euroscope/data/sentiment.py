@@ -20,13 +20,14 @@ def get_sentiment_engine():
     Lazy load the ONNX-optimized FinBERT engine.
     
     Returns:
-        tuple (model, tokenizer) or (None, None) if loading fails.
+        tuple (session, tokenizer) or (None, None) if loading fails.
     """
     global _onnx_model, _tokenizer
     
     if _onnx_model is None:
         try:
-            from optimum.onnxruntime import ORTModelForSequenceClassification
+            import onnxruntime as ort
+            import numpy as np
             from transformers import AutoTokenizer
             
             # Paths relative to this file
@@ -51,15 +52,12 @@ def get_sentiment_engine():
                 logger.error(f"ONNX model file missing at {onnx_path}")
                 return None, None
 
-            logger.info(f"Loading Quantized FinBERT ONNX model from {model_dir}...")
-            _onnx_model = ORTModelForSequenceClassification.from_pretrained(
-                model_dir, 
-                file_name="model_quantized.onnx"
-            )
+            logger.info(f"Loading Quantized FinBERT ONNX model from {onnx_path}...")
+            _onnx_model = ort.InferenceSession(onnx_path)
             _tokenizer = AutoTokenizer.from_pretrained(model_dir)
             
         except ImportError:
-            logger.error("optimum/onnxruntime not installed. Falling back.")
+            logger.error("onnxruntime not installed. Falling back.")
             return None, None
         except Exception as e:
             logger.error(f"Failed to load FinBERT ONNX: {e}")
@@ -81,19 +79,28 @@ def analyze_sentiment_onnx(text: str) -> dict:
         return {"sentiment": "neutral", "score": 0.0, "provider": "none"}
         
     try:
-        # Tokenize and run inference
-        inputs = tokenizer(text, return_tensors="pt", truncation=True, max_length=512)
-        outputs = model(**inputs)
+        import numpy as np
         
-        # Process output (FinBERT labels: 0: neutral, 1: positive, 2: negative)
-        import torch
-        probs = torch.nn.functional.softmax(outputs.logits, dim=-1)
+        # Tokenize (returns numpy arrays directly if specified)
+        inputs = tokenizer(text, return_tensors="np", truncation=True, max_length=512)
         
-        conf, label_idx = torch.max(probs, dim=-1)
-        conf = conf.item()
-        label_idx = label_idx.item()
+        # Run inference using session
+        # Inputs should match what the model expects (usually input_ids, attention_mask)
+        ort_inputs = {k: v for k, v in inputs.items()}
+        outputs = model.run(None, ort_inputs)
         
-        # Mapping from FinBERT config.json:
+        # outputs[0] is typically the logits array [1, num_labels]
+        logits = outputs[0]
+        
+        # Softmax using numpy
+        e_x = np.exp(logits - np.max(logits, axis=-1, keepdims=True))
+        probs = e_x / e_x.sum(axis=-1, keepdims=True)
+        
+        # Get label with highest probability
+        label_idx = np.argmax(probs, axis=-1)[0]
+        conf = float(probs[0, label_idx])
+        
+        # Mapping from FinBERT config.json (Confirmed!):
         # 0: positive, 1: negative, 2: neutral
         if label_idx == 0: # Positive
             sentiment = "bullish"
@@ -108,7 +115,7 @@ def analyze_sentiment_onnx(text: str) -> dict:
         return {
             "sentiment": sentiment,
             "score": round(score, 3),
-            "provider": "onnx_quantized"
+            "provider": "onnx_quantized_numpy"
         }
         
     except Exception as e:

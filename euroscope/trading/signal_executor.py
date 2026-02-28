@@ -13,6 +13,7 @@ from ..data.storage import Storage
 from .execution_simulator import ExecutionSimulator
 from .capital_provider import CapitalProvider
 from .capital_ws import CapitalWebsocketClient
+from .risk_manager import RiskManager
 
 logger = logging.getLogger("euroscope.trading.signal_executor")
 
@@ -25,12 +26,20 @@ class SignalExecutor:
     and tracks performance via Storage.save_signal / get_signals.
     """
 
-    def __init__(self, storage: Storage, execution_sim: ExecutionSimulator = None, broker: CapitalProvider = None, paper_trading: bool = True):
+    def __init__(self, storage: Storage, execution_sim: ExecutionSimulator = None, 
+                 risk_manager: RiskManager = None, broker: CapitalProvider = None, 
+                 paper_trading: bool = True):
         self.storage = storage
         self.execution_sim = execution_sim or ExecutionSimulator()
+        self.risk_manager = risk_manager or RiskManager(storage=storage)
         self.broker = broker
         self.paper_trading = paper_trading
         self.ws_client: Optional[CapitalWebsocketClient] = None
+
+    async def initialize(self):
+        """Initialize the executor (load risk state, etc)."""
+        if self.risk_manager:
+            await self.risk_manager.load_state()
 
     def start_streaming(self, ws_client: CapitalWebsocketClient):
         """Bind WS client to the executor and register the on_tick callback."""
@@ -279,6 +288,10 @@ class SignalExecutor:
 
         # Update in DB — store reason in reasoning via pnl_pips
         await self.storage.update_signal_status(signal_id, "closed", pnl_pips=pnl_pips)
+
+        # Update RiskManager stats
+        if self.risk_manager:
+            await self.risk_manager.record_trade_result(pnl_pips)
 
         logger.info(
             f"Closed signal #{signal_id}: {direction} "

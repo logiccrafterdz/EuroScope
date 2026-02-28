@@ -63,6 +63,12 @@ class SignalExecutorSkill(BaseSkill):
             )
             logger.info("SignalExecutorSkill: Trading executor initialized.")
 
+    async def initialize(self):
+        """Perform async initialization."""
+        self._init_executor()
+        if self._executor:
+            await self._executor.initialize()
+
     def set_storage(self, storage):
         self._storage = storage
         self._init_executor()
