@@ -506,6 +506,9 @@
                 <div class="session-info" id="current-session">DETECTING SESSION...</div>
             </div>
             <div id="mkt-status" class="market-badge status-closed">OFFLINE</div>
+            <div id="ws-link" class="market-badge"
+                style="background:rgba(0,0,0,0.3); color:var(--text-dim); border:1px solid var(--border-color); margin-left:8px;">
+                WS: LINKING...</div>
         </header>
 
         <!-- TERMINAL TAB -->
@@ -522,6 +525,17 @@
                     class="text-glow">-.-----</div>
                 <div id="price-change" style="font-size:0.95rem; font-weight:600; font-family:'Fira Code';">--.---
                     (---%)</div>
+            </div>
+
+            <div class="bento">
+                <div class="glass-card" style="padding:16px;">
+                    <div class="label-sm">Broker Balance</div>
+                    <div id="stat-balance" class="val-md">--.--</div>
+                </div>
+                <div class="glass-card" style="padding:16px;">
+                    <div class="label-sm">Account Equity</div>
+                    <div id="stat-equity" class="val-md" style="color:var(--accent-primary);">--.--</div>
+                </div>
             </div>
 
             <div class="bento">
@@ -580,8 +594,11 @@
                 </button>
             </div>
 
-            <div class="glass-card bento-full" style="margin-bottom: 12px;">
-                <div class="label-sm" style="margin-bottom: 16px;">Neural Indicators</div>
+            <div class="glass-card bento-full" style="margin-bottom: 12px; border:1px solid rgba(0,255,157,0.15);">
+                <div class="label-sm" style="margin-bottom: 16px; display:flex; justify-content:space-between;">
+                    <span>Neural Indicators</span>
+                    <span style="font-size:0.5rem; color:var(--text-dim);">PROVIDER: ONNX_QUANTIZED</span>
+                </div>
                 <div id="node-analysis">
                     <div class="empty-state">SYNCING ANALYTICS...</div>
                 </div>
@@ -694,6 +711,19 @@
                         <div id="perf-pnl" class="val-md">--</div>
                     </div>
                 </div>
+                <!-- Risk Stats (Fix 13) -->
+                <div class="bento"
+                    style="margin-bottom:0; background:rgba(255,255,255,0.02); border-radius:16px; border:1px solid var(--border-color); padding:10px;">
+                    <div style="padding:5px 0;">
+                        <div class="label-sm" style="margin-bottom:4px; color:var(--accent-primary);">DAILY DRAWDOWN
+                        </div>
+                        <div id="risk-daily-pnl" class="val-md">--.--</div>
+                    </div>
+                    <div style="padding:5px 0;">
+                        <div class="label-sm" style="margin-bottom:4px;">LOSS STREAK</div>
+                        <div id="risk-streak" class="val-md">--</div>
+                    </div>
+                </div>
                 <div id="perf-recommendations"
                     style="margin-top:12px; padding-top:12px; border-top:1px solid var(--border-color);">
                     <div class="empty-state" style="padding:20px 0;">ANALYZING...</div>
@@ -804,7 +834,21 @@
             <div class="label-sm" style="margin-top:16px;">API ENDPOINT</div>
             <input type="text" id="api-url-input" class="action-in" placeholder="https://your-bot-server.com">
             <button class="action-btn" onclick="saveOverride()">APPLY OVERRIDE</button>
-            <button class="action-btn action-outline" onclick="toggleDebug()">TOGGLE DEBUG CONSOLE</button>
+
+            <div style="margin-top:24px; border-top: 1px solid rgba(255, 51, 102, 0.3); padding-top:16px;">
+                <div class="label-sm" style="color:var(--down-color); margin-bottom:8px;">CRITICAL OPERATIONS</div>
+                <button class="action-btn" id="btn-killswitch" onclick="toggleEmergency()"
+                    style="background:rgba(255, 51, 102, 0.1); color:var(--down-color); border:1px solid var(--down-color); box-shadow:0 0 15px rgba(255,51,102,0.2);">
+                    🚨 ACTIVATE KILL SWITCH
+                </button>
+                <div
+                    style="font-size:0.6rem; color:var(--text-muted); margin-top:8px; text-align:center; line-height:1.4;">
+                    Halts all autonomous execution immediately.<br>Use only in extreme market conditions.
+                </div>
+            </div>
+
+            <button class="action-btn action-outline" onclick="toggleDebug()" style="margin-top:24px;">TOGGLE DEBUG
+                CONSOLE</button>
             <button class="action-btn action-outline" style="border:none; color:var(--text-main);"
                 onclick="closeSystem()">CLOSE</button>
         </div>
@@ -872,12 +916,93 @@
 
         async function saveSettings() {
             const btn = document.querySelector('#settings-form .action-btn');
+            btn.disabled = true;
             btn.textContent = 'SAVING...';
-            // Placeholder for saving settings (to be wired into POST /settings later)
-            setTimeout(() => {
+
+            const payload = {
+                risk_per_trade: parseFloat(document.getElementById('setting-risk').value),
+                max_daily_loss: parseFloat(document.getElementById('setting-maxloss').value),
+                auto_trading_enabled: document.getElementById('setting-auto').checked
+            };
+
+            const res = await api('/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (res.success) {
                 btn.textContent = 'SETTINGS SAVED';
-                setTimeout(() => btn.textContent = 'SAVE SETTINGS', 2000);
-            }, 800);
+                btn.style.background = 'var(--up-color)';
+                try { tg.HapticFeedback.notificationOccurred('success'); } catch (e) { }
+            } else {
+                btn.textContent = 'FAILED TO SAVE';
+                btn.style.background = 'var(--down-color)';
+                log('Save settings failed: ' + res.error, 'error');
+            }
+
+            setTimeout(() => {
+                btn.textContent = 'SAVE SETTINGS';
+                btn.style.background = 'var(--accent-primary)';
+                btn.disabled = false;
+            }, 2000);
+        }
+
+        let isEmergency = false;
+        async function toggleEmergency() {
+            const btn = document.getElementById('btn-killswitch');
+            const targetState = !isEmergency;
+
+            if (targetState && !confirm("WARNING: This will immediately halt all autonomous trading. Are you sure?")) {
+                return;
+            }
+
+            btn.disabled = true;
+            btn.textContent = 'PROCESSING...';
+
+            const res = await api('/emergency', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ active: targetState })
+            });
+
+            if (res.success) {
+                isEmergency = res.emergency_mode;
+
+                if (isEmergency) {
+                    btn.textContent = 'RESTORE SYSTEM OPERATIONS';
+                    btn.style.background = 'rgba(0, 255, 157, 0.1)';
+                    btn.style.color = 'var(--up-color)';
+                    btn.style.borderColor = 'var(--up-color)';
+                    btn.style.boxShadow = '0 0 15px rgba(0,255,157,0.2)';
+
+                    document.getElementById('mkt-status').textContent = 'HALTED';
+                    document.getElementById('mkt-status').className = 'market-badge status-closed';
+                    document.getElementById('mkt-status').style.boxShadow = '0 0 15px rgba(255, 51, 102, 0.6)';
+                    document.getElementById('mkt-status').style.backgroundColor = 'var(--down-color)';
+                    document.getElementById('mkt-status').style.color = '#fff';
+
+                    // Update local Settings UI 
+                    document.getElementById('setting-auto').checked = false;
+
+                    try { window.Telegram.WebApp.HapticFeedback.notificationOccurred('error'); } catch (e) { }
+                    log("EMERGENCY KILL SWITCH ACTIVATED.", "error");
+                } else {
+                    btn.textContent = '🚨 ACTIVATE KILL SWITCH';
+                    btn.style.background = 'rgba(255, 51, 102, 0.1)';
+                    btn.style.color = 'var(--down-color)';
+                    btn.style.borderColor = 'var(--down-color)';
+                    btn.style.boxShadow = '0 0 15px rgba(255,51,102,0.2)';
+
+                    try { window.Telegram.WebApp.HapticFeedback.notificationOccurred('success'); } catch (e) { }
+                    log("SYSTEM RESTORED.", "success");
+                    sync(); // Refresh standard status
+                }
+            } else {
+                alert("Failed to toggle emergency mode: " + res.error);
+                btn.textContent = 'RETRY OPERATION';
+            }
+            btn.disabled = false;
         }
 
         const parseMd = str => {
@@ -915,6 +1040,14 @@
                     let cleanHeader = line.replace(/<\/?strong[^>]*>/g, '');
                     output.push(`<div style="margin-top:20px; margin-bottom:8px; font-weight:800; color:var(--text-main); letter-spacing:1px; text-transform:uppercase; font-size:0.75rem;">${cleanHeader}</div>`);
                 }
+                // Is it a Scenario Header?
+                else if (line.match(/<strong[^>]*>Scenario (A|B).*?<\/strong>/i)) {
+                    let cleanScenario = line.replace(/<\/?strong[^>]*>/g, '').trim();
+                    let isBull = cleanScenario.toLowerCase().includes('bullish');
+                    let color = isBull ? 'var(--up-color)' : 'var(--down-color)';
+                    let bg = isBull ? 'rgba(0, 255, 157, 0.05)' : 'rgba(255, 51, 102, 0.05)';
+                    output.push(`<div style="margin-top:16px; margin-bottom:8px; padding:8px 12px; font-weight:800; color:${color}; background:${bg}; border-left: 2px solid ${color}; border-radius:0 8px 8px 0; letter-spacing:1px; font-size:0.75rem;">${cleanScenario}</div>`);
+                }
                 // Regular paragraph
                 else {
                     output.push(`<div style="margin-bottom:8px; line-height:1.6;">${line}</div>`);
@@ -927,11 +1060,11 @@
         const f5 = (v) => (v != null && typeof v === 'number') ? v.toFixed(5) : '-.-----';
         const f2 = (v) => (v != null && typeof v === 'number') ? v.toFixed(2) : '---';
 
-        async function api(path) {
+        async function api(path, options = {}) {
             const url = `${API_ROOT}/api${path}`;
             try {
                 // Increased timeout to 60s to accommodate slow LLM AI responses (Briefing, Macro, Backtests)
-                const r = await fetch(url, { signal: AbortSignal.timeout(60000) });
+                const r = await fetch(url, { signal: AbortSignal.timeout(60000), ...options });
                 if (!r.ok) throw new Error(`HTTP ${r.status}`);
                 return await r.json();
             } catch (e) { return { success: false, error: e.message }; }
@@ -1004,6 +1137,15 @@
                 const s = res.data.stats || {};
                 document.getElementById('perf-wr').textContent = `${(s.win_rate || 0).toFixed(0)}%`;
                 document.getElementById('perf-pnl').textContent = `${(s.total_pnl || 0).toFixed(1)}p`;
+
+                // Risk Persistence Display
+                const r = res.data.risk || {};
+                const dailyPnl = r.daily_pnl || 0;
+                const dPnlEl = document.getElementById('risk-daily-pnl');
+                dPnlEl.textContent = `${dailyPnl >= 0 ? '+' : ''}${dailyPnl.toFixed(2)}`;
+                dPnlEl.style.color = dailyPnl >= 0 ? 'var(--up-color)' : 'var(--down-color)';
+                document.getElementById('risk-streak').textContent = r.consecutive_losses || 0;
+
                 const t = res.data.tuning || {}; const recs = t.recommendations || [];
                 const recEl = document.getElementById('perf-recommendations');
                 if (recs.length > 0) {
@@ -1060,14 +1202,29 @@
 
             try {
                 const res = await api('/scan_signals');
+                btnText.textContent = "SCAN MARKET";
                 if (res.success && res.signal) {
-                    // Success! Refresh the signals tab to show the new trade
-                    btnText.textContent = "SCAN MARKET";
-                    await sync('signals');
-                    try { tg.HapticFeedback.notificationOccurred('success'); } catch (e) { }
+                    if (res.execution_skipped) {
+                        log(`Signal Found: ${res.signal.direction} @ ${f5(res.signal.entry_price)} (Auto-Trading: OFF)`, 'warn');
+                        btnText.textContent = "SIGNAL FOUND";
+                        btn.style.background = 'var(--accent-primary)';
+                        if (emptyState) {
+                            emptyState.innerHTML = `<div style="text-align:center;"><span style="color:var(--accent-primary); font-size:1.2rem; display:block; margin-bottom:8px;">💡</span>` +
+                                `IDENTIFIED ${res.signal.direction} SIGNAL<br><span style="font-size:0.6rem; color:var(--text-dim);">Auto-trading is currently disabled in settings.</span></div>`;
+                        }
+                        try { tg.HapticFeedback.notificationOccurred('warning'); } catch (e) { }
+                        setTimeout(() => { btnText.textContent = "SCAN MARKET"; btn.style.background = 'var(--accent-primary)'; }, 2000);
+                    } else {
+                        // Success! Refresh the signals tab to show the new trade
+                        log(`Trade Executed: ${res.signal.direction} Position Opened`, 'success');
+                        btnText.textContent = "TRADE EXECUTED";
+                        btn.style.background = 'var(--up-color)';
+                        await sync('signals');
+                        try { tg.HapticFeedback.notificationOccurred('success'); } catch (e) { }
+                        setTimeout(() => { btnText.textContent = "SCAN MARKET"; btn.style.background = 'var(--accent-primary)'; }, 2000);
+                    }
                 } else {
                     // No high confidence signal found
-                    btnText.textContent = "SCAN MARKET";
                     if (emptyState) {
                         emptyState.innerHTML = `<span style="color:var(--warn-color); font-size:1.2rem; display:block; margin-bottom:8px;">⚠️</span>` + (res.message || "NO OPPORTUNITIES AT THE MOMENT. EXERCISE PATIENCE.");
                     }
@@ -1094,18 +1251,53 @@
                     if (s.status === 'OPEN') mkt.style.boxShadow = '0 0 15px rgba(0, 255, 157, 0.4)';
                     else mkt.style.boxShadow = 'none';
                     document.getElementById('current-session').textContent = `${s.session} SESSION`;
+
+                    const ws = document.getElementById('ws-link');
+                    if (s.ws_status === 'CONNECTED') {
+                        ws.textContent = 'WS: LIVE';
+                        ws.style.color = 'var(--up-color)';
+                        ws.style.borderColor = 'rgba(0, 255, 157, 0.3)';
+                    } else {
+                        ws.textContent = 'WS: LINKING...';
+                        ws.style.color = 'var(--text-dim)';
+                        ws.style.borderColor = 'var(--border-color)';
+                    }
                 }
             });
 
             api('/summary').then(sum => {
                 if (sum.success) {
-                    document.getElementById('price').textContent = f5(sum.price);
+                    const oldPrice = parseFloat(document.getElementById('price').textContent);
+                    const newPrice = sum.price;
+                    document.getElementById('price').textContent = f5(newPrice);
+
+                    // Live Glow Animation
+                    if (oldPrice && newPrice !== oldPrice) {
+                        const priceEl = document.getElementById('price');
+                        priceEl.style.transition = 'none';
+                        priceEl.style.color = newPrice > oldPrice ? 'var(--up-color)' : 'var(--down-color)';
+                        priceEl.style.textShadow = `0 0 30px ${newPrice > oldPrice ? 'var(--up-color)' : 'var(--down-color)'}`;
+                        setTimeout(() => {
+                            priceEl.style.transition = 'all 1s ease';
+                            priceEl.style.color = '#fff';
+                            priceEl.style.textShadow = '0 0 20px var(--accent-glow)';
+                        }, 100);
+                    }
+
                     const el = document.getElementById('price-change');
                     const sign = (sum.change || 0) >= 0 ? '+' : '';
                     el.textContent = `${sign}${f5(sum.change)} (${sign}${f2(sum.change_pct)}%)`;
                     el.style.color = (sum.change || 0) >= 0 ? 'var(--up-color)' : 'var(--down-color)';
                     document.getElementById('stat-range').textContent = `${(sum.range_pips || 0).toFixed(1)} P`;
                     document.getElementById('stat-hilo').textContent = `${f5(sum.low)} / ${f5(sum.high)}`;
+                }
+            });
+
+            // Fetch Account Info
+            api('/account').then(acc => {
+                if (acc.success) {
+                    document.getElementById('stat-balance').textContent = `${f2(acc.balance)} ${acc.currency}`;
+                    document.getElementById('stat-equity').textContent = `${f2(acc.equity)} ${acc.currency}`;
                 }
             });
 
@@ -1152,9 +1344,14 @@
                     document.getElementById('forecast-dir').textContent = d.direction;
                     document.getElementById('forecast-dir').style.color = d.direction === 'BUY' ? 'var(--up-color)' : d.direction === 'SELL' ? 'var(--down-color)' : 'var(--text-muted)';
                     document.getElementById('forecast-dir').style.textShadow = `0 0 20px ${d.direction === 'BUY' ? 'var(--up-color)' : d.direction === 'SELL' ? 'var(--down-color)' : 'transparent'}`;
-                    document.getElementById('forecast-conf-bar').style.width = `${(d.confidence || 0) * 100}%`;
-                    document.getElementById('forecast-conf-bar').style.backgroundColor = document.getElementById('forecast-dir').style.color;
-                    document.getElementById('forecast-conf-bar').style.color = document.getElementById('forecast-dir').style.color;
+
+                    // Dynamic Gradient for Confidence Bar
+                    const color = d.direction === 'BUY' ? 'var(--up-color)' : d.direction === 'SELL' ? 'var(--down-color)' : 'var(--text-muted)';
+                    const bar = document.getElementById('forecast-conf-bar');
+                    bar.style.width = `${(d.confidence || 0) * 100}%`;
+                    bar.style.background = `linear-gradient(90deg, transparent, ${color})`;
+                    bar.style.boxShadow = `0 0 15px ${color}`;
+
                     document.getElementById('forecast-conf-text').textContent = `${((d.confidence || 0) * 100).toFixed(0)}%`;
                     document.getElementById('forecast-text').innerHTML = parseMd(d.reasoning || "...");
                 } else if (res.error) {
@@ -1165,7 +1362,28 @@
                 if (res.success && res.data) {
                     const ta = res.data; const ind = ta.indicators || {};
                     const b = (ta.overall_bias || 'NEUTRAL').toUpperCase();
-                    document.getElementById('node-analysis').innerHTML = `
+                    const node = document.getElementById('node-analysis');
+                    node.innerHTML = '';
+
+                    // Add Sentiment Card
+                    if (res.sentiment) {
+                        const s = res.sentiment;
+                        const sColor = s.label === 'BULLISH' ? 'var(--up-color)' : s.label === 'BEARISH' ? 'var(--down-color)' : 'var(--text-muted)';
+                        node.innerHTML += `
+                            <div class="info-row" style="background:rgba(255,255,255,0.03); padding:12px; border-radius:12px; margin-bottom:12px; border-left:4px solid ${sColor}">
+                                <div>
+                                    <div class="label-sm" style="margin-bottom:2px;">NEURAL SENTIMENT</div>
+                                    <div style="font-size:0.9rem; font-weight:800; color:${sColor}">${s.label}</div>
+                                </div>
+                                <div style="text-align:right">
+                                    <div class="label-sm" style="margin-bottom:2px;">CONVICTION</div>
+                                    <div style="font-family:'Fira Code'; font-weight:700;">${(s.score * 100).toFixed(1)}%</div>
+                                </div>
+                            </div>
+                        `;
+                    }
+
+                    node.innerHTML += `
                         <div class="info-row"><span class="label">Bias</span><span class="val" style="color:${b === 'BUY' ? 'var(--up-color)' : b === 'SELL' ? 'var(--down-color)' : 'var(--accent-primary)'};text-shadow:0 0 10px currentColor;">${b}</span></div>
                         <div class="info-row"><span class="label">RSI</span><span class="val">${f2(ind.RSI?.value)}</span></div>
                         <div class="info-row"><span class="label">MACD</span><span class="val">${ind.MACD?.signal_text || '---'}</span></div>
