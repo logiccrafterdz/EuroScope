@@ -54,6 +54,9 @@ def main():
         bot.run()
     except KeyboardInterrupt:
         logger.info("EuroScope shutting down...")
+    except Exception:
+        logger.exception("EuroScope crashed during runtime")
+        raise
     finally:
         pass
 

@@ -29,6 +29,12 @@ def _make_bot():
     config.data.alphavantage_key = ""
     config.data.tiingo_key = ""
     config.data.fred_api_key = ""
+    config.data.oanda_api_key = ""
+    config.data.oanda_account_id = ""
+    config.data.oanda_practice = True
+    config.data.capital_api_key = ""
+    config.data.capital_identifier = ""
+    config.data.capital_password = ""
     config.llm = MagicMock()
     config.llm.api_key = ""
     config.llm.api_base = ""
@@ -41,18 +47,28 @@ def _make_bot():
     config.admin_chat_ids = []
     config.vector_memory_ttl_days = 30
     config.data_dir = "."
+    config.proactive_analysis_interval_minutes = 15
+    config.proactive_alert_cache_minutes = 60
     config.proactive_alert_chat_ids = []
+    config.proactive_quiet_hours = None
+    config.proactive_disable_weekends = False
+    config.proactive_holiday_dates = []
+    config.paper_trading_only = True
+    config.safety_news_block_minutes = 30
+    config.safety_asian_min_confidence = 0.75
+    config.safety_volatility_stop_min = 25
 
-    with patch("euroscope.bot.telegram_bot.PriceProvider"), \
+    with patch("euroscope.bot.telegram_bot.MultiSourceProvider"), \
          patch("euroscope.bot.telegram_bot.NewsEngine"), \
          patch("euroscope.bot.telegram_bot.EconomicCalendar"), \
+         patch("euroscope.bot.telegram_bot.FundamentalDataProvider"), \
          patch("euroscope.bot.telegram_bot.Agent"), \
          patch("euroscope.bot.telegram_bot.Memory"), \
          patch("euroscope.bot.telegram_bot.Forecaster"), \
          patch("euroscope.bot.telegram_bot.Orchestrator"), \
          patch("euroscope.bot.telegram_bot.RiskManager"), \
-         patch("euroscope.bot.telegram_bot.StrategyEngine"), \
-         patch("euroscope.bot.telegram_bot.SignalExecutor"), \
+         patch("euroscope.bot.telegram_bot.CapitalProvider"), \
+         patch("euroscope.bot.telegram_bot.CapitalWebsocketClient"), \
          patch("euroscope.bot.telegram_bot.Storage"):
         bot = EuroScopeBot(config)
     return bot

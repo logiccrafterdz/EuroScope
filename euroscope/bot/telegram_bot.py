@@ -525,4 +525,8 @@ class EuroScopeBot:
         self.notifications.set_bot(app.bot)
         if self.config.telegram.allowed_users:
             self.notifications.schedule_daily_reports(app.job_queue, self.config.telegram.allowed_users)
-        app.run_polling(drop_pending_updates=True)
+        try:
+            app.run_polling(drop_pending_updates=True)
+        except Exception:
+            logger.exception("Telegram polling crashed")
+            raise
