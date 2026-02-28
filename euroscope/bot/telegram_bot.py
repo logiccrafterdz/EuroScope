@@ -31,7 +31,7 @@ from ..data.storage import Storage
 from ..forecast.engine import Forecaster
 from ..trading.risk_manager import RiskManager
 from ..trading.strategy_engine import StrategyEngine
-from ..trading.signal_executor import SignalExecutor
+from ..trading.capital_provider import CapitalProvider
 from ..utils.charts import generate_chart
 from ..utils.formatting import truncate, safe_markdown, rich_header, thematic_divider, priority_label, progress_bar
 from .rate_limiter import RateLimiter
@@ -77,8 +77,16 @@ class EuroScopeBot:
             tiingo_key=config.data.tiingo_key,
             oanda_key=config.data.oanda_api_key,
             oanda_account=config.data.oanda_account_id,
-            oanda_practice=config.data.oanda_practice
+            oanda_practice=config.data.oanda_practice,
+            capital_key=config.data.capital_api_key,
+            capital_identifier=config.data.capital_identifier,
+            capital_password=config.data.capital_password
         )
+        self.broker = CapitalProvider(
+            api_key=config.data.capital_api_key,
+            identifier=config.data.capital_identifier,
+            password=config.data.capital_password
+        ) if config.data.capital_api_key else None
         self.macro_provider = FundamentalDataProvider(config.data.fred_api_key)
         self.news_engine = NewsEngine(config.data.brave_api_key, self.storage)
         self.calendar = EconomicCalendar()
@@ -113,7 +121,24 @@ class EuroScopeBot:
             logger.warning(f"Bot: Error loading bot_settings.json: {e}")
 
         market_data_skill = self.registry.get('market_data')
-        self.orchestrator.inject_dependencies(provider=self.price_provider, macro_provider=self.macro_provider, news_engine=self.news_engine, calendar=self.calendar, storage=self.storage, agent=self.agent, vector_memory=self.vector_memory, pattern_tracker=self.pattern_tracker, adaptive_tuner=self.adaptive_tuner, risk_manager=risk_manager, event_bus=self.bus, heartbeat=self.heartbeat, market_data_skill=market_data_skill, global_context=self.orchestrator.global_context, config=self.config)
+        self.orchestrator.inject_dependencies(
+            provider=self.price_provider, 
+            broker=self.broker,
+            macro_provider=self.macro_provider, 
+            news_engine=self.news_engine, 
+            calendar=self.calendar, 
+            storage=self.storage, 
+            agent=self.agent, 
+            vector_memory=self.vector_memory, 
+            pattern_tracker=self.pattern_tracker, 
+            adaptive_tuner=self.adaptive_tuner, 
+            risk_manager=risk_manager, 
+            event_bus=self.bus, 
+            heartbeat=self.heartbeat, 
+            market_data_skill=market_data_skill, 
+            global_context=self.orchestrator.global_context, 
+            config=self.config
+        )
         signal_executor_skill = self.registry.get('signal_executor')
         self._signal_executor_subscriber = SignalExecutorSubscriber(signal_executor_skill)
         self._alert_suppression_subscriber = AlertSuppressionSubscriber(self.alerts)

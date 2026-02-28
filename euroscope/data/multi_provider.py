@@ -15,6 +15,7 @@ from .provider import PriceProvider
 from .alpha_vantage import AlphaVantageProvider
 from .tiingo import TiingoProvider
 from .oanda import OandaProvider
+from .capital import CapitalDataProvider
 
 logger = logging.getLogger("euroscope.data.multi")
 
@@ -26,14 +27,18 @@ class MultiSourceProvider:
     Tries OANDA first, then yfinance, then Tiingo, then Alpha Vantage.
     """
 
-    def __init__(self, alphavantage_key: str = "", tiingo_key: str = "", oanda_key: str = "", oanda_account: str = "", oanda_practice: bool = True):
+    def __init__(self, alphavantage_key: str = "", tiingo_key: str = "", oanda_key: str = "", oanda_account: str = "", oanda_practice: bool = True,
+                 capital_key: str = "", capital_identifier: str = "", capital_password: str = ""):
+        self.capital = CapitalDataProvider(capital_key, capital_identifier, capital_password) if capital_key else None
         self.oanda = OandaProvider(oanda_key, oanda_account, oanda_practice) if oanda_key else None
         self.tiingo = TiingoProvider(tiingo_key) if tiingo_key else None
         self.legacy = PriceProvider() # yfinance
         self.fallback = AlphaVantageProvider(alphavantage_key) if alphavantage_key else None
         
         # Determine initial preferred source
-        if self.oanda:
+        if self.capital:
+            self._last_source = "capital"
+        elif self.oanda:
             self._last_source = "oanda"
         elif self.tiingo:
             self._last_source = "tiingo"
@@ -47,6 +52,15 @@ class MultiSourceProvider:
 
     async def get_price(self) -> dict:
         """Get current EUR/USD price with automatic failover."""
+        # Try Capital.com
+        if self.capital:
+            result = await self.capital.get_price()
+            if "error" not in result:
+                self._last_source = "capital"
+                result["source"] = "capital"
+                return result
+            logger.warning(f"Capital.com price failed: {result.get('error')}, trying OANDA...")
+
         # Try OANDA
         if self.oanda:
             result = await self.oanda.get_price()
@@ -86,6 +100,17 @@ class MultiSourceProvider:
 
     async def get_candles(self, timeframe: str = "H1", count: int = 100) -> Optional[pd.DataFrame]:
         """Get OHLCV candles with automatic failover."""
+        # Try Capital.com
+        if self.capital:
+            df = await self.capital.get_candles(timeframe, count)
+            if df is not None and not df.empty:
+                df = self._validate_data(df)
+                if df is not None:
+                    self._last_source = "capital"
+                    return df
+                logger.error(f"Capital.com data failed validation for {timeframe}")
+            logger.warning(f"Capital.com candles failed for {timeframe}, trying OANDA...")
+
         # Try OANDA
         if self.oanda:
             df = await self.oanda.get_candles(timeframe, count)

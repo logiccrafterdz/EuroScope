@@ -40,6 +40,9 @@ class DataConfig:
     oanda_api_key: str = ""
     oanda_account_id: str = ""
     oanda_practice: bool = True
+    capital_api_key: str = ""
+    capital_identifier: str = ""
+    capital_password: str = ""
     symbol: str = "EURUSD=X"  # Yahoo Finance symbol for EUR/USD
     update_interval_minutes: int = 15
 
@@ -115,6 +118,9 @@ class Config:
                 oanda_api_key=os.getenv("EUROSCOPE_OANDA_API_KEY", ""),
                 oanda_account_id=os.getenv("EUROSCOPE_OANDA_ACCOUNT_ID", ""),
                 oanda_practice=os.getenv("EUROSCOPE_OANDA_PRACTICE", "1") != "0",
+                capital_api_key=os.getenv("EUROSCOPE_CAPITAL_API_KEY", ""),
+                capital_identifier=os.getenv("EUROSCOPE_CAPITAL_IDENTIFIER", ""),
+                capital_password=os.getenv("EUROSCOPE_CAPITAL_PASSWORD", ""),
             ),
             log_level=os.getenv("EUROSCOPE_LOG_LEVEL", "INFO"),
             rate_limit_requests=int(os.getenv("EUROSCOPE_RATE_LIMIT_REQUESTS", "5")),
@@ -146,8 +152,8 @@ class Config:
             warnings.append("⚠️  EUROSCOPE_TIINGO_KEY not set — Tiingo (deep history) disabled")
         if not self.data.fred_api_key:
             warnings.append("⚠️  EUROSCOPE_FRED_API_KEY not set — FRED macro data disabled")
-        if not self.data.oanda_api_key:
-            warnings.append("⚠️  EUROSCOPE_OANDA_API_KEY not set — Precise real-time tick data disabled. Falling back to yfinance!")
+        if not self.data.oanda_api_key and not self.data.capital_api_key:
+            warnings.append("⚠️  Neither OANDA nor Capital.com API keys set — Real-time execution disabled!")
         return warnings
 
     def validate_connections(self) -> dict[str, bool]:

@@ -47,12 +47,16 @@ class SignalExecutorSkill(BaseSkill):
         self._paper_trading_only = True
         self._config = None
         self._guardrail = None
+        self._broker = None
 
     def set_storage(self, storage):
         self._storage = storage
 
     def set_event_bus(self, event_bus):
         self._bus = event_bus
+
+    def set_broker(self, broker):
+        self._broker = broker
 
     def set_config(self, config):
         self._config = config
@@ -102,18 +106,36 @@ class SignalExecutorSkill(BaseSkill):
                 "aborted": True,
                 "reason": abort_reason,
             })
-        self._counter += 1
-        signal = context.signals or params
-        risk = context.risk or {}
+        trade_id = f"PT-{self._counter:04d}"
+        exec_mode = "paper"
+        fill_price = signal.get("entry_price", risk.get("entry_price", 0))
+
+        if not self._paper_trading_only and self._broker:
+            # LIVE EXECUTION
+            res = await self._broker.execute_trade(
+                symbol="EURUSD",
+                direction=signal.get("direction", "BUY"),
+                size=0.01, # Default size for now
+                stop_loss=risk.get("stop_loss"),
+                take_profit=risk.get("take_profit")
+            )
+            if res.get("success"):
+                exec_mode = "live"
+                trade_id = f"CT-{self._counter:04d}" # Capital Trade
+                # In real scenario we'd get the actual fill price from the deal response
+                logger.info(f"Live trade executed on Capital.com: {trade_id}")
+            else:
+                return SkillResult(success=False, error=f"Live execution failed: {res.get('error')}")
 
         trade = PaperTrade(
-            trade_id=f"PT-{self._counter:04d}",
+            trade_id=trade_id,
             direction=signal.get("direction", "BUY"),
-            entry_price=signal.get("entry_price", risk.get("entry_price", 0)),
+            entry_price=fill_price,
             stop_loss=risk.get("stop_loss", 0),
             take_profit=risk.get("take_profit", 0),
             strategy=signal.get("strategy", "manual"),
             timestamp=time.time(),
+            execution_mode=exec_mode
         )
         self._open.append(trade)
         context.open_positions.append(trade.__dict__)

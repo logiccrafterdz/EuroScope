@@ -11,6 +11,7 @@ from typing import Optional
 
 from ..data.storage import Storage
 from .execution_simulator import ExecutionSimulator
+from .capital_provider import CapitalProvider
 
 logger = logging.getLogger("euroscope.trading.signal_executor")
 
@@ -23,9 +24,11 @@ class SignalExecutor:
     and tracks performance via Storage.save_signal / get_signals.
     """
 
-    def __init__(self, storage: Storage, execution_sim: ExecutionSimulator = None):
+    def __init__(self, storage: Storage, execution_sim: ExecutionSimulator = None, broker: CapitalProvider = None, paper_trading: bool = True):
         self.storage = storage
         self.execution_sim = execution_sim or ExecutionSimulator()
+        self.broker = broker
+        self.paper_trading = paper_trading
 
     async def open_signal(self, direction: str, entry_price: float,
                     stop_loss: float, take_profit: float,
@@ -45,15 +48,30 @@ class SignalExecutor:
         Returns:
             Signal ID, or -1 if order rejected
         """
-        # Simulate execution
-        exec_result = self.execution_sim.simulate_entry(direction, entry_price, atr=atr)
-        if not exec_result.filled:
-            logger.warning(f"Signal REJECTED: {direction} @ {entry_price} ({exec_result.details})")
-            return -1
-
-        # Use simulated fill price
-        fill_price = exec_result.fill_price
-
+        # 1. Simulate execution for paper trading or get real fill
+        if self.paper_trading:
+            exec_result = self.execution_sim.simulate_entry(direction, entry_price, atr=atr)
+            if not exec_result.filled:
+                logger.warning(f"Paper Signal REJECTED: {direction} @ {entry_price} ({exec_result.details})")
+                return -1
+            fill_price = exec_result.fill_price
+            exec_details = exec_result.details
+        else:
+            # REAL EXECUTION via Capital.com
+            if not self.broker:
+                logger.error("Real trading enabled but no broker configured!")
+                return -1
+            
+            # Note: For real execution, stop_loss and take_profit are passed to broker
+            res = await self.broker.execute_trade("EURUSD", direction, 0.01, stop_loss, take_profit)
+            if not res.get("success"):
+                logger.error(f"REAL TRADE FAILED: {res.get('error')}")
+                return -1
+            
+            # For simplicity in this v1 bridge, we assume the price we requested is roughly the fill
+            # In a full project we'd poll for 'deal' confirmation
+            fill_price = entry_price 
+            exec_details = "Capital.com Live"
         rr = 0.0
         sl_dist = abs(fill_price - stop_loss)
         tp_dist = abs(take_profit - fill_price)
