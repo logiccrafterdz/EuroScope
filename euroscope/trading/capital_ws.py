@@ -32,42 +32,56 @@ class CapitalWebsocketClient:
         self._callbacks.append(callback)
 
     async def connect(self):
-        """Establish connection and start listener tasks."""
+        """Establish connection and ensure listener tasks are running."""
+        if self._running and self.ws and getattr(self.ws.state, 'name', '') == 'OPEN':
+            return True
+
+        if not await self._establish_connection():
+            return False
+
+        self._running = True
+        loop = asyncio.get_running_loop()
+        
+        # Start background tasks ONLY if not already running
+        if not self._listen_task or self._listen_task.done():
+            self._listen_task = loop.create_task(self._listen())
+            logger.debug("Started WS Listener task.")
+            
+        if not self._ping_task or self._ping_task.done():
+            self._ping_task = loop.create_task(self._ping_loop())
+            logger.debug("Started WS Ping task.")
+
+        return True
+
+    async def _establish_connection(self) -> bool:
+        """Internal helper to handle the raw socket connection and auth."""
         if not self.provider.session_token:
             success = await self.provider.login()
             if not success:
-                logger.error("Capital.com WS failed: Broker not authenticated.")
+                logger.error("Capital.com WS auth failed: Broker not authenticated.")
                 return False
 
         logger.info(f"Connecting to Capital.com WebSocket: {self.WS_URL}...")
         try:
             # ping_interval=None because Capital.com expects custom "ping" messages
             self.ws = await websockets.connect(self.WS_URL, ping_interval=None)
-            self._running = True
-            
-            # Start background tasks
-            loop = asyncio.get_running_loop()
-            self._listen_task = loop.create_task(self._listen())
-            self._ping_task = loop.create_task(self._ping_loop())
-            
-            logger.info("Capital.com WebSocket Connected.")
             
             # Re-subscribe to any existing epics upon connection
             if self._subscribed_epics:
                 await self._send_subscription(list(self._subscribed_epics))
                 
+            logger.info("Capital.com WebSocket Socket Established.")
             return True
         except Exception as e:
-            logger.error(f"WebSocket connection failed: {e}")
-            self._running = False
+            logger.error(f"WebSocket socket connection failed: {e}")
             return False
 
     async def _ping_loop(self):
         """Capital.com requires a ping message every 5-10 minutes. We'll send one every 5 minutes."""
         while self._running:
-            await asyncio.sleep(300) # 5 minutes
-            if self.ws and getattr(self.ws.state, 'name', '') == 'OPEN':
-                try:
+            try:
+                await asyncio.sleep(300) # 5 minutes
+                if self.ws and getattr(self.ws.state, 'name', '') == 'OPEN':
                     payload = {
                         "destination": "ping",
                         "cst": self.provider.session_token,
@@ -75,8 +89,10 @@ class CapitalWebsocketClient:
                     }
                     await self.ws.send(json.dumps(payload))
                     logger.debug("Sent WS Ping")
-                except Exception as e:
-                    logger.warning(f"WS ping failed: {e}")
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.warning(f"WS ping loop error: {e}")
 
     async def subscribe(self, epics: List[str]):
         """Subscribe to live market data (ticks)."""
@@ -85,13 +101,15 @@ class CapitalWebsocketClient:
             return
             
         self._subscribed_epics.update(new_epics)
-        if self.ws and getattr(self.ws.state, 'name', '') == 'OPEN':
+        if self._running and self.ws and getattr(self.ws.state, 'name', '') == 'OPEN':
             await self._send_subscription(list(self._subscribed_epics))
         else:
-            # If not connected yet, it will automatically subscribe upon connect()
-            logger.info("Saved subscription; will execute when connected.")
+            logger.info("Saved subscription; will execute when socket is open.")
 
     async def _send_subscription(self, epics: List[str]):
+        if not self.ws or getattr(self.ws.state, 'name', '') != 'OPEN':
+            return
+            
         payload = {
             "destination": "marketData.subscribe",
             "cst": self.provider.session_token,
@@ -110,6 +128,14 @@ class CapitalWebsocketClient:
         """Continuously listen for incoming WebSocket messages."""
         while self._running:
             try:
+                if not self.ws or getattr(self.ws.state, 'name', '') != 'OPEN':
+                    logger.warning("WS socket not open in listener; attempting reconnect...")
+                    if await self._establish_connection():
+                        continue
+                    else:
+                        await asyncio.sleep(10)
+                        continue
+
                 message = await self.ws.recv()
                 data = json.loads(message)
                 
@@ -126,16 +152,16 @@ class CapitalWebsocketClient:
                             asyncio.create_task(self._safe_invoke(cb, epic, float(bid), float(ask)))
                                 
             except websockets.exceptions.ConnectionClosed:
-                logger.warning("Capital.com WS Connection closed. Attempting reconnect...")
-                self._running = False
+                logger.warning("Capital.com WS Connection closed. Re-establishing socket...")
                 await asyncio.sleep(5)
-                await self.connect()
+                # Loop continues and calls _establish_connection()
             except json.JSONDecodeError:
                 pass
             except asyncio.CancelledError:
                 break
             except Exception as e:
                 logger.error(f"Capital.com WS Listen Error: {e}")
+                await asyncio.sleep(5)
 
     async def _safe_invoke(self, cb: Callable, symbol: str, bid: float, ask: float):
         try:
