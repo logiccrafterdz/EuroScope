@@ -11,6 +11,7 @@ from ..skills.base import SkillContext
 class SafetyGuardrail:
     config: object
     calendar: Optional[EconomicCalendar] = None
+    storage: Optional[Storage] = None
 
     def __post_init__(self):
         if self.calendar is None:
@@ -26,13 +27,11 @@ class SafetyGuardrail:
                 
             # --- DAILY DRAWDOWN CHECK ---
             max_dd_pips = float(getattr(self.config, "safety_max_daily_drawdown_pips", 50.0))
-            if max_dd_pips > 0:
+            if max_dd_pips > 0 and self.storage:
                 try:
-                    from ..data.storage import Storage
                     from datetime import datetime, timezone
-                    storage = Storage()
                     today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-                    today_trades = await storage.get_trade_journal_for_date(today_str, status="closed")
+                    today_trades = await self.storage.get_trade_journal_for_date(today_str, status="closed")
                     daily_pnl = sum(t.get("pnl_pips", 0.0) for t in today_trades)
                     
                     if daily_pnl <= -max_dd_pips:

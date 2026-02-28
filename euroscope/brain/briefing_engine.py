@@ -17,8 +17,9 @@ class BriefingEngine:
     Aggregates multi-source intelligence into a human-readable daily briefing.
     """
     
-    def __init__(self, storage: Storage = None):
-        self.storage = storage or Storage()
+    def __init__(self, config=None, storage: Storage = None):
+        self.config = config
+        self.storage = storage
         
     async def generate_briefing(self) -> str:
         """

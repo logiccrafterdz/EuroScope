@@ -18,7 +18,7 @@ class EvolutionTracker:
     """
     
     def __init__(self, storage: Storage = None):
-        self.storage = storage or Storage()
+        self.storage = storage
         
     async def get_evolution_report(self) -> str:
         """

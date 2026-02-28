@@ -43,7 +43,7 @@ class PatternTracker:
     """
 
     def __init__(self, storage: Storage = None):
-        self.storage = storage or Storage()
+        self.storage = storage
         self._last_causal_similarity: Optional[float] = None
 
     async def record_detection(self, pattern_name: str, timeframe: str,

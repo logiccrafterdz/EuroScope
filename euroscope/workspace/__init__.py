@@ -130,12 +130,13 @@ class WorkspaceManager:
 
         Pulls from: prediction accuracy, pattern stats, tuning recommendations.
         """
+        if not storage:
+            logger.warning("refresh_memory called without storage")
+            return
         from ..learning.pattern_tracker import PatternTracker
         from ..learning.adaptive_tuner import AdaptiveTuner
         from ..brain.memory import Memory
-        from ..data.storage import Storage as _Storage
 
-        storage = storage or _Storage()
         memory = Memory(storage)
         tracker = PatternTracker(storage)
         tuner = AdaptiveTuner(storage)
@@ -183,11 +184,12 @@ class WorkspaceManager:
         logger.info("MEMORY.md refreshed with learning insights")
 
     async def refresh_identity(self, storage=None):
+        if not storage:
+            logger.warning("refresh_identity called without storage")
+            return
         from ..learning.pattern_tracker import PatternTracker
         from ..brain.memory import Memory
-        from ..data.storage import Storage as _Storage
 
-        storage = storage or _Storage()
         memory = Memory(storage)
         tracker = PatternTracker(storage)
         stats = await storage.get_trade_journal_stats()

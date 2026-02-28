@@ -66,10 +66,12 @@ class Orchestrator:
     for pipeline execution. Purely skills-based.
     """
 
-    def __init__(self):
+    def __init__(self, storage=None, registry=None):
         # V2: Skills system
-        self.registry = SkillsRegistry()
-        self.registry.discover()
+        self.registry = registry or SkillsRegistry()
+        self.storage = storage
+        if not registry:
+             self.registry.discover()
         self.chain = SkillChain(self.registry)
         self.conflict_arbiter = ConflictArbiter()
         self.vector_memory: Optional[VectorMemory] = None

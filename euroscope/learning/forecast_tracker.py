@@ -67,7 +67,7 @@ class ForecastTracker:
     """
 
     def __init__(self, storage: Storage = None):
-        self.storage = storage or Storage()
+        self.storage = storage
         self._weights = dict(DEFAULT_WEIGHTS)
         self._forecasts: list[Forecast] = []
         self._next_id = 1

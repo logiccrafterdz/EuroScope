@@ -51,7 +51,7 @@ class SignalExecutorSkill(BaseSkill):
 
     def set_config(self, config):
         self._config = config
-        self._guardrail = SafetyGuardrail(config)
+        self._guardrail = SafetyGuardrail(config, storage=self._storage)
         value = getattr(config, "paper_trading_only", None)
         if value is None:
             value = getattr(config, "EUROSCOPE_PAPER_TRADING_ONLY", None)
@@ -78,6 +78,8 @@ class SignalExecutorSkill(BaseSkill):
 
     def set_storage(self, storage):
         self._storage = storage
+        if self._guardrail:
+            self._guardrail.storage = storage
         self._init_executor()
 
     def set_broker(self, broker):

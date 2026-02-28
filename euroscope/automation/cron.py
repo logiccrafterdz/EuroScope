@@ -108,10 +108,11 @@ class CronScheduler:
         await cron.start()
     """
 
-    def __init__(self, tick_interval: int = 10, config: Optional[object] = None, bot: Optional[object] = None):
+    def __init__(self, tick_interval: int = 10, config: Optional[object] = None, bot: Optional[object] = None, storage: Optional[object] = None):
         self.tick_interval = tick_interval
         self.config = config
         self.bot = bot
+        self.storage = storage
         self._tasks: dict[str, ScheduledTask] = {}
         self._running = False
         self._task: Optional[asyncio.Task] = None
@@ -360,10 +361,10 @@ class CronScheduler:
                 from ..learning.pattern_tracker import PatternTracker
                 from ..learning.forecast_tracker import ForecastTracker
 
-                storage = getattr(self.bot, "storage", None)
+                storage = self.storage or getattr(self.bot, "storage", None)
                 if not storage:
-                    from ..data.storage import Storage
-                    storage = Storage()
+                    logger.error("Learning tick failed: No storage available")
+                    return
 
                 provider = getattr(self.bot, "price_provider", None)
                 if not provider:
@@ -401,10 +402,10 @@ class CronScheduler:
             try:
                 from ..learning.adaptive_tuner import AdaptiveTuner
 
-                storage = getattr(self.bot, "storage", None)
+                storage = self.storage or getattr(self.bot, "storage", None)
                 if not storage:
-                    from ..data.storage import Storage
-                    storage = Storage()
+                    logger.error("Learning tick failed: No storage available")
+                    return
 
                 tuner = AdaptiveTuner(storage=storage)
                 report = await tuner.format_report()

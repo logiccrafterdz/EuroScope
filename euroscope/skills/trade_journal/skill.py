@@ -22,7 +22,11 @@ class TradeJournalSkill(BaseSkill):
 
     def __init__(self):
         super().__init__()
-        self.storage = Storage()
+        self.storage = None
+
+    def set_storage(self, storage):
+        """Inject shared storage."""
+        self.storage = storage
 
     async def execute(self, context: SkillContext, action: str, **params) -> SkillResult:
         if action == "log_trade":

@@ -92,15 +92,49 @@ class EuroScopeBot:
         self.news_engine = NewsEngine(config.data.brave_api_key, self.storage)
         self.calendar = EconomicCalendar()
         self.router = LLMRouter.from_config(primary_key=config.llm.api_key, primary_base=config.llm.api_base, primary_model=config.llm.model, fallback_key=config.llm.fallback_api_key, fallback_base=config.llm.fallback_api_base, fallback_model=config.llm.fallback_model)
-        self.vector_memory = VectorMemory()
-        self.agent = Agent(config.llm, router=self.router, vector_memory=self.vector_memory, orchestrator=self.orchestrator)
+        # Core Components
+        self.storage = self.storage or Storage()
+        self.registry = SkillsRegistry()
         self.memory = Memory(self.storage)
-        self.pattern_tracker = PatternTracker(self.storage)
-        self.adaptive_tuner = AdaptiveTuner(self.storage)
+        self.vector_memory = VectorMemory(storage=self.storage)
+        self.orchestrator = Orchestrator(storage=self.storage, registry=self.registry)
+        self.llm = LLMRouter.from_config(primary_key=config.llm.api_key, primary_base=config.llm.api_base, primary_model=config.llm.model, fallback_key=config.llm.fallback_api_key, fallback_base=config.llm.fallback_api_base, fallback_model=config.llm.fallback_model)
+        self.llm.set_memory(self.memory)
+        
+        # Tracking & Learning (Shared Storage)
+        self.pattern_tracker = PatternTracker(storage=self.storage)
+        self.adaptive_tuner = AdaptiveTuner(storage=self.storage)
+        self.evolution_tracker = EvolutionTracker(storage=self.storage)
+        self.daily_tracker = DailyTracker(storage=self.storage)
+        self.briefing_engine = BriefingEngine(self.config, storage=self.storage)
+        
+        # Domain Services
+        self.price_provider = MultiSourceProvider(
+            alphavantage_key=config.data.alphavantage_key,
+            tiingo_key=config.data.tiingo_key,
+            oanda_key=config.data.oanda_api_key,
+            oanda_account=config.data.oanda_account_id,
+            oanda_practice=config.data.oanda_practice,
+            capital_key=config.data.capital_api_key,
+            capital_identifier=config.data.capital_identifier,
+            capital_password=config.data.capital_password
+        )
+        self.news_engine = NewsEngine(config.data.brave_api_key, storage=self.storage)
+        self.calendar = EconomicCalendar()
+        self.fundamentals = FundamentalDataProvider(config.data.fred_api_key)
         self.forecaster = Forecaster(self.agent, self.memory, self.orchestrator, pattern_tracker=self.pattern_tracker)
+        self.risk_manager = RiskManager()
+        
+        # Bot Logic & UI
+        self.agent = Agent(config.llm, router=self.router, vector_memory=self.vector_memory, orchestrator=self.orchestrator)
+        self.user_settings = UserSettings(self.storage)
+        self.notifications = NotificationManager(self.storage)
+        
+        # Automation & Scheduling
+        self.bus = EventBus()
+        self.heartbeat = HeartbeatService(interval=300, event_bus=self.bus)
+        self.cron = CronScheduler(config=config, bot=self, storage=self.storage)
         self.agent.forecaster = self.forecaster
-        self.briefing_engine = BriefingEngine(self.storage)
-        self.evolution_tracker = EvolutionTracker(self.storage)
         self.bot_settings = {
             'risk_per_trade': 1.0,
             'max_daily_loss': 3.0,
@@ -122,15 +156,18 @@ class EuroScopeBot:
             logger.warning(f"Bot: Error loading bot_settings.json: {e}")
 
         market_data_skill = self.registry.get('market_data')
+        # Inject shared storage into Orchestrator/Skills Discovery
         self.orchestrator.inject_dependencies(
+            storage=self.storage,
+            vector_memory=self.vector_memory,
+            memory=self.memory,
+            config=self.config,
             provider=self.price_provider, 
             broker=self.broker,
             macro_provider=self.macro_provider, 
             news_engine=self.news_engine, 
             calendar=self.calendar, 
-            storage=self.storage, 
             agent=self.agent, 
-            vector_memory=self.vector_memory, 
             pattern_tracker=self.pattern_tracker, 
             adaptive_tuner=self.adaptive_tuner, 
             risk_manager=risk_manager, 

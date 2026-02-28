@@ -21,8 +21,16 @@ class PredictionTrackerSkill(BaseSkill):
 
     def __init__(self):
         super().__init__()
-        self.storage = Storage()
-        self.memory = Memory(self.storage)
+        self.storage = None
+        self.memory = None
+
+    def set_storage(self, storage):
+        """Inject shared storage."""
+        self.storage = storage
+
+    def set_memory(self, memory):
+        """Inject shared memory."""
+        self.memory = memory
 
     def execute(self, context: SkillContext, action: str, **params) -> SkillResult:
         if action == "record":
