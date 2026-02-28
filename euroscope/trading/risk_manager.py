@@ -217,7 +217,8 @@ class RiskManager:
     def assess_trade(self, direction: str, entry_price: float,
                      atr: float = None, support: list[float] = None,
                      resistance: list[float] = None,
-                     rr_ratio: float = None) -> TradeRisk:
+                     rr_ratio: float = None,
+                     regime: str = None) -> TradeRisk:
         """
         Full risk assessment for a proposed trade.
 
@@ -283,7 +284,7 @@ class RiskManager:
             # Use atr as both current and avg if we don't have separate avg
             avg_atr_val = atr  # Caller can override
         position_size = self.calculate_position_size(
-            stop_pips, atr=atr, avg_atr=avg_atr_val,
+            stop_pips, atr=atr, avg_atr=avg_atr_val, regime=regime
         )
         risk_amount = round(self.config.account_balance * (self.config.risk_per_trade / 100), 2)
 

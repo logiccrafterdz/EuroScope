@@ -350,7 +350,7 @@ class StrategyEngine:
         direction = "WAIT"
 
         # Oversold at support → BUY
-        if rsi < 35:
+        if rsi < 40:
             direction = "BUY"
             entry_rules.append(f"RSI oversold ({rsi:.0f})")
             confidence += 15
@@ -368,7 +368,7 @@ class StrategyEngine:
                 confidence += 10
 
         # Overbought at resistance → SELL
-        elif rsi > 65:
+        elif rsi > 60:
             direction = "SELL"
             entry_rules.append(f"RSI overbought ({rsi:.0f})")
             confidence += 15
