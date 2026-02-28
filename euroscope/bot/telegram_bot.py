@@ -24,6 +24,7 @@ from ..brain.vector_memory import VectorMemory
 from ..learning.pattern_tracker import PatternTracker
 from ..learning.adaptive_tuner import AdaptiveTuner
 from ..data.provider import PriceProvider
+from ..data.multi_provider import MultiSourceProvider
 from ..data.news import NewsEngine
 from ..data.calendar import EconomicCalendar
 from ..data.fundamental import FundamentalDataProvider
