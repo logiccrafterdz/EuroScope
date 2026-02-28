@@ -9,6 +9,7 @@ search. Zero external dependencies.
 import logging
 import sqlite3
 import os
+import re
 from datetime import datetime, timedelta, UTC
 from typing import Optional
 
@@ -118,11 +119,13 @@ class VectorMemory:
         try:
             # Build FTS5 query: use each word as a match term
             # FTS5 uses implicit AND between terms
-            search_terms = " OR ".join(
-                word for word in query.split() if len(word) > 2
-            )
+            cleaned = re.sub(r"[^\w\s]+", " ", query or "").strip()
+            terms = [word for word in cleaned.split() if len(word) > 2]
+            search_terms = " OR ".join(terms)
             if not search_terms:
-                search_terms = query
+                if not cleaned:
+                    return []
+                search_terms = cleaned
 
             rows = self._conn.execute(
                 f"SELECT doc_id, text, stored_at, timestamp, rank "

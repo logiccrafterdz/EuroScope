@@ -137,7 +137,7 @@ class NewsEngine:
                 # Persist to DB if storage available
                 if self.storage:
                     try:
-                        self.storage.save_news_event(
+                        await self.storage.save_news_event(
                             title=article["title"],
                             source=article["source"],
                             url=article["url"],

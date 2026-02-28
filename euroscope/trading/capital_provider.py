@@ -191,18 +191,37 @@ class CapitalProvider:
                 if not prices:
                     return None
                     
+                def _extract_mid(price_block: dict | None) -> Optional[float]:
+                    if not price_block:
+                        return None
+                    if "mid" in price_block and price_block["mid"] is not None:
+                        return price_block["mid"]
+                    bid = price_block.get("bid")
+                    ask = price_block.get("ask")
+                    if bid is not None and ask is not None:
+                        return (bid + ask) / 2
+                    return bid if bid is not None else ask
+
                 records = []
                 for p in prices:
                     snapshot = p.get("snapshotTimeUTC", "").replace("T", " ")
+                    open_mid = _extract_mid(p.get("openPrice"))
+                    high_mid = _extract_mid(p.get("highPrice"))
+                    low_mid = _extract_mid(p.get("lowPrice"))
+                    close_mid = _extract_mid(p.get("closePrice"))
+                    if open_mid is None or high_mid is None or low_mid is None or close_mid is None:
+                        continue
                     records.append({
                         "time": pd.to_datetime(snapshot),
-                        "Open": p["openPrice"]["mid"],
-                        "High": p["highPrice"]["mid"],
-                        "Low": p["lowPrice"]["mid"],
-                        "Close": p["closePrice"]["mid"],
+                        "Open": open_mid,
+                        "High": high_mid,
+                        "Low": low_mid,
+                        "Close": close_mid,
                         "Volume": float(p.get("lastTradedVolume", 0))
                     })
                     
+                if not records:
+                    return None
                 df = pd.DataFrame(records)
                 df.set_index("time", inplace=True)
                 return df

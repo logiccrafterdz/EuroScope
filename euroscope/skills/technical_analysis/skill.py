@@ -126,8 +126,8 @@ class TechnicalAnalysisSkill(BaseSkill):
             price = float(df['Close'].iloc[-1])
             for p in adjusted:
                 name, signal = self._normalize_pattern(p)
-                self._tracker.record_detection(name, tf, signal, price)
-                multipliers[name] = self._tracker.get_confidence_multiplier(name, tf)
+                await self._tracker.record_detection(name, tf, signal, price)
+                multipliers[name] = await self._tracker.get_confidence_multiplier(name, tf)
 
         formatted = self._format_patterns(adjusted)
         return SkillResult(success=True, data=adjusted, metadata={
@@ -174,8 +174,8 @@ class TechnicalAnalysisSkill(BaseSkill):
             price = float(df['Close'].iloc[-1])
             for p in adjusted:
                 name, signal = self._normalize_pattern(p)
-                self._tracker.record_detection(name, tf, signal, price)
-                multipliers[name] = self._tracker.get_confidence_multiplier(name, tf)
+                await self._tracker.record_detection(name, tf, signal, price)
+                multipliers[name] = await self._tracker.get_confidence_multiplier(name, tf)
 
         data = {"indicators": ta, "patterns": adjusted, "levels": levels}
         context.analysis.update(data)

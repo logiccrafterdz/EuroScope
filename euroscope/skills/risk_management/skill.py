@@ -372,7 +372,7 @@ class RiskManagementSkill(BaseSkill):
         indicators = context.analysis.get("indicators", {})
         patterns = context.analysis.get("patterns", [])
         if self._storage:
-            self._storage.save_trade_journal(
+            await self._storage.save_trade_journal(
                 direction=signal.get("direction", "BUY"),
                 entry_price=entry_price,
                 stop_loss=stop_loss,
