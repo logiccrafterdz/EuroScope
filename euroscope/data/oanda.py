@@ -177,5 +177,6 @@ class OandaProvider:
             logger.error(f"Error fetching OANDA {tf} candles: {e}")
             return None
 
-    def clear_cache(self):
-        self._cache.clear()
+    async def close(self):
+        """No persistent session held, but added for API consistency."""
+        pass

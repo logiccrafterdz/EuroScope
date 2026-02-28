@@ -96,7 +96,16 @@ class MultiSourceProvider:
                 return result
             logger.error(f"Alpha Vantage also failed: {result.get('error')}")
 
-        return {"error": "All price data sources failed"}
+    async def close(self):
+        """Close all underlying provider sessions."""
+        tasks = []
+        if self.capital: tasks.append(self.capital.provider.close())
+        if self.oanda: tasks.append(self.oanda.close())
+        if self.tiingo: # Tiingo uses context managers per call, but we can add close() for future-proofing
+            pass
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
+        logger.info("MultiSourceProvider: All sessions closed.")
 
     async def get_candles(self, timeframe: str = "H1", count: int = 100) -> Optional[pd.DataFrame]:
         """Get OHLCV candles with automatic failover."""

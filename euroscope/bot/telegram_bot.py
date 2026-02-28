@@ -453,23 +453,32 @@ class EuroScopeBot:
         logger.info('Shutting down background services...')
         await self.heartbeat.stop()
         await self.cron.stop()
+        
+        # Close all data and service sessions
+        await self.price_provider.close()
+        await self.storage.close()
+        await self.news_engine.close()
+        await self.macro_provider.close()
+        await self.risk_manager.close()
+        
         logger.info('✅ Background services stopped.')
 
-    # Command handlers extracted to handlers/commands.py    async def _task_resolve_patterns(self):
+    # Command handlers extracted to handlers/commands.py
+    async def _task_resolve_patterns(self):
         """Periodically resolve pending patterns using latest price."""
         logger.info('Cron: Running pattern resolution...')
         price_data = await self.price_provider.get_price()
         if 'error' in price_data:
             return
         current_price = price_data['price']
-        self.pattern_tracker.resolve_pending(current_price)
-        self.memory.resolve_pending_predictions(current_price)
+        await self.pattern_tracker.resolve_pending(current_price)
+        await self.memory.resolve_pending_predictions(current_price)
         logger.info('Cron: Pattern resolution complete.')
 
     async def _task_daily_tuning(self):
         """Analyze trade history once a day and report recommendations."""
         logger.info('Cron: Running daily strategy tuning...')
-        report = self.adaptive_tuner.format_report()
+        report = await self.adaptive_tuner.format_report()
         await self.notifications.broadcast_message(f'🧠 *Daily Strategy Optimization*\n\n{report}', parse_mode='Markdown')
         logger.info('Cron: Daily tuning complete.')
 

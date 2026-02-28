@@ -6,6 +6,7 @@ Includes FinBERT-based sentiment analysis and DB persistence.
 No API key required.
 """
 
+import aiohttp
 import asyncio
 import logging
 from datetime import datetime
@@ -261,4 +262,7 @@ class NewsEngine:
         bear = sentiments.count("bearish")
         lines.append(f"📊 *Sentiment:* 🟢 {bull} bullish | 🔴 {bear} bearish | ⚪ {len(sentiments) - bull - bear} neutral")
 
-        return "\n".join(lines)
+
+    async def close(self):
+        """No persistent resources currently held, but added for consistency."""
+        pass
