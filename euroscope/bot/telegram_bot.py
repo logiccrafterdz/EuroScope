@@ -174,8 +174,7 @@ class EuroScopeBot:
             event_bus=self.bus, 
             heartbeat=self.heartbeat, 
             market_data_skill=market_data_skill, 
-            global_context=self.orchestrator.global_context, 
-            config=self.config
+            global_context=self.orchestrator.global_context
         )
         signal_executor_skill = self.registry.get('signal_executor')
         self._signal_executor_subscriber = SignalExecutorSubscriber(signal_executor_skill)
