@@ -88,9 +88,7 @@ class EuroScopeBot:
             password=config.data.capital_password
         ) if config.data.capital_api_key else None
         self.ws_client = CapitalWebsocketClient(self.broker) if self.broker else None
-        self.macro_provider = FundamentalDataProvider(config.data.fred_api_key)
-        self.news_engine = NewsEngine(config.data.brave_api_key, self.storage)
-        self.calendar = EconomicCalendar()
+        
         self.router = LLMRouter.from_config(
             primary_key=config.llm.api_key, 
             primary_base=config.llm.api_base, 
@@ -127,12 +125,14 @@ class EuroScopeBot:
         )
         self.news_engine = NewsEngine(config.data.brave_api_key, storage=self.storage)
         self.calendar = EconomicCalendar()
-        self.fundamentals = FundamentalDataProvider(config.data.fred_api_key)
-        self.forecaster = Forecaster(self.agent, self.memory, self.orchestrator, pattern_tracker=self.pattern_tracker)
-        self.risk_manager = RiskManager()
+        self.macro_provider = FundamentalDataProvider(config.data.fred_api_key)
+        self.risk_manager = RiskManager(storage=self.storage)
         
-        # Bot Logic & UI
+        # Bot Logic & UI (Order is critical: Agent first, then components that need it)
         self.agent = Agent(config.llm, router=self.router, vector_memory=self.vector_memory, orchestrator=self.orchestrator)
+        self.forecaster = Forecaster(self.agent, self.memory, self.orchestrator, pattern_tracker=self.pattern_tracker)
+        self.agent.forecaster = self.forecaster
+        
         self.user_settings = UserSettings(self.storage)
         self.notifications = NotificationManager(self.storage)
         
@@ -140,7 +140,6 @@ class EuroScopeBot:
         self.bus = EventBus()
         self.heartbeat = HeartbeatService(interval=300, event_bus=self.bus)
         self.cron = CronScheduler(config=config, bot=self, storage=self.storage)
-        self.agent.forecaster = self.forecaster
         self.bot_settings = {
             'risk_per_trade': 1.0,
             'max_daily_loss': 3.0,
