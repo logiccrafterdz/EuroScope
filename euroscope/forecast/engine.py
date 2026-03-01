@@ -37,7 +37,7 @@ class Forecaster:
         news_text = ctx.get_result("fundamental_analysis")["data"].get("formatted", "No news available") if ctx.get_result("fundamental_analysis") else "No news available"
 
         # Learning context
-        learning = self._build_learning_context(
+        learning = await self._build_learning_context(
             price_info=price_info,
             ta_results=ta_results,
             timeframe=timeframe,
@@ -78,7 +78,7 @@ class Forecaster:
         # Record prediction for accuracy tracking
         pred_id = None
         if direction:
-            pred_id = self.memory.record_prediction(
+            pred_id = await self.memory.record_prediction(
                 direction=direction,
                 confidence=confidence,
                 reasoning=forecast_text[:500],
@@ -103,12 +103,12 @@ class Forecaster:
             "price": price_info.get("price"),
         }
 
-    def _build_learning_context(self, price_info: dict, ta_results: dict, timeframe: str) -> str:
-        parts = [self.memory.get_learning_context()]
+    async def _build_learning_context(self, price_info: dict, ta_results: dict, timeframe: str) -> str:
+        parts = [await self.memory.get_learning_context()]
 
         patterns = ta_results.get("patterns", []) if ta_results else []
         if self.pattern_tracker and patterns:
-            rates = self.pattern_tracker.get_success_rates()
+            rates = await self.pattern_tracker.get_success_rates()
             tf = ta_results.get("timeframe") or price_info.get("timeframe") or "H1"
             lines = []
             for p in patterns:
