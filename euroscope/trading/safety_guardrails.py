@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Optional, Tuple
 
 from ..data.calendar import EconomicCalendar
+from ..data.storage import Storage
 from ..skills.base import SkillContext
 
 
@@ -16,6 +17,8 @@ class SafetyGuardrail:
     def __post_init__(self):
         if self.calendar is None:
             self.calendar = EconomicCalendar()
+        if self.storage is None:
+            self.storage = Storage()
 
     async def should_block_signal(self, context: SkillContext) -> Tuple[bool, str]:
         try:

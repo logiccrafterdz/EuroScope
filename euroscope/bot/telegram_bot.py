@@ -34,6 +34,8 @@ from ..forecast.engine import Forecaster
 from ..trading.risk_manager import RiskManager
 from ..trading.capital_provider import CapitalProvider
 from ..trading.capital_ws import CapitalWebsocketClient
+from ..trading.strategy_engine import StrategyEngine
+from ..trading.signal_executor import SignalExecutor
 from ..utils.charts import generate_chart
 from ..utils.formatting import truncate, safe_markdown, rich_header, thematic_divider, priority_label, progress_bar
 from .rate_limiter import RateLimiter

@@ -5,6 +5,7 @@ Calculates position sizes, stop losses, take profits, and enforces
 drawdown limits for disciplined EUR/USD trading.
 """
 
+import asyncio
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, UTC
@@ -388,7 +389,7 @@ class RiskManager:
 
     # ─── Trade Result Tracking ───────────────────────────────
 
-    async def record_trade_result(self, pnl: float):
+    def record_trade_result(self, pnl: float):
         """Record a closed trade's PnL for drawdown tracking."""
         today = datetime.now(UTC).strftime("%Y-%m-%d")
         if self._daily_pnl_date != today:
@@ -401,8 +402,14 @@ class RiskManager:
             self._consecutive_losses += 1
         else:
             self._consecutive_losses = 0
-            
-        await self.save_state()
+        if not self.storage:
+            return
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            asyncio.run(self.save_state())
+        else:
+            loop.create_task(self.save_state())
 
     def update_open_count(self, count: int):
         """Update the number of currently open trades."""

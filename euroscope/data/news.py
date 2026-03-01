@@ -261,6 +261,7 @@ class NewsEngine:
         bull = sentiments.count("bullish")
         bear = sentiments.count("bearish")
         lines.append(f"📊 *Sentiment:* 🟢 {bull} bullish | 🔴 {bear} bearish | ⚪ {len(sentiments) - bull - bear} neutral")
+        return "\n".join(lines)
 
 
     async def close(self):

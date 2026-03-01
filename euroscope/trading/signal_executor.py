@@ -291,7 +291,7 @@ class SignalExecutor:
 
         # Update RiskManager stats
         if self.risk_manager:
-            await self.risk_manager.record_trade_result(pnl_pips)
+            self.risk_manager.record_trade_result(pnl_pips)
 
         logger.info(
             f"Closed signal #{signal_id}: {direction} "

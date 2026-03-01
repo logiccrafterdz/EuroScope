@@ -52,6 +52,7 @@ class SignalExecutorSkill(BaseSkill):
         self._executor: Optional[SignalExecutor] = None
         self._temp_db_path = None
         self._config_injected = False
+        self._open: list[PaperTrade] = []
 
     def set_config(self, config):
         self._config = config
@@ -311,15 +312,48 @@ class SignalExecutorSkill(BaseSkill):
     async def _update_trade(self, context: SkillContext, **params) -> SkillResult:
         """Modify SL/TP of an active open trade."""
         signal_id = params.get("signal_id") or params.get("id")
+        trade_id = params.get("trade_id")
         new_sl = params.get("stop_loss")
         new_tp = params.get("take_profit")
         
+        if trade_id:
+            open_trade = next((t for t in self._open if t.trade_id == trade_id), None)
+            if open_trade:
+                if new_sl is not None:
+                    open_trade.stop_loss = new_sl
+                if new_tp is not None:
+                    open_trade.take_profit = new_tp
+                for t in context.open_positions:
+                    if t.get("trade_id") == trade_id:
+                        if new_sl is not None:
+                            t["stop_loss"] = new_sl
+                        if new_tp is not None:
+                            t["take_profit"] = new_tp
+                return SkillResult(success=True, data={"trade_id": trade_id, "stop_loss": new_sl, "take_profit": new_tp})
+            if signal_id is None and isinstance(trade_id, str):
+                if trade_id.startswith("T-"):
+                    try:
+                        signal_id = int(trade_id.split("T-")[1])
+                    except (ValueError, IndexError):
+                        signal_id = None
+                else:
+                    try:
+                        signal_id = int(trade_id)
+                    except ValueError:
+                        signal_id = None
+
         if not signal_id:
             return SkillResult(success=False, error="signal_id is required")
         if not self._storage:
             self._init_executor()
         if self._storage:
             await self._storage.update_signal_levels(signal_id, stop_loss=new_sl, take_profit=new_tp)
+            for t in context.open_positions:
+                if t.get("id") == signal_id or t.get("trade_id") == f"T-{signal_id}":
+                    if new_sl is not None:
+                        t["stop_loss"] = new_sl
+                    if new_tp is not None:
+                        t["take_profit"] = new_tp
             return SkillResult(success=True, data={"id": signal_id, "stop_loss": new_sl, "take_profit": new_tp})
                 
         return SkillResult(success=False, error="Storage not available")

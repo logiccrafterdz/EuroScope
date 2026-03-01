@@ -36,7 +36,7 @@ async def test_risk_persistence():
     print(f"Initial State: PnL={rm._daily_pnl}, Streak={rm._consecutive_losses}")
     
     print("Recording a loss of -250...")
-    await rm.record_trade_result(-250.0)
+    rm.record_trade_result(-250.0)
     print(f"Updated State: PnL={rm._daily_pnl}, Streak={rm._consecutive_losses}")
     
     print("Simulating bot restart...")
