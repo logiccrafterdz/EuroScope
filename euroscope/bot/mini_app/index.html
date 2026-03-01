@@ -1439,27 +1439,30 @@
 
             } else if (activeTab === 'macro') {
                 const res = await api('/macro');
-                if (res.success && res.data) {
-                    const m = res.data; const eu = m.macro_data?.eu_data || {}; const us = m.macro_data?.us_data || {};
-                    document.getElementById('macro-data-list').innerHTML = `
-                        <div class="glass-card" style="padding:16px"><div class="label-sm">Fed Rate</div><div class="val-md">${f2(us.fed?.rate)}%</div></div>
-                        <div class="glass-card" style="padding:16px"><div class="label-sm">ECB Rate</div><div class="val-md">${f2(eu.ecb?.value)}%</div></div>
-                        <div class="glass-card" style="padding:16px"><div class="label-sm">US CPI</div><div class="val-md">${f2(us.cpi?.value)}</div></div>
-                        <div class="glass-card" style="padding:16px"><div class="label-sm">EU CPI</div><div class="val-md">${f2(eu.cpi?.value)}</div></div>
-                        <div class="glass-card" style="padding:16px"><div class="label-sm">Spread</div><div class="val-md">${f2(eu.yield_spread?.spread)}%</div></div>
-                        <div class="glass-card" style="padding:16px"><div class="label-sm">Bias</div><div class="val-md" style="color:${m.macro_impact === 'bullish' ? 'var(--up-color)' : m.macro_impact === 'bearish' ? 'var(--down-color)' : 'var(--text-main)'}; text-shadow:0 0 10px currentColor;">${(m.macro_impact || '---').toUpperCase()}</div></div>
-                    `;
-                    const spread = eu.yield_spread;
-                    document.getElementById('macro-context').textContent = spread ? `US 10Y ${f2(spread.us_10y)}% vs DE 10Y ${f2(spread.german_10y)}% → Spread ${f2(spread.spread)}%.` : "Data loaded.";
+                const m = res.data || { macro_data: {}, macro_impact: 'NEUTRAL' };
+                const eu = m.macro_data?.eu_data || {};
+                const us = m.macro_data?.us_data || {};
+                document.getElementById('macro-data-list').innerHTML = `
+                    <div class="glass-card" style="padding:16px"><div class="label-sm">Fed Rate</div><div class="val-md">${f2(us.fed?.rate)}%</div></div>
+                    <div class="glass-card" style="padding:16px"><div class="label-sm">ECB Rate</div><div class="val-md">${f2(eu.ecb?.value)}%</div></div>
+                    <div class="glass-card" style="padding:16px"><div class="label-sm">US CPI</div><div class="val-md">${f2(us.cpi?.value)}</div></div>
+                    <div class="glass-card" style="padding:16px"><div class="label-sm">EU CPI</div><div class="val-md">${f2(eu.cpi?.value)}</div></div>
+                    <div class="glass-card" style="padding:16px"><div class="label-sm">Spread</div><div class="val-md">${f2(eu.yield_spread?.spread)}%</div></div>
+                    <div class="glass-card" style="padding:16px"><div class="label-sm">Bias</div><div class="val-md" style="color:${m.macro_impact === 'bullish' ? 'var(--up-color)' : m.macro_impact === 'bearish' ? 'var(--down-color)' : 'var(--text-main)'}; text-shadow:0 0 10px currentColor;">${(m.macro_impact || '---').toUpperCase()}</div></div>
+                `;
+                const spread = eu.yield_spread;
+                let contextText = spread ? `US 10Y ${f2(spread.us_10y)}% vs DE 10Y ${f2(spread.german_10y)}% → Spread ${f2(spread.spread)}%.` : "Data loaded.";
+                if (!res.success && res.error) contextText = res.error;
+                if (res.formatted) contextText = res.formatted;
+                document.getElementById('macro-context').textContent = contextText;
 
-                    const fDir = document.getElementById('forecast-dir').textContent.trim().toUpperCase();
-                    const mDir = (m.macro_impact || '').toUpperCase();
-                    const warnEl = document.getElementById('mixed-signal-warn');
-                    if (fDir && mDir && fDir !== 'NEUTRAL' && mDir !== 'NEUTRAL' && fDir !== mDir && fDir !== 'LOADING...') {
-                        warnEl.style.display = 'block';
-                    } else {
-                        warnEl.style.display = 'none';
-                    }
+                const fDir = document.getElementById('forecast-dir').textContent.trim().toUpperCase();
+                const mDir = (m.macro_impact || '').toUpperCase();
+                const warnEl = document.getElementById('mixed-signal-warn');
+                if (fDir && mDir && fDir !== 'NEUTRAL' && mDir !== 'NEUTRAL' && fDir !== mDir && fDir !== 'LOADING...') {
+                    warnEl.style.display = 'block';
+                } else {
+                    warnEl.style.display = 'none';
                 }
             } else if (activeTab === 'signals') {
                 const resTrades = await api('/trades');
