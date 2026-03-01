@@ -35,6 +35,32 @@ class Forecaster:
         price_info = ctx.get_result("market_data")["data"] if ctx.get_result("market_data") else {}
         ta_results = ctx.get_result("technical_analysis")["data"] if ctx.get_result("technical_analysis") else {}
         news_text = ctx.get_result("fundamental_analysis")["data"].get("formatted", "No news available") if ctx.get_result("fundamental_analysis") else "No news available"
+        signal_data = {}
+        strat_entry = ctx.get_result("trading_strategy")
+        if strat_entry and isinstance(strat_entry.get("data"), dict):
+            signal_data = strat_entry.get("data") or {}
+        elif isinstance(ctx.signals, dict) and ctx.signals:
+            signal_data = ctx.signals
+        strategy_signal = "No strategy signal available."
+        if signal_data:
+            direction = signal_data.get("direction", "NEUTRAL")
+            strategy = signal_data.get("strategy", "unknown")
+            confidence = signal_data.get("confidence", 0)
+            regime = signal_data.get("regime") or ""
+            reasoning = signal_data.get("reasoning") or ""
+            entry_price = signal_data.get("entry_price")
+            parts = [
+                f"Direction: {direction}",
+                f"Strategy: {strategy}",
+                f"Confidence: {confidence}",
+            ]
+            if regime:
+                parts.append(f"Regime: {regime}")
+            if entry_price not in (None, 0, 0.0):
+                parts.append(f"Entry: {entry_price}")
+            if reasoning:
+                parts.append(f"Reasoning: {reasoning}")
+            strategy_signal = "\n".join(parts)
 
         # Learning context
         learning = await self._build_learning_context(
@@ -68,6 +94,7 @@ class Forecaster:
             patterns=patterns_str,
             levels=levels_str,
             news=news_text,
+            strategy_signal=strategy_signal,
             prediction_history=learning,
             timeframe=timeframe,
         )

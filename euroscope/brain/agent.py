@@ -1299,7 +1299,8 @@ class Agent:
 
     async def forecast(self, price_data: str, technical_summary: str,
                        patterns: str, levels: str, news: str,
-                       prediction_history: str, timeframe: str = "24 hours") -> str:
+                       prediction_history: str, strategy_signal: str = "No strategy signal available.",
+                       timeframe: str = "24 hours") -> str:
         """Generate directional forecast."""
         prompt = FORECAST_PROMPT.format(
             price_data=price_data,
@@ -1307,6 +1308,7 @@ class Agent:
             patterns=patterns,
             levels=levels,
             news=news,
+            strategy_signal=strategy_signal,
             prediction_history=prediction_history,
             timeframe=timeframe,
         )
