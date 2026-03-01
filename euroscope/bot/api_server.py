@@ -97,7 +97,7 @@ class APIServer:
         logger.debug("API: Running deep AI forecast...")
         try:
             tf = request.query.get("timeframe", "24 hours")
-            result = await self.bot.forecaster.generate_forecast(tf)
+            result = await asyncio.wait_for(self.bot.forecaster.generate_forecast(tf), timeout=60)
             return web.json_response({
                 "success": True,
                 "data": {
@@ -107,6 +107,16 @@ class APIServer:
                     "timeframe": tf,
                     "price": result.get("price"),
                     "timestamp": datetime.now().isoformat(),
+                }
+            })
+        except asyncio.TimeoutError:
+            return web.json_response({
+                "success": False,
+                "error": "Strategic Reasoning signal timed out",
+                "data": {
+                    "direction": "NEUTRAL",
+                    "confidence": 0,
+                    "reasoning": "Forecasting engine timed out. Please try again later.",
                 }
             })
         except Exception as e:
