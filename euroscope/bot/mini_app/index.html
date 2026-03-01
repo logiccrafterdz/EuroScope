@@ -655,6 +655,13 @@
                 </div>
             </div>
 
+            <div class="glass-card bento-full" style="margin-bottom: 16px; padding-bottom: 8px;">
+                <div class="label-sm" style="margin-bottom: 12px;">Recent Signals</div>
+                <div id="recent-signals-list">
+                    <div class="empty-state" style="padding: 20px 0;">NO SIGNALS</div>
+                </div>
+            </div>
+
             <div class="glass-card bento-full">
                 <div class="label-sm" style="margin-bottom: 12px;">Recent History</div>
                 <div id="trade-history-list">
@@ -1486,6 +1493,34 @@
                 } else {
                     countBadge.textContent = '0';
                     listOpen.innerHTML = `<div class="empty-state">NO ACTIVE TRADES</div>`;
+                }
+
+                const resSignals = await api('/signals');
+                const listSignals = document.getElementById('recent-signals-list');
+                if (resSignals.success && resSignals.signals?.length > 0) {
+                    listSignals.innerHTML = resSignals.signals.map(s => {
+                        const dir = String(s.direction || '').toUpperCase();
+                        const dirColor = dir === 'BUY' ? 'var(--up-color)' : dir === 'SELL' ? 'var(--down-color)' : 'var(--text-muted)';
+                        return `
+                            <div style="padding: 12px 0; border-bottom: 1px solid var(--border-color);">
+                                <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+                                    <span style="font-weight:800; color:${dirColor}; font-size:0.7rem; letter-spacing:1px;">${dir || 'SIGNAL'}</span>
+                                    <span style="font-size:0.65rem; color:var(--text-dim); font-weight:700;">${s.timeframe || '-'}</span>
+                                </div>
+                                <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; text-align:center;">
+                                    <div><div class="label-sm">ENTRY</div><div class="val-md">${f5(s.entry_price)}</div></div>
+                                    <div><div class="label-sm">STOP</div><div class="val-md" style="color:var(--down-color)">${f5(s.stop_loss)}</div></div>
+                                    <div><div class="label-sm">TARGET</div><div class="val-md" style="color:var(--up-color)">${f5(s.take_profit)}</div></div>
+                                </div>
+                                <div style="display:flex; justify-content:space-between; margin-top:8px; font-size:0.6rem; color:var(--text-dim);">
+                                    <span>CONF: ${f2(s.confidence)}%</span>
+                                    <span>${(s.status || '').toUpperCase()}</span>
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+                } else {
+                    listSignals.innerHTML = `<div class="empty-state">NO SIGNALS</div>`;
                 }
 
                 const resHist = await api('/history');

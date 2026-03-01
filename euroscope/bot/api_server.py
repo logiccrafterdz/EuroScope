@@ -142,9 +142,14 @@ class APIServer:
     async def _api_signals(self, request):
         """API endpoint for recent trading signals."""
         logger.debug("API: Fetching recent signals...")
-        # Await the storage method since we migrated Storage to async
-        signals = await self.bot.storage.get_signals(limit=5)
-        return web.json_response({"success": True, "signals": signals})
+        try:
+            if not getattr(self.bot, "storage", None):
+                return web.json_response({"success": False, "error": "Storage not configured", "signals": []})
+            signals = await self.bot.storage.get_signals(limit=5)
+            return web.json_response({"success": True, "signals": signals})
+        except Exception as e:
+            logger.error(f"API: Signals error: {e}")
+            return web.json_response({"success": False, "error": str(e), "signals": []})
 
     async def _api_trades(self, request):
         """API endpoint for active open trades."""
