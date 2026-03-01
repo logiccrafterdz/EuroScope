@@ -219,9 +219,14 @@ class APIServer:
     async def _api_alerts(self, request):
         """API endpoint for active price alerts."""
         logger.debug("API: Fetching active alerts...")
-        # Since storage is async now
-        alerts = await self.bot.storage.get_active_alerts()
-        return web.json_response({"success": True, "alerts": alerts})
+        try:
+            if not getattr(self.bot, "storage", None):
+                return web.json_response({"success": False, "error": "Storage not configured", "alerts": []})
+            alerts = await self.bot.storage.get_active_alerts()
+            return web.json_response({"success": True, "alerts": alerts})
+        except Exception as e:
+            logger.error(f"API: Alerts error: {e}")
+            return web.json_response({"success": False, "error": str(e), "alerts": []})
 
     async def _api_analysis(self, request):
         """API endpoint for technical analysis snapshot."""

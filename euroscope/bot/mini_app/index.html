@@ -1272,6 +1272,32 @@
                 }
             });
 
+            api('/alerts').then(res => {
+                const alertList = document.getElementById('alert-list');
+                if (!alertList) return;
+                if (res.success && res.alerts?.length > 0) {
+                    alertList.innerHTML = res.alerts.map(a => {
+                        const cond = (a.condition || '').toLowerCase();
+                        const label = cond === 'above' ? 'ABOVE' : cond === 'below' ? 'BELOW' : (cond || 'ALERT').toUpperCase();
+                        const color = cond === 'above' ? 'var(--up-color)' : cond === 'below' ? 'var(--down-color)' : 'var(--text-muted)';
+                        const when = a.created_at ? new Date(a.created_at).toLocaleString() : '';
+                        return `
+                            <div class="glass-card" style="padding:10px; margin-bottom:8px;">
+                                <div style="display:flex; justify-content:space-between; align-items:center;">
+                                    <span style="font-weight:800; font-size:0.65rem; letter-spacing:1px; color:${color};">${label}</span>
+                                    <span style="font-size:0.6rem; color:var(--text-muted);">${when}</span>
+                                </div>
+                                <div style="margin-top:6px; font-size:0.75rem; color:var(--text-main); font-weight:700;">
+                                    EUR/USD ${label} ${f5(a.target_value)}
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+                } else {
+                    alertList.innerHTML = `<div class="empty-state" style="padding: 10px 0;">NO ACTIVE ALERTS</div>`;
+                }
+            });
+
             api('/summary').then(sum => {
                 if (sum.success) {
                     const oldPrice = parseFloat(document.getElementById('price').textContent);
