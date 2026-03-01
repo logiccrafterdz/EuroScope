@@ -120,7 +120,12 @@ class VectorMemory:
             # Build FTS5 query: use each word as a match term
             # FTS5 uses implicit AND between terms
             cleaned = re.sub(r"[^\w\s]+", " ", query or "").strip()
-            terms = [word for word in cleaned.split() if len(word) > 2]
+            operators = {"and", "or", "not", "near"}
+            terms = [
+                word
+                for word in cleaned.split()
+                if len(word) > 2 and word.lower() not in operators
+            ]
             search_terms = " OR ".join(terms)
             if not search_terms:
                 if not cleaned:
