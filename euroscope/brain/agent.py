@@ -754,7 +754,7 @@ class Agent:
         from ..learning.pattern_tracker import PatternTracker
         storage = getattr(self, "storage", None)
         tracker = PatternTracker(storage=storage)
-        lessons = tracker.get_recent_lessons(limit=3)
+        lessons = await tracker.get_recent_lessons(limit=3)
 
         # Force fetch current price, recent candles, AND advanced context so the pulse is deeply informative
         current_price = "Unavailable"
