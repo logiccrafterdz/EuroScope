@@ -21,7 +21,7 @@
             --accent-glow: rgba(0, 255, 157, 0.3);
             --text-main: #ffffff;
             --text-muted: #8b949e;
-            --text-dim: #4b5563;
+            --text-dim: #010101;
             --border-color: rgba(255, 255, 255, 0.08);
             --up-color: #00ff9d;
             --down-color: #ff3366;
@@ -1285,9 +1285,11 @@
                     }
 
                     const el = document.getElementById('price-change');
-                    const sign = (sum.change || 0) >= 0 ? '+' : '';
-                    el.textContent = `${sign}${f5(sum.change)} (${sign}${f2(sum.change_pct)}%)`;
-                    el.style.color = (sum.change || 0) >= 0 ? 'var(--up-color)' : 'var(--down-color)';
+                    const change = typeof sum.change === 'number' ? sum.change : 0;
+                    const changePct = typeof sum.change_pct === 'number' ? sum.change_pct : 0;
+                    const sign = change >= 0 ? '+' : '';
+                    el.textContent = `${sign}${f5(change)} (${sign}${f2(changePct)}%)`;
+                    el.style.color = change >= 0 ? 'var(--up-color)' : 'var(--down-color)';
                     document.getElementById('stat-range').textContent = `${(sum.range_pips || 0).toFixed(1)} P`;
                     document.getElementById('stat-hilo').textContent = `${f5(sum.low)} / ${f5(sum.high)}`;
                 }
