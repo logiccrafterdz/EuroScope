@@ -129,6 +129,8 @@ class PatternTracker:
 
     async def get_recent_lessons(self, limit: int = 5) -> str:
         """Summarize recent resolved patterns into a natural language string."""
+        if not self.storage:
+            return "No recent patterns resolved yet. Storage not available."
         resolved = await self.storage.get_resolved_patterns(limit=limit)
         if not resolved:
             return "No recent patterns resolved yet. I am continuously monitoring market structure for new opportunities."
