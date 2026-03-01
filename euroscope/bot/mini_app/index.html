@@ -1364,9 +1364,11 @@
                 }
             } else if (activeTab === 'analysis') {
                 const res = await api('/analysis');
-                if (res.success && res.data) {
-                    const ta = res.data; const ind = ta.indicators || {};
-                    const b = (ta.overall_bias || 'NEUTRAL').toUpperCase();
+                if (res.data) {
+                    const ta = res.data || {}; const ind = ta.indicators || {};
+                    const biasRaw = String(ta.overall_bias || 'NEUTRAL').toUpperCase();
+                    const isUp = biasRaw === 'BUY' || biasRaw === 'BULLISH';
+                    const isDown = biasRaw === 'SELL' || biasRaw === 'BEARISH';
                     const node = document.getElementById('node-analysis');
                     node.innerHTML = '';
 
@@ -1389,7 +1391,7 @@
                     }
 
                     node.innerHTML += `
-                        <div class="info-row"><span class="label">Bias</span><span class="val" style="color:${b === 'BUY' ? 'var(--up-color)' : b === 'SELL' ? 'var(--down-color)' : 'var(--accent-primary)'};text-shadow:0 0 10px currentColor;">${b}</span></div>
+                        <div class="info-row"><span class="label">Bias</span><span class="val" style="color:${isUp ? 'var(--up-color)' : isDown ? 'var(--down-color)' : 'var(--accent-primary)'};text-shadow:0 0 10px currentColor;">${biasRaw}</span></div>
                         <div class="info-row"><span class="label">RSI</span><span class="val">${f2(ind.RSI?.value)}</span></div>
                         <div class="info-row"><span class="label">MACD</span><span class="val">${ind.MACD?.signal_text || '---'}</span></div>
                         <div class="info-row"><span class="label">ADX</span><span class="val">${f2(ind.ADX?.value)} (${ind.ADX?.strength || '-'})</span></div>

@@ -223,13 +223,14 @@ class APIServer:
         logger.debug("API: Running real-time technical analysis...")
         ctx = SkillContext()
         res_ta = await self.bot.orchestrator.run_skill("technical_analysis", "analyze", context=ctx, timeframe="H1")
+        ta_data = res_ta.data if res_ta.success and res_ta.data else {"indicators": {}, "overall_bias": "NEUTRAL"}
         
         # Add Real-time Sentiment (Optimized ONNX)
         sentiment_data = {"label": "NEUTRAL", "score": 0.5}
         try:
             from ..data.sentiment import analyze_sentiment_onnx
             if res_ta.success:
-                mood_phrase = f"EURUSD is currently {res_ta.data.get('overall_bias', 'neutral')}."
+                mood_phrase = f"EURUSD is currently {ta_data.get('overall_bias', 'neutral')}."
             else:
                 mood_phrase = "EURUSD market status is unknown."
             
@@ -243,10 +244,12 @@ class APIServer:
             logger.warning(f"API: Sentiment analysis failed: {e}")
 
         return web.json_response({
-            "success": True, 
-            "data": res_ta.data, 
+            "success": res_ta.success,
+            "partial": not res_ta.success,
+            "error": res_ta.error if not res_ta.success else None,
+            "data": ta_data,
             "sentiment": sentiment_data,
-            "formatted": res_ta.metadata.get("formatted")
+            "formatted": res_ta.metadata.get("formatted") if res_ta.metadata else None
         })
 
     async def _api_candles(self, request):
