@@ -1343,12 +1343,15 @@
                 const res = await api('/forecast');
                 if (res.success && res.data) {
                     const d = res.data;
-                    document.getElementById('forecast-dir').textContent = d.direction;
-                    document.getElementById('forecast-dir').style.color = d.direction === 'BUY' ? 'var(--up-color)' : d.direction === 'SELL' ? 'var(--down-color)' : 'var(--text-muted)';
-                    document.getElementById('forecast-dir').style.textShadow = `0 0 20px ${d.direction === 'BUY' ? 'var(--up-color)' : d.direction === 'SELL' ? 'var(--down-color)' : 'transparent'}`;
+                    const dir = String(d.direction || 'NEUTRAL').toUpperCase();
+                    document.getElementById('forecast-dir').textContent = dir;
+                    const isUp = dir === 'BUY' || dir === 'BULLISH';
+                    const isDown = dir === 'SELL' || dir === 'BEARISH';
+                    document.getElementById('forecast-dir').style.color = isUp ? 'var(--up-color)' : isDown ? 'var(--down-color)' : 'var(--text-muted)';
+                    document.getElementById('forecast-dir').style.textShadow = `0 0 20px ${isUp ? 'var(--up-color)' : isDown ? 'var(--down-color)' : 'transparent'}`;
 
                     // Dynamic Gradient for Confidence Bar
-                    const color = d.direction === 'BUY' ? 'var(--up-color)' : d.direction === 'SELL' ? 'var(--down-color)' : 'var(--text-muted)';
+                    const color = isUp ? 'var(--up-color)' : isDown ? 'var(--down-color)' : 'var(--text-muted)';
                     const bar = document.getElementById('forecast-conf-bar');
                     bar.style.width = `${(d.confidence || 0) * 100}%`;
                     bar.style.background = `linear-gradient(90deg, transparent, ${color})`;
