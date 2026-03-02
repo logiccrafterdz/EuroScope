@@ -212,6 +212,150 @@
             transform: scale(0.97);
         }
 
+        /* --- System Menu Overlay CSS --- */
+        #system-overlay.active {
+            display: flex !important;
+        }
+
+        #system-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(4, 5, 7, 0.95);
+            backdrop-filter: blur(30px);
+            -webkit-backdrop-filter: blur(30px);
+            z-index: 9999;
+            padding: 40px 24px;
+            display: none;
+            flex-direction: column;
+            overflow-y: auto;
+            animation: fadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        #system-overlay .close-btn {
+            position: absolute;
+            top: 24px;
+            right: 24px;
+            background: rgba(255, 255, 255, 0.1);
+            border: none;
+            color: #fff;
+            width: 40px;
+            height: 40px;
+            border-radius: 20px;
+            font-size: 1.2rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .sys-group {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            padding: 16px;
+            margin-bottom: 16px;
+        }
+
+        .sys-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .sys-row:last-child {
+            border-bottom: none;
+            padding-bottom: 0;
+        }
+
+        .sys-row:first-child {
+            padding-top: 0;
+        }
+
+        .kill-switch {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid var(--down-color);
+            color: var(--down-color);
+            padding: 20px;
+            border-radius: 20px;
+            text-align: center;
+            font-weight: 800;
+            letter-spacing: 2px;
+            margin-top: 24px;
+            text-shadow: 0 0 10px rgba(239, 68, 68, 0.5);
+            box-shadow: inset 0 0 30px rgba(239, 68, 68, 0.1);
+            transition: all 0.3s;
+            width: 100%;
+            cursor: pointer;
+        }
+
+        .kill-switch:active {
+            background: var(--down-color);
+            color: #fff;
+            transform: scale(0.95);
+        }
+
+        .toggle-switch {
+            position: relative;
+            width: 50px;
+            height: 28px;
+        }
+
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(255, 255, 255, 0.1);
+            transition: .4s;
+            border-radius: 34px;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 20px;
+            width: 20px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s cubic-bezier(0.16, 1, 0.3, 1);
+            border-radius: 50%;
+        }
+
+        input:checked+.slider {
+            background-color: var(--accent-primary);
+            box-shadow: 0 0 10px var(--accent-glow);
+        }
+
+        input:checked+.slider:before {
+            transform: translateX(22px);
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
         /* Floating Dock */
         .dock {
             position: fixed;
@@ -909,47 +1053,67 @@
 
     <!-- SYSTEM OVERLAY -->
     <div id="system-overlay">
-        <div class="glass-card" style="margin-top: 40px;">
-            <div class="label-sm" style="font-size:0.75rem; color:#fff;">System Diagnostics</div>
-            <div id="alert-list" style="margin-bottom: 16px;"></div>
+        <button class="close-btn" onclick="closeSystem()">✕</button>
+        <div style="padding: 24px; padding-top: 80px; height: 100%; overflow-y: auto;">
+            <h2
+                style="font-size:1.5rem; font-family:'Fira Code'; font-weight:800; margin-bottom:24px; color:var(--text-main);">
+                SYSTEM CONTROLS</h2>
 
-            <div class="label-sm" style="font-size:0.75rem; color:#fff; margin-top:16px;">Bot Settings</div>
-            <div id="settings-loader" class="empty-state" style="padding: 10px 0;">LOADING SETTINGS...</div>
-            <div id="settings-form" style="display:none; margin-bottom: 16px;">
-                <div class="label-sm" style="margin-top:8px;">RISK PER TRADE (%)</div>
-                <input type="number" id="setting-risk" class="action-in" step="0.1" max="5.0" min="0.1">
-                <div class="label-sm">MAX DAILY LOSS (%)</div>
-                <input type="number" id="setting-maxloss" class="action-in" step="0.5" max="10.0" min="1.0">
-                <label
-                    style="display:flex; align-items:center; gap:8px; margin-top:8px; font-size:0.75rem; color:var(--text-main); font-weight:700;">
-                    <input type="checkbox" id="setting-auto"
-                        style="width:16px; height:16px; accent-color:var(--accent-primary);">
-                    ENABLE AUTO-TRADING
-                </label>
-                <button class="action-btn" onclick="saveSettings()"
-                    style="margin-top:16px; background:var(--accent-primary); color:#000;">SAVE SETTINGS</button>
-            </div>
-
-            <div class="label-sm" style="margin-top:16px;">API ENDPOINT</div>
-            <input type="text" id="api-url-input" class="action-in" placeholder="https://your-bot-server.com">
-            <button class="action-btn" onclick="saveOverride()">APPLY OVERRIDE</button>
-
-            <div style="margin-top:24px; border-top: 1px solid rgba(255, 51, 102, 0.3); padding-top:16px;">
-                <div class="label-sm" style="color:var(--down-color); margin-bottom:8px;">CRITICAL OPERATIONS</div>
-                <button class="action-btn" id="btn-killswitch" onclick="toggleEmergency()"
-                    style="background:rgba(255, 51, 102, 0.1); color:var(--down-color); border:1px solid var(--down-color); box-shadow:0 0 15px rgba(255,51,102,0.2);">
-                    🚨 ACTIVATE KILL SWITCH
-                </button>
-                <div
-                    style="font-size:0.6rem; color:var(--text-muted); margin-top:8px; text-align:center; line-height:1.4;">
-                    Halts all autonomous execution immediately.<br>Use only in extreme market conditions.
+            <div class="sys-group">
+                <div class="label-sm" style="margin-bottom:12px;">ENGINE DIAGNOSTICS</div>
+                <div id="alert-list" style="margin-bottom: 16px;"></div>
+                <div class="sys-row" style="border:none; padding-bottom:0;">
+                    <span style="font-size:0.9rem; font-weight:700;">Local UI Debug Console</span>
+                    <button class="action-btn action-outline" onclick="toggleDebug()"
+                        style="padding:6px 16px; margin:0; width:auto; font-size:0.75rem;">TOGGLE</button>
                 </div>
             </div>
 
-            <button class="action-btn action-outline" onclick="toggleDebug()" style="margin-top:24px;">TOGGLE DEBUG
-                CONSOLE</button>
-            <button class="action-btn action-outline" style="border:none; color:var(--text-main);"
-                onclick="closeSystem()">CLOSE</button>
+            <div class="sys-group">
+                <div class="label-sm" style="margin-bottom:12px;">RISK PARAMETERS</div>
+                <div id="settings-loader" class="empty-state" style="padding: 10px 0;">SYNCING CORE...</div>
+                <div id="settings-form" style="display:none;">
+                    <div class="sys-row" style="padding-top:0;">
+                        <span style="font-size:0.9rem; font-weight:700; color:var(--text-dim);">Risk Per Trade</span>
+                        <div style="display:flex; align-items:center;">
+                            <input type="number" id="setting-risk" class="action-in" step="0.1" max="5.0" min="0.1"
+                                style="width: 70px; text-align: right; padding: 6px 12px; margin:0 8px 0 0; background:rgba(0,0,0,0.3);">
+                            <span style="font-size:1.1rem; font-weight:800; color:var(--text-main);">%</span>
+                        </div>
+                    </div>
+                    <div class="sys-row">
+                        <span style="font-size:0.9rem; font-weight:700; color:var(--text-dim);">Max Daily Loss</span>
+                        <div style="display:flex; align-items:center;">
+                            <input type="number" id="setting-maxloss" class="action-in" step="0.5" max="10.0" min="1.0"
+                                style="width: 70px; text-align: right; padding: 6px 12px; margin:0 8px 0 0; background:rgba(0,0,0,0.3);">
+                            <span style="font-size:1.1rem; font-weight:800; color:var(--text-main);">%</span>
+                        </div>
+                    </div>
+                    <div class="sys-row" style="border-bottom:none; padding-bottom:0;">
+                        <span style="font-size:0.9rem; font-weight:700;">Auto-Trading Engine</span>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="setting-auto">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                    <button class="action-btn" onclick="saveSettings()" style="margin-top:24px; text-shadow:none;">SAVE
+                        LOGIC</button>
+                </div>
+            </div>
+
+            <div class="sys-group">
+                <div class="label-sm" style="margin-bottom:12px;">API OVERRIDE</div>
+                <div style="display:flex; gap:8px;">
+                    <input type="text" id="api-url-input" class="action-in" placeholder="https://bot-url.com"
+                        style="margin:0;">
+                    <button class="action-btn action-outline" onclick="saveOverride()"
+                        style="margin:0; width:100px;">LINK</button>
+                </div>
+            </div>
+
+            <button class="kill-switch" id="btn-killswitch" onclick="toggleEmergency()">
+                INITIATE EMERGENCY HALT
+            </button>
         </div>
     </div>
 
