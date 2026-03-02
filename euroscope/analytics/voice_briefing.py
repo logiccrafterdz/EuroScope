@@ -74,6 +74,11 @@ class VoiceBriefingEngine:
         if ta_section:
             sections.append(ta_section)
 
+        # 2b. News & Geopolitics
+        news_section = await self._get_news_section()
+        if news_section:
+            sections.append(news_section)
+
         # 3. Recent Signals  
         signal_section = await self._get_signal_section()
         if signal_section:
@@ -153,6 +158,29 @@ class VoiceBriefingEngine:
                 )
         except Exception as e:
             logger.debug(f"Technical section failed: {e}")
+        return None
+
+    async def _get_news_section(self) -> Optional[BriefingSection]:
+        """Get latest macroeconomic events and geopolitical news."""
+        if not self.orchestrator:
+            return None
+        try:
+            # We call the 'fundamental_analysis' skill which parses raw news and FRED
+            result = await self.orchestrator.run_skill("fundamental_analysis", "get_news")
+            if result.success and result.data:
+                # The 'formatted' field contains the raw aggregated newsletter style bullet points
+                formatted_news = result.metadata.get("formatted") or str(result.data)
+                
+                # Truncate slightly if it's too long
+                content = formatted_news[:450] + "..." if len(formatted_news) > 450 else formatted_news
+                
+                return BriefingSection(
+                    title="Macro & Geopolitics",
+                    content=content,
+                    priority=2, # Right below price, high priority
+                )
+        except Exception as e:
+            logger.debug(f"News section failed: {e}")
         return None
 
     async def _get_scenario_section(self) -> Optional[BriefingSection]:
