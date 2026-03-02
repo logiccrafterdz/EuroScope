@@ -551,7 +551,15 @@ class APIServer:
         # Note: adjust path relative to current file vs telegram_bot
         mini_app_path = os.path.join(os.path.dirname(__file__), "mini_app", "index.html")
         if os.path.exists(mini_app_path):
-            return web.FileResponse(mini_app_path, headers={"Content-Type": "text/html; charset=utf-8"})
+            return web.FileResponse(
+                mini_app_path, 
+                headers={
+                    "Content-Type": "text/html; charset=utf-8",
+                    "Cache-Control": "no-cache, no-store, must-revalidate",
+                    "Pragma": "no-cache",
+                    "Expires": "0"
+                }
+            )
         return web.Response(text="Mini App not found", status=404)
 
     async def start(self):
