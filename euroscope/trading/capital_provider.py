@@ -276,18 +276,47 @@ class CapitalProvider:
         try:
             session = await self._get_session()
             async with session.get(url, headers=headers) as response:
+                if response.status == 401:
+                    await self.login() # Retry once
+                    return await self.get_account_info()
+                
                 response.raise_for_status()
                 data = await response.json()
                 # Capital.com returns a list of accounts
                 accounts = data.get("accounts", [])
                 for acc in accounts:
                     if acc.get("accountId") == self.account_id or not self.account_id:
+                        raw_balance = acc.get("balance")
+                        raw_equity = acc.get("equity")
+                        
+                        balance_val = 0.0
+                        if isinstance(raw_balance, dict):
+                            balance_val = float(raw_balance.get("balance", 0.0))
+                        elif isinstance(raw_balance, (int, float)):
+                            balance_val = float(raw_balance)
+                            
+                        equity_val = None
+                        if isinstance(raw_equity, dict):
+                            # Default to balance + profitLoss if equity key not found
+                            eq_base = float(raw_equity.get("equity", raw_equity.get("balance", balance_val)))
+                            profit = float(raw_equity.get("profitLoss", 0.0))
+                            # Capital.com equity dict might just give balance and profitLoss
+                            if "equity" not in raw_equity and "balance" in raw_equity:
+                                equity_val = eq_base + profit
+                            else:
+                                equity_val = eq_base
+                        elif isinstance(raw_equity, (int, float)):
+                            equity_val = float(raw_equity)
+                            
+                        if equity_val is None:
+                            equity_val = balance_val
+                            
                         return {
                             "success": True,
                             "account_id": acc.get("accountId"),
                             "account_name": acc.get("accountName"),
-                            "balance": acc.get("balance"),
-                            "equity": acc.get("equity"),
+                            "balance": balance_val,
+                            "equity": equity_val,
                             "available": acc.get("available"),
                             "currency": acc.get("currency"),
                             "status": acc.get("status")
