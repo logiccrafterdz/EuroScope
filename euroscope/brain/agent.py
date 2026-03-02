@@ -761,6 +761,8 @@ class Agent:
         current_price = "Unavailable"
         recent_action = "Unavailable"
         advanced_analysis = "No advanced analysis available."
+        breaking_news = "No recent breaking news detected."
+        macro_text = "No macro events pending."
         
         if hasattr(self, "orchestrator") and self.orchestrator:
             try:
@@ -773,6 +775,15 @@ class Agent:
                     df = res_candles.data["df"]
                     recent_action = df[["open", "high", "low", "close"]].tail(4).to_string()
                     
+                # Explicitly fetch raw fundamental news to overcome pipeline JSON summarization
+                res_news = await self.orchestrator.run_skill("fundamental_analysis", "get_news")
+                if res_news.success and res_news.metadata and "formatted" in res_news.metadata:
+                    breaking_news = res_news.metadata["formatted"]
+                    
+                res_macro = await self.orchestrator.run_skill("fundamental_analysis", "get_macro")
+                if res_macro.success and res_macro.metadata and "formatted" in res_macro.metadata:
+                    macro_text = res_macro.metadata["formatted"]
+
                 # Run the full pipeline to inject liquidity and macro context into the pulse
                 ctx = await self.orchestrator.run_full_analysis_pipeline(timeframe="H1")
                 advanced_analysis = ctx.metadata.get("formatted", "Pipeline executed but yielded no formatted summary.")
@@ -780,25 +791,34 @@ class Agent:
                 logger.warning(f"Market Pulse: failed to fetch live advanced data: {e}")
 
         pulse_prompt = (
-            "You are EuroScope, an intelligent, persistent EUR/USD AI expert providing your regular 'Market Pulse'.\n"
-            "Your goal is to demonstrate continuous analysis, self-learning, and active monitoring.\n\n"
+            "You are EuroScope, an elite, institutional-grade EUR/USD AI expert providing your regular 'Market Pulse'.\n"
+            "Your goal is to demonstrate continuous analysis, active monitoring, and deliver a highly engaging Telegram update.\n\n"
             "## CRITICAL INSTRUCTION:\n"
-            "Read the context below carefully. Provide the final output directly without asking for tools.\n\n"
+            "Read the context below carefully. You MUST format your response as a professional, alerting newsletter. Provide the final output directly without asking for tools.\n\n"
             "--- CURRENT LIVE STATE ---\n"
             f"- Last Known Price: {current_price}\n"
             f"- Recent H1 Action:\n{recent_action}\n\n"
+            "--- BREAKING NEWS & GEOPOLITICS ---\n"
+            f"{breaking_news}\n\n"
+            "--- ECONOMIC CALENDAR / MACRO ---\n"
+            f"{macro_text}\n\n"
             "--- ADVANCED SKILLS ANALYSIS ---\n"
             f"{advanced_analysis}\n\n"
-            "CONTENT GUIDELINES:\n"
-            "1. **Macro & Geopolitical Context (Prioritize)**: If the advanced analysis mentions wars, news, or structural shifts, START with this. Do not bury it beneath RSI/MACD readings.\n"
-            "2. **Market Context**: Brief summary of price action and momentum. Do not just regurgitate \"RSI is X\". Explain what the technicals mean in the current macro context.\n"
-            "3. **Learning Update**: How does this map to our recent findings or failures? Have we invalidated any prior thesis?\n"
-            "4. **Current Focus**: What you are watching right now (e.g., waiting for session open, monitoring a level, or waiting for news impact). Is the market shifting regimes?\n\n"
-            "TONE GUIDELINES:\n"
-            "- If there are major geopolitical events or breaking news, adopt an urgent, serious, and alerting tone.\n"
-            "- Stop being dry and repetitive. Synthesize a narrative.\n\n"
-            f"RECENT LESSONS LEARNED:\n{lessons}\n\n"
-            "Keep the reply concise, professional, and insightful. Use bullet points."
+            "FORMATTING GUIDELINES:\n"
+            "Your response must be formatted EXACTLY like this structure using HTML tags for bold/italics (Telegram format):\n\n"
+            "🌍 <b>GLOBAL HEADLINES & MACRO</b>\n"
+            "- [Synthesize the top 1-2 breaking news/geopolitical events from the raw text provided. NEVER SAY 'no major geopolitical news' if there is obvious war/crisis news provided.]\n"
+            "- [Mention any major economic data releases or Fed/ECB positioning from the macro text.]\n\n"
+            "📊 <b>TECHNICAL & MARKET CONTEXT</b>\n"
+            "• <b>Price Level:</b> [Current Price] | <b>Regime:</b> [Trending/Ranging/Breakout]\n"
+            "• <b>Momentum:</b> [Brief 1 sentence analyzing RSI, MACD, and patterns like Double Top/Bottom.]\n"
+            "• <b>Liquidity:</b> [Briefly mention S/R levels or where stops are sitting.]\n\n"
+            "🧠 <b>STRATEGIC OUTLOOK & LEARNING</b>\n"
+            "• <b>Previous Bias:</b> [How current price matches or invalidates recent lessons/previous thesis.]\n"
+            "• <b>Current Focus:</b> [What you are watching EXACTLY right now - an inflection point, a breakout level, etc.]\n"
+            "• <b>System Action:</b> [Are we WAIT, BUY, SELL? Why?]\n\n"
+            "TONE: Authoritative, institutional, alerting. Use concise bullet points. Be punchy. Do not be overly verbose.\n\n"
+            f"RECENT LESSONS LEARNED:\n{lessons}\n"
         )
 
         # Run via simple stateless chat without tools to force output generation
