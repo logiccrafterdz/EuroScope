@@ -13,20 +13,22 @@
         rel="stylesheet">
     <style>
         :root {
-            --bg-color: #040507;
-            --surface-color: rgba(15, 18, 24, 0.4);
-            --surface-solid: #0A0D14;
-            --surface-accent: rgba(255, 255, 255, 0.03);
-            --accent-primary: #00ff9d;
-            --accent-glow: rgba(0, 255, 157, 0.3);
-            --text-main: #ffffff;
-            --text-muted: #8b949e;
-            --text-dim: #010101;
-            --border-color: rgba(255, 255, 255, 0.08);
-            --up-color: #00ff9d;
-            --down-color: #ff3366;
-            --warn-color: #f5a623;
-            --safe-bottom: env(safe-area-inset-bottom, 20px);
+            --bg-color: #020305;
+            --surface-color: rgba(10, 14, 23, 0.45);
+            --surface-solid: #06090e;
+            --surface-accent: rgba(255, 255, 255, 0.05);
+            --accent-primary: #00F0FF;
+            --accent-glow: rgba(0, 240, 255, 0.35);
+            --text-main: #FFFFFF;
+            --text-muted: #94A3B8;
+            --text-dim: #475569;
+            --border-color: rgba(255, 255, 255, 0.06);
+            --up-color: #10B981;
+            --up-glow: rgba(16, 185, 129, 0.25);
+            --down-color: #EF4444;
+            --down-glow: rgba(239, 68, 68, 0.25);
+            --warn-color: #F59E0B;
+            --safe-bottom: env(safe-area-inset-bottom, 24px);
         }
 
         * {
@@ -37,18 +39,18 @@
         }
 
         body {
-            font-family: 'Inter', sans-serif;
+            font-family: 'Inter', -apple-system, sans-serif;
             background-color: var(--bg-color);
             background-image:
-                radial-gradient(circle at 50% -20%, #111a22, transparent 70%),
-                linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
-            background-size: 100% 100%, 20px 20px, 20px 20px;
+                radial-gradient(ellipse at 50% -20%, rgba(0, 240, 255, 0.1), transparent 60%),
+                linear-gradient(rgba(255, 255, 255, 0.015) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255, 255, 255, 0.015) 1px, transparent 1px);
+            background-size: 100% 100%, 24px 24px, 24px 24px;
             background-position: center top, center center, center center;
             color: var(--text-main);
             overflow-x: hidden;
             padding: 16px;
-            padding-bottom: calc(90px + var(--safe-bottom));
+            padding-bottom: calc(100px + var(--safe-bottom));
             min-height: 100vh;
         }
 
@@ -183,19 +185,31 @@
 
         .glass-card {
             background: var(--surface-color);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
+            backdrop-filter: blur(24px) saturate(150%);
+            -webkit-backdrop-filter: blur(24px) saturate(150%);
             border: 1px solid var(--border-color);
             border-radius: 24px;
             padding: 20px;
             position: relative;
             overflow: hidden;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
-            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+            transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.3s ease;
+        }
+
+        .glass-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 50%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.02), transparent);
+            transform: skewX(-20deg);
+            transition: left 0.7s ease;
         }
 
         .glass-card:active {
-            transform: scale(0.98);
+            transform: scale(0.97);
         }
 
         /* Floating Dock */
@@ -304,6 +318,38 @@
             }
         }
 
+        /* Hero Price Animations */
+        @keyframes pulseGlow {
+            0% {
+                filter: blur(60px) opacity(0.8);
+                transform: translateX(-50%) scale(1);
+            }
+
+            50% {
+                filter: blur(80px) opacity(1);
+                transform: translateX(-50%) scale(1.1);
+            }
+
+            100% {
+                filter: blur(60px) opacity(0.8);
+                transform: translateX(-50%) scale(1);
+            }
+        }
+
+        .hero-glow {
+            position: absolute;
+            top: -60px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 140px;
+            height: 140px;
+            background: var(--accent-glow);
+            filter: blur(60px);
+            border-radius: 50%;
+            pointer-events: none;
+            animation: pulseGlow 4s ease-in-out infinite;
+        }
+
         /* Chart */
         #chart-wrap {
             position: relative;
@@ -312,12 +358,13 @@
             overflow: hidden;
             background: var(--surface-solid);
             border: 1px solid var(--border-color);
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+            margin-bottom: 20px;
         }
 
         #chart-container {
             width: 100%;
-            height: 280px;
+            height: 300px;
         }
 
         #chart-status {
@@ -515,37 +562,36 @@
         <div id="terminal-view" class="tab-content active">
             <!-- Hero Price -->
             <div class="glass-card bento-full"
-                style="text-align: center; padding: 36px 20px; border-color: rgba(255,255,255,0.15); margin-bottom: 12px;">
-                <div
-                    style="position:absolute; top:-60px; left:50%; transform:translateX(-50%); width:120px; height:120px; background:var(--accent-glow); filter:blur(60px); border-radius:50%; pointer-events:none;">
-                </div>
-                <div class="label-sm">EUR/USD Live</div>
+                style="text-align: center; padding: 40px 20px; border-color: rgba(255,255,255,0.1); margin-bottom: 16px;">
+                <div class="hero-glow"></div>
+                <div class="label-sm" style="color:var(--text-main); font-weight:800; opacity:0.8;">EUR/USD LIVE</div>
                 <div id="price"
-                    style="font-size:3.5rem; font-weight:800; font-family:'Fira Code'; letter-spacing:-2px; margin-bottom:4px; color:#fff;"
+                    style="font-size:3.8rem; font-weight:800; font-family:'Fira Code'; letter-spacing:-2px; margin-bottom:4px; margin-top:8px; color:#fff;"
                     class="text-glow">-.-----</div>
-                <div id="price-change" style="font-size:0.95rem; font-weight:600; font-family:'Fira Code';">--.---
+                <div id="price-change" style="font-size:1rem; font-weight:700; font-family:'Fira Code';">--.---
                     (---%)</div>
             </div>
 
             <div class="bento">
                 <div class="glass-card" style="padding:16px;">
                     <div class="label-sm">Broker Balance</div>
-                    <div id="stat-balance" class="val-md">--.--</div>
+                    <div id="stat-balance" class="val-md" style="font-size:1.1rem;">--.--</div>
                 </div>
                 <div class="glass-card" style="padding:16px;">
                     <div class="label-sm">Account Equity</div>
-                    <div id="stat-equity" class="val-md" style="color:var(--accent-primary);">--.--</div>
+                    <div id="stat-equity" class="val-md" style="color:var(--accent-primary); font-size:1.1rem;">--.--
+                    </div>
                 </div>
             </div>
 
             <div class="bento">
                 <div class="glass-card" style="padding:16px;">
                     <div class="label-sm">Vol. Reach</div>
-                    <div id="stat-range" class="val-md">--- pips</div>
+                    <div id="stat-range" class="val-md" style="font-size:0.9rem;">--- pips</div>
                 </div>
                 <div class="glass-card" style="padding:16px;">
                     <div class="label-sm">Day Range</div>
-                    <div id="stat-hilo" class="val-md" style="font-size: 0.8rem;">-.--- / -.---</div>
+                    <div id="stat-hilo" class="val-md" style="font-size: 0.85rem;">-.--- / -.---</div>
                 </div>
             </div>
 
