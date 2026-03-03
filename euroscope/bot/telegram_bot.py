@@ -13,7 +13,7 @@ from datetime import datetime
 from typing import Optional
 from aiohttp import web
 from telegram import Update, InputFile, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo, MenuButtonWebApp
-from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
+from telegram.ext import Application, CommandHandler, ContextTypes, filters
 from telegram import BotCommand
 from telegram.error import Conflict
 from ..config import Config
@@ -50,6 +50,7 @@ from ..automation import HeartbeatService, EventBus, SmartAlerts, AlertChannel, 
 from ..automation.daily_tracker import DailyTracker
 from .api_server import APIServer
 from .handlers.commands import CommandHandlers
+from .handlers.tasks import BotTasks
 logger = logging.getLogger('euroscope.bot')
 
 class EuroScopeBot:
@@ -140,6 +141,7 @@ class EuroScopeBot:
         # 7. UI, Interface & Scheduling
         self.api = APIServer(self)
         self.commands = CommandHandlers(self)
+        self.tasks = BotTasks(self)
         self.workspace = WorkspaceManager()
         self.heartbeat = HeartbeatService(interval=300, event_bus=self.bus)
         self.cron = CronScheduler(config=config, bot=self, storage=self.storage)
@@ -411,10 +413,8 @@ class EuroScopeBot:
         heartbeat_task.add_done_callback(self._bg_tasks.discard)
 
         async def tick_job(context: ContextTypes.DEFAULT_TYPE):
-            try:
-                await self.cron._tick()
-            except Exception as e:
-                logger.error(f'Cron loop tick failed: {e}')
+            await self.tasks.tick_job(context)
+            
         if application.job_queue:
             application.job_queue.run_repeating(tick_job, interval=self.cron.tick_interval, first=self.cron.tick_interval, name='euroscope_cron_ticker', job_kwargs={'misfire_grace_time': 10})
             logger.info('Cron ticking delegated to JobQueue')
@@ -423,11 +423,13 @@ class EuroScopeBot:
             cron_task = asyncio.create_task(self.cron.start())
             self._bg_tasks.add(cron_task)
             cron_task.add_done_callback(self._bg_tasks.discard)
-        self.cron.schedule('resolve_patterns', TaskFrequency.HOURLY, self._task_resolve_patterns)
-        self.cron.schedule('daily_tuning', TaskFrequency.DAILY, self._task_daily_tuning, delay=3600)
-        self.cron.schedule('weekly_reflection', TaskFrequency.WEEKLY, self._task_weekly_reflection, delay=7200)
+            
+        self.cron.schedule('resolve_patterns', TaskFrequency.HOURLY, self.tasks.task_resolve_patterns)
+        self.cron.schedule('daily_tuning', TaskFrequency.DAILY, self.tasks.task_daily_tuning, delay=3600)
+        self.cron.schedule('weekly_reflection', TaskFrequency.WEEKLY, self.tasks.task_weekly_reflection, delay=7200)
         self.cron.schedule('daily_trading_journal', TaskFrequency.DAILY, self.daily_tracker.run, delay=self.cron._seconds_until(23, 55))
-        self.cron.schedule('daily_briefing', TaskFrequency.DAILY, self._task_daily_briefing, delay=self.cron._seconds_until(7, 0))
+        self.cron.schedule('daily_briefing', TaskFrequency.DAILY, self.tasks.task_daily_briefing, delay=self.cron._seconds_until(7, 0))
+        
         api_task = asyncio.create_task(self.api.start())
         self._bg_tasks.add(api_task)
         api_task.add_done_callback(self._bg_tasks.discard)
@@ -467,54 +469,6 @@ class EuroScopeBot:
         logger.info('✅ Background services stopped.')
 
     # Command handlers extracted to handlers/commands.py
-    async def _task_resolve_patterns(self):
-        """Periodically resolve pending patterns using latest price."""
-        logger.info('Cron: Running pattern resolution...')
-        price_data = await self.price_provider.get_price()
-        if 'error' in price_data:
-            return
-        current_price = price_data['price']
-        await self.pattern_tracker.resolve_pending(current_price)
-        await self.memory.resolve_pending_predictions(current_price)
-        logger.info('Cron: Pattern resolution complete.')
-
-    async def _task_daily_tuning(self):
-        """Analyze trade history once a day and report recommendations."""
-        logger.info('Cron: Running daily strategy tuning...')
-        report = await self.adaptive_tuner.format_report()
-        await self.notifications.broadcast_message(f'🧠 *Daily Strategy Optimization*\n\n{report}', parse_mode='Markdown')
-        logger.info('Cron: Daily tuning complete.')
-
-    async def _task_weekly_reflection(self):
-        logger.info('Cron: Running weekly reflection...')
-        accuracy = self.storage.get_accuracy_stats(30)
-        patterns = self.pattern_tracker.get_success_rates()
-        stats = self.storage.get_trade_journal_stats()
-        tuner = self.adaptive_tuner.analyze()
-        lines = ['Weekly Reflection', f"Prediction accuracy (30d): {accuracy.get('accuracy', 0)}% ({accuracy.get('total', 0)})", f"Trades: {stats.get('total', 0)} | Win rate: {stats.get('win_rate', 0)}% | Avg PnL: {stats.get('avg_pnl', 0):+.1f}p"]
-        if patterns:
-            top = sorted(patterns.values(), key=lambda x: x['success_rate'], reverse=True)[:3]
-            weak = sorted(patterns.values(), key=lambda x: x['success_rate'])[:2]
-            lines.append('Top patterns: ' + ', '.join((f"{p['pattern']} {p['timeframe']} ({p['success_rate']}%)" for p in top)))
-            lines.append('Weak patterns: ' + ', '.join((f"{p['pattern']} {p['timeframe']} ({p['success_rate']}%)" for p in weak)))
-        if tuner.get('ready') and tuner.get('recommendations'):
-            lines.append('Tuning focus: ' + ', '.join((r['param'] for r in tuner['recommendations'][:3])))
-        insight = ' | '.join(lines)
-        self.memory.save_insight(insight)
-        if self.vector_memory:
-            self.vector_memory.store_insight(insight, tags=['reflection', 'weekly'])
-        self.workspace.refresh_memory(self.storage)
-        self.workspace.refresh_identity(self.storage)
-        logger.info('Cron: Weekly reflection complete.')
-
-    async def _task_daily_briefing(self):
-        """Generate and broadcast the morning briefing."""
-        logger.info('Cron: Running daily briefing...')
-        report = await self.briefing_engine.generate_briefing()
-        chat_ids = self.config.proactive_alert_chat_ids
-        if chat_ids:
-            await self.notifications.broadcast_message(report, chat_ids=chat_ids, parse_mode='HTML')
-        logger.info('Cron: Daily briefing sent.')
 
     # API Server endpoints extracted to api_server.py
 
