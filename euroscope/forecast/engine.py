@@ -31,8 +31,18 @@ class Forecaster:
         # Use Orchestrator to gather all necessary data via Skills
         ctx = await self.orchestrator.run_full_analysis_pipeline()
 
+        # Explicitly fetch LIVE price (pipeline only runs get_candles which gives historical OHLC)
+        try:
+            price_res = await self.orchestrator.run_skill("market_data", "get_price", context=ctx)
+            if price_res.success and isinstance(price_res.data, dict):
+                price_info = price_res.data
+            else:
+                price_info = ctx.market_data.get("price", {})
+        except Exception as e:
+            logger.warning(f"Forecast: Failed to fetch live price: {e}")
+            price_info = ctx.market_data.get("price", {})
+
         # Extract data from context
-        price_info = ctx.get_result("market_data")["data"] if ctx.get_result("market_data") else {}
         ta_results = ctx.get_result("technical_analysis")["data"] if ctx.get_result("technical_analysis") else {}
 
         # The pipeline only runs get_macro (interest rates, CPI), NOT get_news.
@@ -194,14 +204,18 @@ class Forecaster:
 
         # 1. Stricter Direction Matching (Prioritize Explicit Bias)
         direction = "NEUTRAL"
-        bias_match = re.search(r'(?i)bias:\s*\*?\**(BULLISH|BEARISH|NEUTRAL)', text_upper)
+        # Match various markdown formats: "**AI Bias:** NEUTRAL", "AI Bias: BULLISH", etc.
+        # The [:\s*]+ group consumes all colons, spaces, and asterisks between "bias" and the direction word
+        bias_match = re.search(r'(?i)\bbias[:\s*]+\s*(BULLISH|BEARISH|NEUTRAL)\b', text)
         if bias_match:
             direction = bias_match.group(1).upper()
         else:
-            # Fallback to broader search if explicit header is missing
-            if "BULLISH" in text_upper:
+            # Fallback: only match if BULLISH/BEARISH appears as a standalone declaration,
+            # NOT inside scenario headings like "Scenario A (Bullish Breakout)"
+            first_lines = "\n".join(text.split("\n")[:5]).upper()
+            if "BULLISH" in first_lines and "SCENARIO" not in first_lines:
                 direction = "BULLISH"
-            elif "BEARISH" in text_upper:
+            elif "BEARISH" in first_lines and "SCENARIO" not in first_lines:
                 direction = "BEARISH"
 
         # 2. Stricter Confidence Matching (Avoid grabbing unrelated percentages like inflation rate)
