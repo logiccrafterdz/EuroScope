@@ -205,3 +205,83 @@ class BacktestEngine:
             self.executor.close_all(final_price, final_time, atr_final, reason="end_of_backtest")
             
         logger.info(f"Backtest complete. Total trades: {len(self.executor.closed_positions)}")
+
+    def run_walk_forward(self, train_days: int = 180, test_days: int = 30) -> dict:
+        """
+        Run a walk-forward optimization backtest.
+        Slices the fetched data into rolling train/test windows.
+        
+        Returns a dictionary of metrics for each test window.
+        """
+        if self.data.empty:
+            logger.error("No data to run walk-forward backtest on.")
+            return {}
+
+        total_days = (self.data.index[-1] - self.data.index[0]).days
+        if total_days < (train_days + test_days):
+            logger.error(f"Insufficient data ({total_days} days) for Walk-Forward with train={train_days}, test={test_days}.")
+            return {}
+
+        logger.info(f"Starting Walk-Forward Optimization (Train: {train_days}d, Test: {test_days}d)")
+        
+        window_results = {}
+        start_date = self.data.index[0]
+        end_date = self.data.index[-1]
+        
+        current_train_start = start_date
+        window_idx = 1
+        
+        while True:
+            train_end = current_train_start + timedelta(days=train_days)
+            test_end = train_end + timedelta(days=test_days)
+            
+            if test_end > end_date:
+                logger.info("Walk-forward completed. Reached end of data.")
+                break
+                
+            logger.info(f"--- Window {window_idx} ---")
+            logger.info(f"Train: {current_train_start.date()} to {train_end.date()}")
+            logger.info(f"Test : {train_end.date()} to {test_end.date()}")
+            
+            # --- Simulated "Training" Phase ---
+            # In a true ML system, we'd fit models here. 
+            # For EuroScope, we could hypothetically pass the train_slice to the AdaptiveTuner.
+            train_slice = self.data.loc[current_train_start:train_end]
+            # (Self-tuning hook goes here)
+            
+            # --- "Testing" Phase (Out-of-Sample) ---
+            test_slice = self.data.loc[train_end:test_end]
+            
+            # Save original global state
+            original_data = self.data.copy()
+            original_balance = self.executor.balance
+            
+            # Isolate engine to the test slice
+            self.data = test_slice
+            self.executor = OfflineExecutor(ExecutionSimulator(ExecutionConfig(enabled=True)))
+            self.executor.balance = self.initial_balance
+            
+            # Run the backtest loop on the Test window (with a small warmup using the end of Train data if needed)
+            # For simplicity, we just run the standard loop which has a default warmup
+            self.run(warmup_period=20) 
+            
+            # Collect metrics
+            from .metrics import BacktestMetrics
+            metrics = BacktestMetrics(self.initial_balance, self.executor.closed_positions)
+            tear_sheet = metrics.generate_tear_sheet()
+            
+            window_results[window_idx] = {
+                "train_period": (current_train_start, train_end),
+                "test_period": (train_end, test_end),
+                "trades": len(self.executor.closed_positions),
+                "tear_sheet": tear_sheet
+            }
+            
+            # Restore global state before shifting window
+            self.data = original_data
+            
+            # Shift window forward by the test period step
+            current_train_start += timedelta(days=test_days)
+            window_idx += 1
+            
+        return window_results
