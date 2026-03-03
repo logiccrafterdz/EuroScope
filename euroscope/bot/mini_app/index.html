@@ -8,6 +8,7 @@
     <title>Zenith Terminal v5.0</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link
         href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Fira+Code:wght@400;600;700&display=swap"
         rel="stylesheet">
@@ -954,6 +955,12 @@
                         <div id="perf-pnl" class="val-md">--</div>
                     </div>
                 </div>
+
+                <div class="label-sm" style="margin-top: 10px;">Live Equity Curve</div>
+                <div style="width: 100%; height: 120px; margin-top: 8px; margin-bottom: 16px;">
+                    <canvas id="live-equity-chart"></canvas>
+                </div>
+
                 <!-- Risk Stats (Fix 13) -->
                 <div class="bento"
                     style="margin-bottom:0; background:rgba(255,255,255,0.02); border-radius:16px; border:1px solid var(--border-color); padding:10px;">
@@ -1125,6 +1132,7 @@
         const VPS_URL = "https://site--euroscope--zyn6vtt48jxf.code.run";
         let API_ROOT = localStorage.getItem('ZENITH_API_OVERRIDE') || (location.origin.includes('code.run') ? '' : VPS_URL);
         let chart, candleSeries;
+        let liveEquityChartInstance = null;
         let currentTF = 'H1';
 
         function log(msg, type = 'info') {
@@ -1430,6 +1438,55 @@
                         <div style="font-size:0.6rem; color:var(--text-dim); padding-bottom:8px;">${r.reason}</div>
                     `).join('');
                 } else recEl.innerHTML = '<div class="empty-state">ALL OPTIMAL ✅</div>';
+
+                // Render Live Equity Curve via Chart.js
+                const canvas = document.getElementById('live-equity-chart');
+                if (canvas && s.equity_curve && s.equity_curve.length > 0) {
+                    const ctx = canvas.getContext('2d');
+
+                    // Create gradient for the area
+                    const gradient = ctx.createLinearGradient(0, 0, 0, 120);
+                    gradient.addColorStop(0, 'rgba(0, 240, 255, 0.5)'); // --accent-primary glow
+                    gradient.addColorStop(1, 'rgba(0, 240, 255, 0.0)');
+
+                    const chartData = {
+                        labels: s.equity_curve.map((_, i) => i + 1),
+                        datasets: [{
+                            label: 'Equity (Pips)',
+                            data: s.equity_curve,
+                            borderColor: '#00F0FF',
+                            backgroundColor: gradient,
+                            borderWidth: 2,
+                            tension: 0.3,
+                            fill: true,
+                            pointRadius: 0,
+                            pointHitRadius: 10
+                        }]
+                    };
+
+                    const chartOptions = {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false } },
+                        scales: {
+                            x: { display: false },
+                            y: { display: false, min: Math.min(...s.equity_curve) - 50 }
+                        },
+                        interaction: { mode: 'nearest', axis: 'x', intersect: false }
+                    };
+
+                    if (liveEquityChartInstance) {
+                        liveEquityChartInstance.data = chartData;
+                        liveEquityChartInstance.options.scales.y.min = Math.min(...s.equity_curve) - 50;
+                        liveEquityChartInstance.update();
+                    } else {
+                        liveEquityChartInstance = new Chart(ctx, {
+                            type: 'line',
+                            data: chartData,
+                            options: chartOptions
+                        });
+                    }
+                }
             }
         }
 
