@@ -113,7 +113,6 @@ class NewsEngine:
                     warnings.filterwarnings("ignore", category=UserWarning, module="primp")
                     with DDGS() as ddgs:
                         return list(ddgs.news(query, max_results=count))
-                        return list(ddgs.news(query, max_results=count))
 
             raw_results = await asyncio.to_thread(_search)
 
