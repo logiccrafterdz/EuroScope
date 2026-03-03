@@ -1237,6 +1237,8 @@
         let API_ROOT = localStorage.getItem('ZENITH_API_OVERRIDE') || (location.origin.includes('code.run') ? '' : VPS_URL);
         let chart, candleSeries;
         let currentTF = 'H1';
+        let _btLoaded = false;       // Cache flag: backtest loaded this session
+        let _briefingLoaded = false; // Cache flag: briefing loaded this session
 
         function log(msg, type = 'info') {
             const consoleEl = document.getElementById('debug-console');
@@ -1585,6 +1587,7 @@
                     }
 
                     try { tg.HapticFeedback.notificationOccurred('success'); } catch (e) { }
+                    _btLoaded = true; // Don't auto-re-run on sync cycle
                 } else {
                     const errMsg = res.error || 'Backtest failed';
                     log('Backtest: ' + errMsg, 'warn');
@@ -2199,8 +2202,10 @@
                     listHist.innerHTML = `<div class="empty-state">NO HISTORY YET</div>`;
                 }
             } else if (activeTab === 'stats') {
-                runBacktest(null); loadPerformance();
+                if (!_btLoaded) runBacktest(null);
+                loadPerformance();
             } else if (activeTab === 'briefing') {
+                if (_briefingLoaded) return; // Don't re-fetch on sync cycle
                 const bLoading = document.getElementById('briefing-loading');
                 const bSections = document.getElementById('briefing-sections');
                 const bSum = document.getElementById('briefing-summary');
@@ -2263,6 +2268,7 @@
                     // Section count
                     document.getElementById('briefing-count').textContent =
                         `${b.section_count || b.sections?.length || 0} SECTIONS ANALYZED`;
+                    _briefingLoaded = true; // Don't re-fetch on next sync cycle
                 } else {
                     bSum.textContent = res.error || 'Failed to load briefing';
                 }
