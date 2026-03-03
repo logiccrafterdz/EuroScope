@@ -139,7 +139,12 @@ class Forecaster:
         )
 
         # Extract direction and confidence from AI response
-        direction, confidence = self._parse_forecast(forecast_text)
+        parsed_json = self._parse_forecast(forecast_text)
+        direction = parsed_json.get("direction", "NEUTRAL")
+        confidence = parsed_json.get("confidence", 50.0)
+
+        # Build readable markdown from JSON for Telegram
+        telegram_output = self._build_telegram_output(parsed_json)
 
         # Record prediction for accuracy tracking
         pred_id = None
@@ -162,7 +167,8 @@ class Forecaster:
                 )
 
         return {
-            "text": forecast_text,
+            "text": telegram_output,  # Send the formatted Markdown to Telegram
+            "raw_json": parsed_json,  # Keep the raw JSON for programmatic use
             "direction": direction,
             "confidence": confidence,
             "prediction_id": pred_id,
@@ -198,42 +204,74 @@ class Forecaster:
 
         return "\n\n".join(p for p in parts if p)
 
-    def _parse_forecast(self, text: str) -> tuple[str, float]:
-        """Extract direction and confidence from AI forecast text using strict parsing."""
-        text_upper = text.upper()
+    def _parse_forecast(self, text: str) -> dict:
+        """Extract structured JSON from the AI forecast text."""
+        try:
+            # Strip potential markdown code blocks
+            clean_text = text.strip()
+            if clean_text.startswith("```json"):
+                clean_text = clean_text[7:]
+            elif clean_text.startswith("```"):
+                clean_text = clean_text[3:]
+            if clean_text.endswith("```"):
+                clean_text = clean_text[:-3]
+            
+            clean_text = clean_text.strip()
+            parsed = json.loads(clean_text)
+            
+            # Normalize enum values
+            direction = str(parsed.get("direction", "NEUTRAL")).upper()
+            if direction not in ("BULLISH", "BEARISH", "NEUTRAL"):
+                direction = "NEUTRAL"
+            parsed["direction"] = direction
+            
+            # Normalize confidence
+            try:
+                conf = float(parsed.get("confidence", 50.0))
+                parsed["confidence"] = max(0.0, min(100.0, conf))
+            except (ValueError, TypeError):
+                parsed["confidence"] = 50.0
+                
+            return parsed
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse LLM JSON forecast: {e}\nRaw Text: {text}")
+            # Fallback
+            return {
+                "direction": "NEUTRAL",
+                "confidence": 0.0,
+                "core_signal": "Failed to parse AI response.",
+                "scenario_a": "",
+                "scenario_b": "",
+                "fundamental_alignment": "",
+                "key_levels": ""
+            }
 
-        # 1. Stricter Direction Matching (Prioritize Explicit Bias)
-        direction = "NEUTRAL"
-        # Match various markdown formats: "**AI Bias:** NEUTRAL", "AI Bias: BULLISH", etc.
-        # The [:\s*]+ group consumes all colons, spaces, and asterisks between "bias" and the direction word
-        bias_match = re.search(r'(?i)\bbias[:\s*]+\s*(BULLISH|BEARISH|NEUTRAL)\b', text)
-        if bias_match:
-            direction = bias_match.group(1).upper()
-        else:
-            # Fallback: only match if BULLISH/BEARISH appears as a standalone declaration,
-            # NOT inside scenario headings like "Scenario A (Bullish Breakout)"
-            first_lines = "\n".join(text.split("\n")[:5]).upper()
-            if "BULLISH" in first_lines and "SCENARIO" not in first_lines:
-                direction = "BULLISH"
-            elif "BEARISH" in first_lines and "SCENARIO" not in first_lines:
-                direction = "BEARISH"
-
-        # 2. Stricter Confidence Matching (Avoid grabbing unrelated percentages like inflation rate)
-        confidence = 50.0
-        # Match "Conviction: 75%", "AI Conviction: 80%", etc.
-        conf_match = re.search(r'(?i)(?:conviction|confidence)(?:[^\d]*)(\d{1,3})(?:%)?', text)
-        if conf_match:
-            confidence = float(conf_match.group(1))
-        else:
-            # Only fallback to raw keywords if explicit percentage is missing
-            if "HIGH" in text_upper:
-                confidence = 75.0
-            elif "MEDIUM" in text_upper:
-                confidence = 55.0
-            elif "LOW" in text_upper:
-                confidence = 35.0
-
-        return direction, min(confidence, 95.0)
+    def _build_telegram_output(self, parsed: dict) -> str:
+        """Constructs a clean Markdown string from the structured JSON."""
+        direction = parsed.get("direction", "NEUTRAL")
+        conf = parsed.get("confidence", 0)
+        
+        icon = "🟢" if direction == "BULLISH" else "🔴" if direction == "BEARISH" else "⚪"
+        
+        parts = [
+            f"{icon} **AI Bias:** {direction}",
+            f"🎯 **Conviction:** {conf}%",
+            "",
+            f"**Core Signal:**\n{parsed.get('core_signal', 'N/A')}",
+            "",
+            "📈 **Primary Scenario (A):**",
+            parsed.get('scenario_a', 'N/A'),
+            "",
+            "📉 **Alternative Scenario (B):**",
+            parsed.get('scenario_b', 'N/A'),
+            "",
+            "📰 **Fundamental Alignment:**",
+            parsed.get('fundamental_alignment', 'N/A'),
+            "",
+            "🧱 **Key Levels:**",
+            parsed.get('key_levels', 'N/A')
+        ]
+        return "\n".join(parts)
 
     @staticmethod
     def _format_ta_for_prompt(ta: dict, tf: str) -> str:

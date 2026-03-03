@@ -87,21 +87,21 @@ FORECAST_PROMPT = """Based on the following comprehensive data about EUR/USD, ac
 {strategy_signal}
 
 Your job is NOT to invent a new forecast. Your job is to EXPLAIN the `strategy_signal` using the provided data.
-You must construct the output as clear, realistic trading Scenarios.
+You must construct the output as realistic trading Scenarios, and return it in STRICT JSON format.
 
 **CRITICAL FORMATTING RULES:**
-You MUST start your response exactly with these two lines:
-**AI Bias:** [BULLISH or BEARISH or NEUTRAL]
-**AI Conviction:** [0-100]%
+You MUST return ONLY valid JSON. Do not include markdown codeblocks, conversational text, or anything else before or after the JSON.
 
-Provide:
-1. **The Core Algorithmic Signal**: Clearly state what the strategy engine has decided (e.g. BULLISH Trend Following).
-2. **Scenario A (Bullish/Primary)**: What needs to happen for the price to go up, and what the targets are based on the algorithm's TP/SL.
-3. **Scenario B (Bearish/Alternative)**: What needs to happen for the price to drop, and the corresponding targets.
-4. **Fundamental Alignment**: How the recent news supports or contradicts the algorithmic signal.
-5. **Key Levels in Play**: Which specific support/resistance levels are most critical for these scenarios.
-
-Format your response as structured text using bullet points and appropriate emojis, making it highly readable for a professional trader.
+REQUIRED JSON STRUCTURE:
+{
+    "direction": "BULLISH" | "BEARISH" | "NEUTRAL",
+    "confidence": 0-100,
+    "core_signal": "Explanation of the algorithm's decision",
+    "scenario_a": "Primary Scenario details and targets",
+    "scenario_b": "Alternative Scenario details and targets",
+    "fundamental_alignment": "How news aligns with the signal",
+    "key_levels": "Specific S/R levels to watch"
+}
 """
 
 QUESTION_PROMPT = """You are EuroScope, the EUR/USD expert. Answer the following question.
