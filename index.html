@@ -662,13 +662,18 @@
             border: none;
             padding: 16px;
             border-radius: 16px;
-            font-weight: 700;
+            font-weight: 600;
             font-size: 0.75rem;
-            text-transform: uppercase;
-            letter-spacing: 2px;
+            letter-spacing: 1px;
             margin-top: 12px;
             cursor: pointer;
             transition: 0.2s;
+        }
+
+        button.action-outline {
+            background: transparent;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: var(--text-main);
         }
 
         .loading-spinner {
@@ -762,9 +767,10 @@
             padding: 40px 20px;
             color: var(--text-dim);
             font-size: 0.7rem;
-            font-weight: 600;
-            letter-spacing: 1px;
+            font-weight: 500;
+            letter-spacing: 1.5px;
             text-transform: uppercase;
+            opacity: 0.7;
         }
     </style>
 </head>
@@ -832,22 +838,24 @@
                 <div id="chart-status">INITIALIZING...</div>
             </div>
 
-            <button class="action-btn" onclick="sync('terminal')">SYNC TERMINAL</button>
+            <button class="action-btn action-outline" onclick="sync('terminal')">SYNC TERMINAL</button>
         </div>
 
         <!-- FORECAST TAB -->
         <div id="forecast-view" class="tab-content">
             <div class="glass-card bento-full" style="text-align: center;">
                 <div class="label-sm">AI Directional Bias</div>
-                <div id="forecast-dir" style="font-size: 2rem; font-weight: 800; margin: 16px 0; letter-spacing: 2px;">
+                <div id="forecast-dir"
+                    style="font-family: var(--font-data); font-size: 2rem; font-weight: 200; margin: 16px 0; letter-spacing: 0.15em; text-transform: uppercase;">
                     NEUTRAL</div>
                 <div class="glow-bar-container">
                     <div id="forecast-conf-bar" class="glow-bar" style="background: var(--text-muted); width: 0%;">
                     </div>
                 </div>
-                <div
-                    style="display:flex; justify-content:space-between; font-size: 0.65rem; color: var(--text-muted); font-weight: 700; letter-spacing:1px;">
-                    <span>CONVICTION</span><span id="forecast-conf-text">0%</span>
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <span
+                        style="font-size: 0.65rem; color: var(--text-muted); font-weight: 500; letter-spacing:1px;">CONVICTION</span>
+                    <span id="forecast-conf-text" class="num-md" style="font-weight:300;">0%</span>
                 </div>
             </div>
             <div class="glass-card bento-full" style="margin-top: 12px;">
@@ -921,7 +929,7 @@
                     </div>
                 </div>
                 <button class="action-btn" onclick="scanSignals()" id="scan-btn"
-                    style="background: var(--accent-primary); color: #000; box-shadow: 0 0 15px var(--accent-glow); display: flex; align-items: center; justify-content: center; gap: 8px;">
+                    style="background: var(--accent-primary); color: #000; box-shadow: 0 0 15px var(--accent-glow); display: flex; align-items: center; justify-content: center; gap: 8px; font-weight:600; letter-spacing:1px;">
                     <span id="scan-btn-text">AUTO-SCAN FOR TRADES</span> <span class="loading-spinner" id="scan-spinner"
                         style="display: none; border-top-color: #000; margin: 0;"></span>
                 </button>
@@ -1556,7 +1564,7 @@
                     document.getElementById('bt-wr').style.color = d.win_rate >= 50 ? 'var(--up-color)' : 'var(--down-color)';
                     document.getElementById('bt-pnl').textContent = formatPips(d.total_pnl);
                     document.getElementById('bt-pnl').style.color = d.total_pnl >= 0 ? 'var(--up-color)' : 'var(--down-color)';
-                    document.getElementById('bt-trades').textContent = `${d.wins}W / ${d.losses}L`;
+                    document.getElementById('bt-trades').innerHTML = `${d.wins}W <span style="opacity:0.3; margin:0 2px;">/</span> ${d.losses}L`;
                     document.getElementById('bt-dd').textContent = `${d.max_drawdown}p`;
                     document.getElementById('bt-dd').style.color = d.max_drawdown > 50 ? 'var(--down-color)' : 'var(--text-main)';
 
