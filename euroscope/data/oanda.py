@@ -50,12 +50,12 @@ class OandaProvider:
         self._last_known_price: Optional[dict] = None
 
     @async_retry(max_attempts=3, delay=1.0, exceptions=(Exception,))
-    async def get_price(self) -> dict:
-        """Get current EUR/USD precise price."""
+    async def get_price(self, symbol: str = "EUR_USD") -> dict:
+        """Get current precise price for an instrument."""
         if not self.api_key:
             return {"error": "OANDA API key not configured"}
             
-        url = f"{self.base_url}/instruments/{OANDA_INSTRUMENT}/candles"
+        url = f"{self.base_url}/instruments/{symbol}/candles"
         params = {
             "count": 2, # Need current and previous to calculate change
             "granularity": "D", # Daily to get day open/high/low
@@ -93,7 +93,7 @@ class OandaProvider:
                     change_pct = (change / prev_close) * 100 if prev_close else 0
 
                     result = {
-                        "symbol": "EUR/USD",
+                        "symbol": symbol.replace("_", "/"),
                         "price": round(current, 5),
                         "open": round(day_open, 5),
                         "high": round(day_high, 5),
@@ -117,7 +117,7 @@ class OandaProvider:
             return {"error": str(e)}
 
     @async_retry(max_attempts=3, delay=1.0, exceptions=(Exception,))
-    async def get_candles(self, timeframe: str = "H1", count: int = 100) -> Optional[pd.DataFrame]:
+    async def get_candles(self, timeframe: str = "H1", count: int = 100, symbol: str = "EUR_USD") -> Optional[pd.DataFrame]:
         """Get precise OHLCV tick data from OANDA."""
         if not self.api_key:
             return None
@@ -125,13 +125,13 @@ class OandaProvider:
         tf = timeframe.upper()
         oanda_granularity = TIMEFRAMES.get(tf, "H1")
         
-        cache_key = f"candles_{tf}"
+        cache_key = f"candles_{symbol}_{tf}"
         if cache_key in self._cache:
             df, cached_at = self._cache[cache_key]
             if datetime.now(UTC) - cached_at < self._cache_ttl:
                 return df.tail(count).copy()
 
-        url = f"{self.base_url}/instruments/{OANDA_INSTRUMENT}/candles"
+        url = f"{self.base_url}/instruments/{symbol}/candles"
         
         # Determine how many candles we really need
         fetch_count = count

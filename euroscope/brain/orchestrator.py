@@ -264,6 +264,7 @@ class Orchestrator:
         # 2. Execute decision pipeline
         pipeline = [
             ("market_data", "get_candles"),
+            ("market_data", "get_correlation"),
             ("liquidity_awareness", "analyze"),
             ("fundamental_analysis", "get_macro"),
             ("technical_analysis", "full"),

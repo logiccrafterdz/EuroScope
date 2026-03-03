@@ -95,12 +95,15 @@ class RiskManagementSkill(BaseSkill):
             base_position_size = result.position_size
             base_risk_pct = self._get_base_risk_pct(context.user_prefs)
             recent_drawdown = self._get_recent_drawdown_pct()
+            correlation_data = context.market_data.get("correlation", {})
             sizing = self._calculate_dynamic_size(
                 base_position_size=base_position_size,
                 session_regime=session_regime,
                 intent_confidence=intent_confidence,
                 base_risk_pct=base_risk_pct,
                 recent_drawdown=recent_drawdown,
+                correlation_data=correlation_data,
+                direction=direction,
             )
             dynamic_size = sizing["position_size"]
             risk_pips = abs((result.entry_price - stop_loss) * 10000)
@@ -159,6 +162,7 @@ class RiskManagementSkill(BaseSkill):
                 "session_multiplier": sizing["session_multiplier"],
                 "confidence_multiplier": sizing["confidence_multiplier"],
                 "drawdown_multiplier": sizing["drawdown_multiplier"],
+                "correlation_multiplier": sizing.get("correlation_multiplier", 1.0),
                 "risk_multiplier": sizing["risk_multiplier"],
                 "base_risk_pct": sizing["base_risk_pct"],
                 "realistic_rr": round(realistic_rr, 2),
@@ -225,6 +229,8 @@ class RiskManagementSkill(BaseSkill):
         intent_confidence,
         base_risk_pct: float,
         recent_drawdown: float,
+        correlation_data: dict = None,
+        direction: str = "BUY",
     ) -> dict:
         rejection_reason = None
         config_risk = self.manager.config.risk_per_trade or 1.0
@@ -232,13 +238,16 @@ class RiskManagementSkill(BaseSkill):
         session_multiplier = self._get_session_multiplier(session_regime)
         confidence_multiplier = self._get_confidence_multiplier(intent_confidence)
         drawdown_multiplier = self._get_drawdown_multiplier(recent_drawdown)
+        correlation_multiplier = self._get_correlation_multiplier(correlation_data)
+        
         if session_multiplier == 0.0:
             rejection_reason = "avoid_weekend"
         if confidence_multiplier == 0.0:
             rejection_reason = self._resolve_rejection_reason([rejection_reason, "low_intent_confidence"])
         if drawdown_multiplier == 0.0:
             rejection_reason = self._resolve_rejection_reason([rejection_reason, "excessive_drawdown"])
-        adjusted_risk_pct = base_risk_pct * session_multiplier * confidence_multiplier * drawdown_multiplier
+            
+        adjusted_risk_pct = base_risk_pct * session_multiplier * confidence_multiplier * drawdown_multiplier * correlation_multiplier
         if rejection_reason:
             adjusted_risk_pct = 0.0
         if adjusted_risk_pct:
@@ -254,6 +263,7 @@ class RiskManagementSkill(BaseSkill):
             "session_multiplier": session_multiplier,
             "confidence_multiplier": confidence_multiplier,
             "drawdown_multiplier": drawdown_multiplier,
+            "correlation_multiplier": correlation_multiplier,
             "adjusted_risk_pct": round(adjusted_risk_pct, 2),
             "rejection_reason": rejection_reason,
         }
@@ -343,6 +353,30 @@ class RiskManagementSkill(BaseSkill):
         if risk_pref == "high":
             return 1.5
         return 1.0
+
+    def _get_correlation_multiplier(self, correlation_data: dict) -> float:
+        if not correlation_data:
+            return 1.0
+            
+        multiplier = 1.0
+        
+        # GBP/USD (Usually moves with EUR/USD)
+        gbp_corr = correlation_data.get("GBP_USD")
+        if gbp_corr is not None:
+            if gbp_corr > 0.75:
+                multiplier += 0.15
+            elif gbp_corr < 0.2:
+                multiplier -= 0.15
+                
+        # USD/CHF (Usually moves inverse to EUR/USD)
+        chf_corr = correlation_data.get("USD_CHF")
+        if chf_corr is not None:
+            if chf_corr < -0.75:
+                multiplier += 0.15
+            elif chf_corr > -0.2:
+                multiplier -= 0.15
+                
+        return min(max(multiplier, 0.5), 1.5)
 
     @staticmethod
     def _resolve_rejection_reason(reasons: list) -> str:

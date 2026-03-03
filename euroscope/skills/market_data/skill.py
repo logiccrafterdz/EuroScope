@@ -13,7 +13,7 @@ class MarketDataSkill(BaseSkill):
     emoji = "📊"
     category = SkillCategory.DATA
     version = "1.0.0"
-    capabilities = ["get_price", "get_candles", "check_market_status"]
+    capabilities = ["get_price", "get_candles", "check_market_status", "get_correlation"]
 
     def __init__(self, provider=None):
         super().__init__()
@@ -36,6 +36,8 @@ class MarketDataSkill(BaseSkill):
             return await self._get_candles(context, **params)
         elif action == "check_market_status":
             return await self._check_status(context)
+        elif action == "get_correlation":
+            return await self._get_correlation(context, **params)
         return SkillResult(success=False, error=f"Unknown action: {action}")
 
     async def _get_price(self, context: SkillContext) -> SkillResult:
@@ -56,7 +58,8 @@ class MarketDataSkill(BaseSkill):
         try:
             timeframe = params.get("timeframe", "H1")
             count = params.get("count", 250)
-            df = await self._provider.get_candles(timeframe=timeframe, count=count)
+            symbol = params.get("symbol", "EUR_USD")
+            df = await self._provider.get_candles(timeframe=timeframe, count=count, symbol=symbol)
             if df is None or (hasattr(df, 'empty') and df.empty):
                 return SkillResult(success=False, error="No candle data returned")
             context.market_data["candles"] = df
@@ -119,3 +122,51 @@ class MarketDataSkill(BaseSkill):
         
         context.metadata["market_status"] = data
         return SkillResult(success=True, data=data)
+
+    async def _get_correlation(self, context: SkillContext, **params) -> SkillResult:
+        """Calculates Pearson correlation between EUR/USD and other pairs."""
+        if not self._provider:
+            return SkillResult(success=False, error="No price provider configured")
+        try:
+            timeframe = params.get("timeframe", "H1")
+            count = params.get("count", 100)
+            base_symbol = params.get("base_symbol", "EUR_USD")
+            compare_symbols = params.get("compare_symbols", ["GBP_USD", "USD_CHF"])
+            
+            import pandas as pd
+            import asyncio
+            
+            # Fetch base pair
+            base_df = await self._provider.get_candles(timeframe=timeframe, count=count, symbol=base_symbol)
+            if base_df is None or base_df.empty:
+                 return SkillResult(success=False, error=f"No data for {base_symbol}")
+            
+            close_prices = {base_symbol: base_df["Close"]}
+            
+            # Fetch comparisons concurrently
+            async def fetch_sym(sym):
+                df = await self._provider.get_candles(timeframe=timeframe, count=count, symbol=sym)
+                if df is not None and not df.empty:
+                    return sym, df["Close"]
+                return sym, None
+                
+            results = await asyncio.gather(*(fetch_sym(sym) for sym in compare_symbols))
+            for sym, series in results:
+                if series is not None:
+                    close_prices[sym] = series
+                    
+            combined_df = pd.DataFrame(close_prices).dropna()
+            if combined_df.empty:
+                return SkillResult(success=False, error="Failed to align timeframes for correlation")
+                
+            corr_matrix = combined_df.corr(method="pearson")
+            
+            correlations = {}
+            for sym in compare_symbols:
+                if sym in corr_matrix.columns:
+                    correlations[sym] = round(corr_matrix.loc[base_symbol, sym], 3)
+                    
+            context.market_data["correlation"] = correlations
+            return SkillResult(success=True, data=correlations)
+        except Exception as e:
+            return SkillResult(success=False, error=str(e))
