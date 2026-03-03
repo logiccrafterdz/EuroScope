@@ -9,7 +9,7 @@
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
     <link
-        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Geist+Mono:wght@200;300;400;500;600&display=swap"
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@300;400;500;600&display=swap"
         rel="stylesheet">
     <style>
         :root {
@@ -17,8 +17,8 @@
             --surface-color: rgba(10, 14, 23, 0.45);
             --surface-solid: #06090e;
             --surface-accent: rgba(255, 255, 255, 0.05);
-            --accent-primary: #00F0FF;
-            --accent-glow: rgba(0, 240, 255, 0.35);
+            --accent-primary: #00D4AA;
+            --accent-glow: rgba(0, 212, 170, 0.25);
             --text-main: #FFFFFF;
             --text-muted: #94A3B8;
             --text-dim: #475569;
@@ -31,8 +31,8 @@
             --safe-bottom: env(safe-area-inset-bottom, 24px);
 
             /* Typography System */
-            --font-data: 'Geist Mono', monospace;
-            --font-ui: 'Inter', -apple-system, sans-serif;
+            --font-data: 'JetBrains Mono', monospace;
+            --font-ui: 'Inter', sans-serif;
             --text-price-hero: clamp(2.5rem, 8vw, 3.5rem);
         }
 
@@ -47,9 +47,9 @@
             font-family: var(--font-ui);
             background-color: var(--bg-color);
             background-image:
-                radial-gradient(ellipse at 50% -20%, rgba(0, 240, 255, 0.1), transparent 60%),
-                linear-gradient(rgba(255, 255, 255, 0.015) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(255, 255, 255, 0.015) 1px, transparent 1px);
+                radial-gradient(ellipse at 50% -20%, rgba(0, 212, 170, 0.08), transparent 60%),
+                linear-gradient(rgba(255, 255, 255, 0.012) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255, 255, 255, 0.012) 1px, transparent 1px);
             background-size: 100% 100%, 24px 24px, 24px 24px;
             background-position: center top, center center, center center;
             color: var(--text-main);
@@ -72,7 +72,7 @@
             backdrop-filter: blur(10px);
             border: 1px solid var(--border-color);
             border-radius: 16px;
-            font-family: 'Fira Code', monospace;
+            font-family: var(--font-data);
             font-size: 0.55rem;
             padding: 12px;
             margin-bottom: 20px;
@@ -105,9 +105,9 @@
         }
 
         .logo {
-            font-weight: 800;
+            font-weight: 700;
             font-size: 0.85rem;
-            letter-spacing: 4px;
+            letter-spacing: 1px;
             color: var(--text-main);
             font-family: var(--font-data);
             text-transform: uppercase;
@@ -148,7 +148,7 @@
         .session-info {
             font-size: 0.65rem;
             color: var(--text-muted);
-            font-weight: 600;
+            font-weight: 500;
             text-transform: uppercase;
             letter-spacing: 1.5px;
         }
@@ -411,9 +411,9 @@
         }
 
         .dock-btn.active {
-            color: var(--text-main);
-            background: rgba(255, 255, 255, 0.1);
-            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.2), 0 0 15px rgba(255, 255, 255, 0.05);
+            color: var(--accent-primary);
+            background: rgba(0, 212, 170, 0.08);
+            box-shadow: inset 0 0 0 1px rgba(0, 212, 170, 0.2), 0 0 15px rgba(0, 212, 170, 0.05);
         }
 
         .dock-btn.active svg {
@@ -464,6 +464,10 @@
             font-size: 0.75rem;
             font-weight: 300;
             letter-spacing: 0px;
+        }
+
+        p {
+            line-height: 1.7;
         }
 
         .unit-suffix {
@@ -770,7 +774,7 @@
             font-weight: 500;
             letter-spacing: 1.5px;
             text-transform: uppercase;
-            opacity: 0.7;
+            opacity: 0.5;
         }
     </style>
 </head>
@@ -868,10 +872,11 @@
         <!-- ANALYSIS TAB -->
         <div id="analysis-view" class="tab-content">
             <div style="margin-bottom: 16px;">
-                <button class="action-btn" onclick="runAnalysis()" id="analysis-btn"
-                    style="background: var(--text-main); color: #000; box-shadow: 0 0 15px rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center; gap: 8px;">
+                <button class="action-btn action-outline" onclick="runAnalysis()" id="analysis-btn"
+                    style="display: flex; align-items: center; justify-content: center; gap: 8px;">
                     <span id="analysis-btn-text">RUN NEURAL ANALYSIS</span> <span class="loading-spinner"
-                        id="analysis-spinner" style="display: none; border-top-color: #000; margin: 0;"></span>
+                        id="analysis-spinner"
+                        style="display: none; border-top-color: var(--accent-primary); margin: 0;"></span>
                 </button>
             </div>
 
@@ -928,10 +933,10 @@
                         </div>
                     </div>
                 </div>
-                <button class="action-btn" onclick="scanSignals()" id="scan-btn"
-                    style="background: var(--accent-primary); color: #000; box-shadow: 0 0 15px var(--accent-glow); display: flex; align-items: center; justify-content: center; gap: 8px; font-weight:600; letter-spacing:1px;">
+                <button class="action-btn action-outline" onclick="scanSignals()" id="scan-btn"
+                    style="border-color: var(--accent-primary); color: var(--accent-primary); display: flex; align-items: center; justify-content: center; gap: 8px; font-weight:600; letter-spacing:1px;">
                     <span id="scan-btn-text">AUTO-SCAN FOR TRADES</span> <span class="loading-spinner" id="scan-spinner"
-                        style="display: none; border-top-color: #000; margin: 0;"></span>
+                        style="display: none; border-top-color: var(--accent-primary); margin: 0;"></span>
                 </button>
             </div>
 
@@ -1800,18 +1805,22 @@
                     if (res.execution_skipped) {
                         log(`Signal Found: ${s.direction} @ ${f5(s.entry_price)} (Auto-Trading: OFF)`, 'warn');
                         btnText.textContent = "SIGNAL FOUND";
-                        btn.style.background = 'var(--accent-primary)';
+                        btn.style.borderColor = 'var(--accent-primary)';
+                        btn.style.color = 'var(--accent-primary)';
+                        btn.style.background = 'transparent';
                         const listSignals = document.getElementById('recent-signals-list');
                         if (listSignals) listSignals.innerHTML = signalCard;
                         try { tg.HapticFeedback.notificationOccurred('warning'); } catch (e) { }
-                        setTimeout(() => { btnText.textContent = "SCAN MARKET"; btn.style.background = 'var(--accent-primary)'; }, 3000);
+                        setTimeout(() => { btnText.textContent = "AUTO-SCAN FOR TRADES"; btn.style.background = ''; btn.style.color = ''; btn.style.borderColor = ''; }, 3000);
                     } else {
                         log(`Trade Executed: ${s.direction} Position Opened`, 'success');
                         btnText.textContent = "TRADE EXECUTED ✓";
-                        btn.style.background = 'var(--up-color)';
+                        btn.style.borderColor = 'var(--up-color)';
+                        btn.style.color = 'var(--up-color)';
+                        btn.style.background = 'transparent';
                         await sync('signals');
                         try { tg.HapticFeedback.notificationOccurred('success'); } catch (e) { }
-                        setTimeout(() => { btnText.textContent = "SCAN MARKET"; btn.style.background = 'var(--accent-primary)'; }, 3000);
+                        setTimeout(() => { btnText.textContent = "AUTO-SCAN FOR TRADES"; btn.style.background = ''; btn.style.color = ''; btn.style.borderColor = ''; }, 3000);
                     }
                 } else {
                     // No actionable signal or risk rejected
@@ -1847,9 +1856,11 @@
                 if (res.success && res.data) {
                     const s = res.data; const mkt = document.getElementById('mkt-status');
                     mkt.textContent = s.status; mkt.className = `market-badge status-${s.status.toLowerCase()}`;
-                    if (s.status === 'OPEN') mkt.style.boxShadow = '0 0 15px rgba(0, 255, 157, 0.4)';
+                    if (s.status === 'OPEN') mkt.style.boxShadow = '0 0 15px rgba(0, 212, 170, 0.4)';
                     else mkt.style.boxShadow = 'none';
-                    document.getElementById('current-session').textContent = `${s.session} SESSION`;
+
+                    let sessionName = (s.session || '').replace('NEWYORK', 'NEW YORK');
+                    document.getElementById('current-session').textContent = `${sessionName} SESSION`;
 
                     const ws = document.getElementById('ws-link');
                     if (s.ws_status === 'CONNECTED') {
