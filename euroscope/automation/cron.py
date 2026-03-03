@@ -473,6 +473,27 @@ class CronScheduler:
                 if direction in ("BUY", "SELL") and confidence >= 60:
                     logger.info(f"Auto Trader found high-confidence {direction} signal ({confidence}%)!")
                     
+                    # 2.5 Run safety guardrails before execution
+                    from ..trading.safety_guardrails import SafetyGuardrail
+                    guardrail = SafetyGuardrail(config=self.config, storage=self.storage)
+                    blocked, reason = await guardrail.should_block_signal(ctx)
+                    
+                    if blocked:
+                        logger.warning(f"Auto Trader BLOCKED by Safety Guardrails: {reason}")
+                        chat_ids = getattr(self.config, "admin_chat_ids", [])
+                        for chat_id in chat_ids:
+                            msg = (
+                                f"🛡️ <b>Trade Blocked by Safety Guardrail</b>\n\n"
+                                f"Direction: <b>{direction}</b> EUR/USD\n"
+                                f"Reason: {reason}\n\n"
+                                f"<i>— EuroScope Auto-Trader</i>"
+                            )
+                            await self._send_proactive_alert_message(chat_id, msg)
+                        return
+                        
+                    # Enhance safety (e.g. widen SL if volatile)
+                    ctx = await guardrail.enhance_signal_safety(ctx)
+                    
                     # 3. Execute the paper trade
                     exec_res = await orchestrator.run_skill("signal_executor", "open_trade", context=ctx)
                     if exec_res.success:
