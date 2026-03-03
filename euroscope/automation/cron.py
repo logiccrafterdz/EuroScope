@@ -143,6 +143,7 @@ class CronScheduler:
         # --- PHASE 4: Autonomous Paper Trader ---
         self._schedule_auto_trader()
         self._schedule_trade_monitor()
+        self._schedule_weekly_report()
         
         logger.info(f"Cron: {len(self._tasks)} tasks scheduled: {list(self._tasks.keys())}")
 
@@ -652,6 +653,63 @@ class CronScheduler:
             delay=60,
         )
         logger.info("Cron: scheduled 'trade_monitor' (1m)")
+
+    def _schedule_weekly_report(self):
+        """Phase 4: Generates and sends a PDF performance report every Friday at 22:00 UTC."""
+        async def generate_and_send_report():
+            try:
+                storage = self.storage or getattr(self.bot, "storage", None)
+                if not storage:
+                    logger.error("Weekly report failed: No storage available")
+                    return
+                    
+                from ..analytics.report_generator import PDFReportGenerator
+                generator = PDFReportGenerator(storage=storage)
+                filepath = await generator.generate_weekly_report()
+                
+                if not filepath or not __import__('os').path.exists(filepath):
+                    logger.warning("Weekly report generation yielded no file.")
+                    return
+                    
+                app = getattr(self.bot, "application", None) or getattr(self.bot, "bot", None)
+                telegram_bot = getattr(app, "bot", None) if app else None
+                if not telegram_bot:
+                    return
+
+                chat_ids = getattr(self.config, "admin_chat_ids", [])
+                for chat_id in chat_ids:
+                    with open(filepath, "rb") as pdf_file:
+                        await telegram_bot.send_document(
+                            chat_id=chat_id,
+                            document=pdf_file,
+                            caption="📊 <b>EuroScope Weekly Performance Report</b>\n\nHere is your institutional tear sheet for the week.",
+                            parse_mode="HTML"
+                        )
+                logger.info("Weekly PDF report generated and dispatched to admins.")
+            except Exception as e:
+                logger.error(f"Weekly report generation task failed: {e}", exc_info=True)
+
+        now = datetime.now(UTC)
+        # Calculate days ahead for next Friday (weekday 4)
+        days_ahead = 4 - now.weekday()
+        if days_ahead <= 0: # Target day already happened this week
+            days_ahead += 7
+            
+        target = now + timedelta(days=days_ahead)
+        target = target.replace(hour=22, minute=0, second=0, microsecond=0)
+        
+        if target <= now:
+            target += timedelta(days=7)
+            
+        delay_seconds = int((target - now).total_seconds())
+
+        self.schedule(
+            "weekly_pdf_report",
+            TaskFrequency.WEEKLY,
+            generate_and_send_report,
+            delay=delay_seconds,
+        )
+        logger.info("Cron: scheduled 'weekly_pdf_report' (Fridays @ 22:00 UTC)")
 
     async def _send_proactive_alert(self, chat_id: int, decision: dict) -> bool:
         if not self.bot:
