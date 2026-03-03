@@ -369,7 +369,7 @@ class APIServer:
 
     async def _api_backtest(self, request):
         """API endpoint for backtesting dashboard data."""
-        logger.debug("API: Running backtest...")
+        logger.info("API: Running backtest...")
         strategy = request.query.get("strategy", None)
         timeframe = request.query.get("timeframe", "H1")
         try:

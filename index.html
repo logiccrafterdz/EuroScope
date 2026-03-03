@@ -1389,59 +1389,78 @@
 
         async function runBacktest(strategy) {
             const q = strategy ? `?strategy=${strategy}` : '';
-            const res = await api(`/backtest${q}`);
-            if (res.success && res.data) {
-                const d = res.data;
-                document.getElementById('bt-wr').textContent = `${d.win_rate}%`;
-                document.getElementById('bt-wr').style.color = d.win_rate >= 50 ? 'var(--up-color)' : 'var(--down-color)';
-                document.getElementById('bt-pnl').textContent = `${d.total_pnl > 0 ? '+' : ''}${d.total_pnl}p`;
-                document.getElementById('bt-pnl').style.color = d.total_pnl >= 0 ? 'var(--up-color)' : 'var(--down-color)';
-                document.getElementById('bt-trades').textContent = d.total_trades;
-                document.getElementById('bt-dd').textContent = `${d.max_drawdown}p`;
-                const eqEl = document.getElementById('bt-equity');
-                const curve = d.equity_curve || [];
-                eqEl.innerHTML = '';
-                if (curve.length > 0) {
-                    const eqChart = LightweightCharts.createChart(eqEl, {
-                        width: eqEl.clientWidth, height: 80,
-                        layout: { background: { type: 'solid', color: 'transparent' }, textColor: '#8b949e' },
-                        grid: { vertLines: { visible: false }, horzLines: { visible: false } },
-                        timeScale: { visible: false }, rightPriceScale: { visible: false },
-                        handleScroll: false, handleScale: false
-                    });
-                    const lSeries = eqChart.addLineSeries({ color: 'var(--accent-primary)', lineWidth: 2 });
-                    const baseTime = Math.floor(Date.now() / 1000) - curve.length * 86400;
-                    lSeries.setData(curve.map((v, i) => ({ time: baseTime + i * 86400, value: v })));
-                    eqChart.timeScale().fitContent();
+            try {
+                const res = await api(`/backtest${q}`);
+                if (res.success && res.data) {
+                    const d = res.data;
+                    document.getElementById('bt-wr').textContent = `${d.win_rate}%`;
+                    document.getElementById('bt-wr').style.color = d.win_rate >= 50 ? 'var(--up-color)' : 'var(--down-color)';
+                    document.getElementById('bt-pnl').textContent = `${d.total_pnl > 0 ? '+' : ''}${d.total_pnl}p`;
+                    document.getElementById('bt-pnl').style.color = d.total_pnl >= 0 ? 'var(--up-color)' : 'var(--down-color)';
+                    document.getElementById('bt-trades').textContent = d.total_trades;
+                    document.getElementById('bt-dd').textContent = `${d.max_drawdown}p`;
+                    const eqEl = document.getElementById('bt-equity');
+                    const curve = d.equity_curve || [];
+                    eqEl.innerHTML = '';
+                    if (curve.length > 0) {
+                        const eqChart = LightweightCharts.createChart(eqEl, {
+                            width: eqEl.clientWidth, height: 80,
+                            layout: { background: { type: 'solid', color: 'transparent' }, textColor: '#8b949e' },
+                            grid: { vertLines: { visible: false }, horzLines: { visible: false } },
+                            timeScale: { visible: false }, rightPriceScale: { visible: false },
+                            handleScroll: false, handleScale: false
+                        });
+                        const lSeries = eqChart.addLineSeries({ color: 'var(--accent-primary)', lineWidth: 2 });
+                        const baseTime = Math.floor(Date.now() / 1000) - curve.length * 86400;
+                        lSeries.setData(curve.map((v, i) => ({ time: baseTime + i * 86400, value: v })));
+                        eqChart.timeScale().fitContent();
+                    } else {
+                        eqEl.innerHTML = '<div class="empty-state" style="width:100%">NO TRADES GENERATED</div>';
+                    }
                 } else {
-                    eqEl.innerHTML = '<div class="empty-state" style="width:100%">NO DATA</div>';
+                    const errMsg = res.error || res.message || 'Backtest failed';
+                    log('Backtest: ' + errMsg, 'warn');
+                    document.getElementById('bt-wr').textContent = '--';
+                    document.getElementById('bt-pnl').textContent = '--';
+                    document.getElementById('bt-trades').textContent = '--';
+                    document.getElementById('bt-dd').textContent = '--';
+                    document.getElementById('bt-equity').innerHTML = `<div class="empty-state" style="width:100%; font-size:0.65rem; color:var(--warn-color);">${errMsg}</div>`;
                 }
+            } catch (e) {
+                log('Backtest error: ' + e.message, 'error');
+                document.getElementById('bt-equity').innerHTML = `<div class="empty-state" style="width:100%; color:var(--down-color);">ERROR: ${e.message}</div>`;
             }
         }
 
         async function loadPerformance() {
-            const res = await api('/performance');
-            if (res.success && res.data) {
-                const s = res.data.stats || {};
-                document.getElementById('perf-wr').textContent = `${(s.win_rate || 0).toFixed(0)}%`;
-                document.getElementById('perf-pnl').textContent = `${(s.total_pnl || 0).toFixed(1)}p`;
+            try {
+                const res = await api('/performance');
+                if (res.success && res.data) {
+                    const s = res.data.stats || {};
+                    document.getElementById('perf-wr').textContent = `${(s.win_rate || 0).toFixed(0)}%`;
+                    document.getElementById('perf-pnl').textContent = `${(s.total_pnl || 0).toFixed(1)}p`;
 
-                // Risk Persistence Display
-                const r = res.data.risk || {};
-                const dailyPnl = r.daily_pnl || 0;
-                const dPnlEl = document.getElementById('risk-daily-pnl');
-                dPnlEl.textContent = `${dailyPnl >= 0 ? '+' : ''}${dailyPnl.toFixed(2)}`;
-                dPnlEl.style.color = dailyPnl >= 0 ? 'var(--up-color)' : 'var(--down-color)';
-                document.getElementById('risk-streak').textContent = r.consecutive_losses || 0;
+                    // Risk Persistence Display
+                    const r = res.data.risk || {};
+                    const dailyPnl = r.daily_pnl || 0;
+                    const dPnlEl = document.getElementById('risk-daily-pnl');
+                    dPnlEl.textContent = `${dailyPnl >= 0 ? '+' : ''}${dailyPnl.toFixed(2)}`;
+                    dPnlEl.style.color = dailyPnl >= 0 ? 'var(--up-color)' : 'var(--down-color)';
+                    document.getElementById('risk-streak').textContent = r.consecutive_losses || 0;
 
-                const t = res.data.tuning || {}; const recs = t.recommendations || [];
-                const recEl = document.getElementById('perf-recommendations');
-                if (recs.length > 0) {
-                    recEl.innerHTML = recs.map(r => `
-                        <div class="info-row"><span class="label">${r.param}</span><span class="val" style="font-size:0.75rem; color:var(--text-main);">${r.action}</span></div>
-                        <div style="font-size:0.75rem; color:var(--text-dim); padding-bottom:8px;">${r.reason}</div>
-                    `).join('');
-                } else recEl.innerHTML = '<div class="empty-state">ALL OPTIMAL ✅</div>';
+                    const t = res.data.tuning || {}; const recs = t.recommendations || [];
+                    const recEl = document.getElementById('perf-recommendations');
+                    if (recs.length > 0) {
+                        recEl.innerHTML = recs.map(r => `
+                            <div class="info-row"><span class="label">${r.param}</span><span class="val" style="font-size:0.75rem; color:var(--text-main);">${r.action}</span></div>
+                            <div style="font-size:0.75rem; color:var(--text-dim); padding-bottom:8px;">${r.reason}</div>
+                        `).join('');
+                    } else recEl.innerHTML = '<div class="empty-state">ALL OPTIMAL ✅</div>';
+                } else {
+                    log('Performance: ' + (res.error || 'Failed to load'), 'warn');
+                }
+            } catch (e) {
+                log('Performance error: ' + e.message, 'error');
             }
         }
 
