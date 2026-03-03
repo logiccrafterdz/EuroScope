@@ -592,14 +592,20 @@
             border-radius: 8px;
             font-weight: 700;
             cursor: pointer;
-            transition: 0.2s;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
             font-family: 'Inter';
+            position: relative;
+            overflow: hidden;
+        }
+
+        .tf-btn:active {
+            transform: scale(0.92);
         }
 
         .tf-btn.active {
             color: #000;
             background: var(--accent-primary);
-            box-shadow: 0 0 10px var(--accent-glow);
+            box-shadow: 0 4px 15px var(--accent-glow);
         }
 
         .info-row {
@@ -671,13 +677,76 @@
             letter-spacing: 1px;
             margin-top: 12px;
             cursor: pointer;
-            transition: 0.2s;
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        button.action-btn::after {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: linear-gradient(45deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+            transform: rotate(45deg);
+            transition: all 0.5s;
+            pointer-events: none;
+        }
+
+        button.action-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
+        }
+
+        button.action-btn:hover::after {
+            left: 100%;
+            top: 100%;
+        }
+
+        button.action-btn:active {
+            transform: scale(0.97);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
         }
 
         button.action-outline {
             background: transparent;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            color: var(--text-main);
+            border: 1px solid var(--border-color);
+            color: var(--text-muted);
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        button.action-outline:hover {
+            border-color: var(--accent-primary);
+            color: var(--accent-primary);
+            background: rgba(0, 212, 170, 0.03);
+            box-shadow: 0 0 15px var(--accent-glow);
+        }
+
+        button.action-outline:active {
+            transform: scale(0.97);
+            background: rgba(0, 212, 170, 0.08);
+        }
+
+        button.bt-filter-btn {
+            margin: 0;
+            padding: 8px 12px;
+            font-size: 0.6rem;
+            flex: 1;
+            font-weight: 700;
+        }
+
+        button.bt-filter-btn.active {
+            background: var(--accent-primary);
+            color: #000;
+            border-color: var(--accent-primary);
+            box-shadow: 0 4px 12px var(--accent-glow);
         }
 
         .loading-spinner {
@@ -692,20 +761,14 @@
             margin-left: 8px;
         }
 
-        @keyframes spin {
-            to {
-                transform: rotate(360deg);
+        @keyframes shimmer {
+            0% {
+                transform: translateX(-100%) rotate(45deg);
             }
-        }
 
-        button.action-btn:active {
-            transform: scale(0.96);
-        }
-
-        button.action-outline {
-            background: transparent;
-            color: var(--text-muted);
-            border: 1px solid var(--border-color);
+            100% {
+                transform: translateX(100%) rotate(45deg);
+            }
         }
 
         input.action-in {
@@ -976,14 +1039,12 @@
                     </div>
                 </div>
                 <div style="display: flex; gap: 6px; margin-bottom: 16px;">
-                    <button class="action-btn action-outline bt-filter-btn" data-strategy="" onclick="runBacktest(null)"
-                        style="margin:0; padding:8px 12px; font-size:0.6rem; flex:1;">ALL STRATEGIES</button>
-                    <button class="action-btn action-outline bt-filter-btn" data-strategy="trend_following"
-                        onclick="runBacktest('trend_following')"
-                        style="margin:0; padding:8px 12px; font-size:0.6rem; flex:1;">TREND</button>
-                    <button class="action-btn action-outline bt-filter-btn" data-strategy="mean_reversion"
-                        onclick="runBacktest('mean_reversion')"
-                        style="margin:0; padding:8px 12px; font-size:0.6rem; flex:1;">MR</button>
+                    <button class="action-outline bt-filter-btn active" data-strategy="" onclick="runBacktest(null)">ALL
+                        STRATEGIES</button>
+                    <button class="action-outline bt-filter-btn" data-strategy="trend_following"
+                        onclick="runBacktest('trend_following')">TREND</button>
+                    <button class="action-outline bt-filter-btn" data-strategy="mean_reversion"
+                        onclick="runBacktest('mean_reversion')">MR</button>
                 </div>
 
                 <!-- Loading state -->
@@ -1547,8 +1608,7 @@
             // Highlight active filter button
             document.querySelectorAll('.bt-filter-btn').forEach(b => {
                 const bStrat = b.getAttribute('data-strategy') || '';
-                b.style.background = bStrat === (strategy || '') ? 'var(--accent-primary)' : '';
-                b.style.color = bStrat === (strategy || '') ? '#000' : '';
+                b.classList.toggle('active', bStrat === (strategy || ''));
             });
 
             // Show loading
