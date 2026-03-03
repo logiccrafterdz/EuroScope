@@ -756,7 +756,7 @@
                 <div class="hero-glow"></div>
                 <div class="label-sm" style="color:var(--text-main); font-weight:800; opacity:0.8;">EUR/USD LIVE</div>
                 <div id="price"
-                    style="font-size:3.8rem; font-weight:800; font-family:'Fira Code'; letter-spacing:-2px; margin-bottom:4px; margin-top:8px; color:#fff;"
+                    style="font-size:3.3rem; font-weight:800; font-family:'Fira Code'; letter-spacing:-2px; margin-bottom:4px; margin-top:8px; color:#fff;"
                     class="text-glow">-.-----</div>
                 <div id="price-change" style="font-size:1rem; font-weight:700; font-family:'Fira Code';">--.---
                     (---%)</div>
@@ -765,11 +765,14 @@
             <div class="bento">
                 <div class="glass-card" style="padding:16px;">
                     <div class="label-sm">Broker Balance</div>
-                    <div id="stat-balance" class="val-md" style="font-size:1.1rem;">--.--</div>
+                    <div id="stat-balance" class="val-md"
+                        style="font-size:0.95rem; letter-spacing:-0.5px; white-space:nowrap;">--.--</div>
                 </div>
                 <div class="glass-card" style="padding:16px;">
                     <div class="label-sm">Account Equity</div>
-                    <div id="stat-equity" class="val-md" style="color:var(--accent-primary); font-size:1.1rem;">--.--
+                    <div id="stat-equity" class="val-md"
+                        style="color:var(--accent-primary); font-size:0.95rem; letter-spacing:-0.5px; white-space:nowrap;">
+                        --.--
                     </div>
                 </div>
             </div>
@@ -781,7 +784,8 @@
                 </div>
                 <div class="glass-card" style="padding:16px;">
                     <div class="label-sm">Day Range</div>
-                    <div id="stat-hilo" class="val-md" style="font-size: 0.85rem;">-.--- / -.---</div>
+                    <div id="stat-hilo" class="val-md"
+                        style="font-size: 0.75rem; letter-spacing:-0.5px; white-space:nowrap;">-.--- / -.---</div>
                 </div>
             </div>
 
@@ -1596,11 +1600,10 @@
                 }
             });
 
-            // Fetch Account Info
             api('/account').then(acc => {
                 if (acc.success) {
-                    document.getElementById('stat-balance').textContent = `${f2(acc.balance)} ${acc.currency}`;
-                    document.getElementById('stat-equity').textContent = `${f2(acc.equity)} ${acc.currency}`;
+                    document.getElementById('stat-balance').innerHTML = `${f2(acc.balance)} <span style="font-size:0.6rem; color:var(--text-dim);">${acc.currency}</span>`;
+                    document.getElementById('stat-equity').innerHTML = `${f2(acc.equity)} <span style="font-size:0.6rem; color:rgba(0,240,255,0.4);">${acc.currency}</span>`;
                 }
             });
 
@@ -1805,26 +1808,26 @@
                     <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-bottom:16px;">
                         <div class="glass-card" style="padding:16px; border-top: 2px solid var(--accent-primary);">
                             <div class="label-sm" style="margin-bottom:8px;">FED FUND RATE</div>
-                            <div style="font-size:1.5rem; font-weight:800; font-family:'Fira Code'; color:var(--text-main);">${f2(us.fed?.rate)}%</div>
+                            <div style="font-size:1.25rem; font-weight:800; font-family:'Fira Code'; color:var(--text-main);">${f2(us.fed?.rate)}%</div>
                         </div>
                         <div class="glass-card" style="padding:16px; border-top: 2px solid #3b82f6;">
                             <div class="label-sm" style="margin-bottom:8px;">ECB MAIN RATE</div>
-                            <div style="font-size:1.5rem; font-weight:800; font-family:'Fira Code'; color:var(--text-main);">${f2(eu.ecb?.value)}%</div>
+                            <div style="font-size:1.25rem; font-weight:800; font-family:'Fira Code'; color:var(--text-main);">${f2(eu.ecb?.value)}%</div>
                         </div>
                         <div class="glass-card" style="padding:16px;">
                             <div class="label-sm" style="margin-bottom:8px;">US CPI (YoY)</div>
-                            <div style="font-size:1.5rem; font-weight:800; font-family:'Fira Code'; color:var(--text-main);">${f2(us.cpi?.value)}%</div>
+                            <div style="font-size:1.25rem; font-weight:800; font-family:'Fira Code'; color:var(--text-main);">${f2(us.cpi?.value)}%</div>
                         </div>
                         <div class="glass-card" style="padding:16px;">
                             <div class="label-sm" style="margin-bottom:8px;">EU CPI (YoY)</div>
-                            <div style="font-size:1.5rem; font-weight:800; font-family:'Fira Code'; color:var(--text-main);">${f2(eu.cpi?.value)}%</div>
+                            <div style="font-size:1.25rem; font-weight:800; font-family:'Fira Code'; color:var(--text-main);">${f2(eu.cpi?.value)}%</div>
                         </div>
                     </div>
                     <div class="glass-card bento-full" style="padding:16px; margin-bottom:12px;">
                         <div style="display:flex; justify-content:space-between; align-items:center;">
                             <div>
                                 <div class="label-sm" style="margin-bottom:4px;">10Y YIELD SPREAD (US-DE)</div>
-                                <div style="font-size:1.5rem; font-weight:800; font-family:'Fira Code'; color:${getTrendColor(eu.yield_spread?.spread, 0)};">${f2(eu.yield_spread?.spread)}%</div>
+                                <div style="font-size:1.25rem; font-weight:800; font-family:'Fira Code'; color:${getTrendColor(eu.yield_spread?.spread, 0)};">${f2(eu.yield_spread?.spread)}%</div>
                             </div>
                             <div style="text-align:right;">
                                 <div class="label-sm" style="margin-bottom:4px;">GLOBAL MACRO BIAS</div>
