@@ -26,7 +26,8 @@ class BriefingSection:
     """A single section of the voice briefing."""
     title: str
     content: str
-    priority: int = 5  # 1=highest, 10=lowest
+    priority: int = 5
+    icon: str = "📋"  # 1=highest, 10=lowest
 
 
 @dataclass
@@ -128,6 +129,7 @@ class VoiceBriefingEngine:
                         f"{sign}{change:.5f} ({sign}{change_pct:.2f}%) on the day"
                     ),
                     priority=1,
+                    icon="💹",
                 )
         except Exception as e:
             logger.debug(f"Price section failed: {e}")
@@ -155,6 +157,7 @@ class VoiceBriefingEngine:
                         f"RSI is at {rsi:.1f}, ADX is at {adx:.1f}"
                     ),
                     priority=2,
+                    icon="📊",
                 )
         except Exception as e:
             logger.debug(f"Technical section failed: {e}")
@@ -177,7 +180,8 @@ class VoiceBriefingEngine:
                 return BriefingSection(
                     title="Macro & Geopolitics",
                     content=content,
-                    priority=2, # Right below price, high priority
+                    priority=2,
+                    icon="🌍",
                 )
         except Exception as e:
             logger.debug(f"News section failed: {e}")
@@ -202,6 +206,7 @@ class VoiceBriefingEngine:
                     title="Strategic Scenarios",
                     content=snippet,
                     priority=3,
+                    icon="🎯",
                 )
             return None
         except Exception as e:
@@ -222,6 +227,7 @@ class VoiceBriefingEngine:
                     title="Trading Signals",
                     content=f"{count} recent signals. Latest is a {direction} signal",
                     priority=3,
+                    icon="📡",
                 )
         except Exception as e:
             logger.debug(f"Signal section failed: {e}")
@@ -242,6 +248,7 @@ class VoiceBriefingEngine:
                         f"and {stats.get('total_pnl', 0):+.1f} pips total"
                     ),
                     priority=4,
+                    icon="📈",
                 )
         except Exception as e:
             logger.debug(f"Performance section failed: {e}")
@@ -264,18 +271,31 @@ class VoiceBriefingEngine:
                 title="Risk Alerts",
                 content=". ".join(warnings),
                 priority=1,
+                icon="⚠️",
             )
         return None
 
     def _build_summary(self, sections: list[BriefingSection]) -> str:
-        """Build a one-line summary from priority sections."""
+        """Build a concise executive summary — NOT a copy of section content."""
         if not sections:
             return "No market data available for briefing."
 
-        # Take the top 2 priority sections for summary
-        top = sorted(sections, key=lambda s: s.priority)[:2]
-        parts = [s.content for s in top]
-        return ". ".join(parts)
+        # Extract key facts for a proper one-liner
+        price_part = ""
+        bias_part = ""
+        for s in sections:
+            if s.title == "Current Price" and "trading at" in s.content:
+                # Extract just the price and change
+                price_part = s.content.split(",")[0].replace("EUR/USD is trading at ", "")
+            if s.title == "Technical Outlook" and "bias is" in s.content:
+                bias_part = s.content.split(".")[0].replace("The overall bias is ", "").strip()
+
+        if price_part and bias_part:
+            return f"EUR/USD at {price_part} — Technical bias: {bias_part}. {len(sections)} sections analyzed."
+        elif price_part:
+            return f"EUR/USD at {price_part}. {len(sections)} sections analyzed."
+        else:
+            return f"Market briefing compiled with {len(sections)} sections."
 
     def _assess_urgency(self, sections: list[BriefingSection]) -> str:
         """Assess overall briefing urgency."""
@@ -321,11 +341,13 @@ class VoiceBriefingEngine:
             "timestamp": briefing.timestamp.isoformat(),
             "urgency": briefing.urgency,
             "summary": briefing.summary,
+            "section_count": len(briefing.sections),
             "sections": [
                 {
                     "title": s.title,
                     "content": s.content,
                     "priority": s.priority,
+                    "icon": s.icon,
                 }
                 for s in sorted(briefing.sections, key=lambda x: x.priority)
             ],

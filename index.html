@@ -1059,19 +1059,47 @@
 
         <!-- BRIEFING TAB -->
         <div id="briefing-view" class="tab-content">
-            <div class="glass-card bento-full" style="text-align: center;">
-                <div style="font-size: 2.5rem; margin-bottom: 12px;">🎙️</div>
-                <div class="label-sm" style="margin-bottom: 6px;">Market Briefing</div>
-                <div id="briefing-urgency"
-                    style="font-size: 0.75rem; font-weight: 800; letter-spacing:2px; color: var(--accent-primary);">
-                    NORMAL</div>
+            <!-- Header Card -->
+            <div class="glass-card bento-full" style="padding:20px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                    <div style="display:flex; align-items:center; gap:10px;">
+                        <div style="font-size:1.5rem;">🎙️</div>
+                        <div>
+                            <div class="label-sm" style="margin:0; font-size:0.7rem;">MARKET BRIEFING</div>
+                            <div id="briefing-time"
+                                style="font-size:0.55rem; color:var(--text-dim); font-family:'Fira Code'; margin-top:2px;">
+                            </div>
+                        </div>
+                    </div>
+                    <div id="briefing-urgency"
+                        style="font-size:0.6rem; font-weight:800; letter-spacing:2px; padding:4px 10px; border-radius:6px; background:rgba(0,255,157,0.1); color:var(--accent-primary); border:1px solid rgba(0,255,157,0.2);">
+                        NORMAL</div>
+                </div>
+                <!-- Executive Summary -->
+                <div
+                    style="padding:14px; background:rgba(255,255,255,0.02); border-radius:12px; border:1px solid var(--border-color); border-left:3px solid var(--accent-primary);">
+                    <div class="label-sm" style="margin-bottom:6px; color:var(--accent-primary);">EXECUTIVE SUMMARY
+                    </div>
+                    <p id="briefing-summary"
+                        style="font-size:0.85rem; color:var(--text-main); line-height:1.6; font-weight:500; margin:0;">
+                        Loading briefing...</p>
+                </div>
             </div>
-            <div class="glass-card bento-full" style="margin-top: 12px;">
-                <p id="briefing-summary"
-                    style="font-size: 0.8rem; color: var(--text-main); line-height: 1.6; font-weight:500;">Loading
-                    briefing...</p>
+
+            <!-- Briefing Loading -->
+            <div id="briefing-loading" style="display:none; text-align:center; padding:30px 0;">
+                <span class="loading-spinner"></span>
+                <div style="font-size:0.7rem; color:var(--text-dim); margin-top:10px; letter-spacing:1px;">COMPILING
+                    BRIEFING...</div>
             </div>
-            <div id="briefing-sections" style="display:flex; flex-direction:column; gap:12px; margin-top:12px;"></div>
+
+            <!-- Section Cards -->
+            <div id="briefing-sections" style="display:flex; flex-direction:column; gap:10px; margin-top:10px;"></div>
+
+            <!-- Section Count Badge -->
+            <div id="briefing-count"
+                style="text-align:center; padding:10px 0; font-size:0.55rem; color:var(--text-dim); letter-spacing:1px;">
+            </div>
         </div>
     </div>
 
@@ -2173,30 +2201,70 @@
             } else if (activeTab === 'stats') {
                 runBacktest(null); loadPerformance();
             } else if (activeTab === 'briefing') {
+                const bLoading = document.getElementById('briefing-loading');
+                const bSections = document.getElementById('briefing-sections');
                 const bSum = document.getElementById('briefing-summary');
-                if (bSum.textContent === 'No data') {
-                    bSum.innerHTML = 'Generating AI Briefing... <span class="loading-spinner"></span>';
-                }
+
+                // Show loading
+                bLoading.style.display = 'block';
+                bSections.innerHTML = '';
+                bSum.textContent = 'Compiling market intelligence...';
+
                 const res = await api('/briefing');
+                bLoading.style.display = 'none';
+
                 if (res.success && res.data) {
                     const b = res.data;
-                    const urgColors = { normal: 'var(--accent-primary)', alert: 'var(--warn-color)', critical: 'var(--down-color)' };
-                    document.getElementById('briefing-urgency').textContent = (b.urgency || 'normal').toUpperCase();
-                    document.getElementById('briefing-urgency').style.color = urgColors[b.urgency] || 'var(--accent-primary)';
 
-                    // Prevent duplicate text between summary and first section
-                    let finalSummary = b.summary || 'No data';
-                    if (b.sections && b.sections.length > 0 && finalSummary.trim() === b.sections[0].content.trim()) {
-                        finalSummary = "Continuous monitoring active. See details below.";
+                    // Urgency badge
+                    const urgEl = document.getElementById('briefing-urgency');
+                    const urgColors = {
+                        normal: { bg: 'rgba(0,255,157,0.1)', color: 'var(--accent-primary)', border: 'rgba(0,255,157,0.2)' },
+                        alert: { bg: 'rgba(255,171,0,0.1)', color: 'var(--warn-color)', border: 'rgba(255,171,0,0.2)' },
+                        critical: { bg: 'rgba(255,51,102,0.1)', color: 'var(--down-color)', border: 'rgba(255,51,102,0.2)' },
+                    };
+                    const uc = urgColors[b.urgency] || urgColors.normal;
+                    urgEl.textContent = (b.urgency || 'normal').toUpperCase();
+                    urgEl.style.color = uc.color;
+                    urgEl.style.background = uc.bg;
+                    urgEl.style.borderColor = uc.border;
+
+                    // Timestamp
+                    if (b.timestamp) {
+                        const ts = new Date(b.timestamp);
+                        document.getElementById('briefing-time').textContent = ts.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' UTC';
                     }
-                    document.getElementById('briefing-summary').innerHTML = parseMd(finalSummary);
 
-                    document.getElementById('briefing-sections').innerHTML = (b.sections || []).map(s => `
-                        <div class="glass-card bento-full">
-                            <h4 style="font-size:0.75rem; color:var(--text-main); margin-bottom:8px; text-transform:uppercase; letter-spacing:1px;">${s.title}</h4>
-                            <p style="font-size:0.9rem; color:var(--text-muted); line-height:1.6;">${parseMd(s.content)}</p>
-                        </div>
-                    `).join('');
+                    // Executive Summary (no duplication — backend now generates a proper one-liner)
+                    bSum.innerHTML = parseMd(b.summary || 'No data available');
+
+                    // Section Cards with icons and priority-based accent colors
+                    const priorityColors = {
+                        1: 'var(--down-color)',      // Critical = red
+                        2: 'var(--accent-primary)',   // High = green
+                        3: '#3b82f6',                 // Medium = blue
+                        4: 'var(--text-dim)',          // Low = dim
+                        5: 'var(--text-dim)',          // Default = dim
+                    };
+
+                    bSections.innerHTML = (b.sections || []).map(s => {
+                        const accentColor = priorityColors[s.priority] || 'var(--text-dim)';
+                        const icon = s.icon || '\ud83d\udccb';
+                        return `
+                            <div class="glass-card bento-full" style="border-left:3px solid ${accentColor}; padding:16px;">
+                                <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
+                                    <span style="font-size:1rem;">${icon}</span>
+                                    <h4 style="font-size:0.7rem; color:var(--text-main); margin:0; text-transform:uppercase; letter-spacing:1.5px; font-weight:800;">${s.title}</h4>
+                                </div>
+                                <div style="font-size:0.82rem; color:var(--text-muted); line-height:1.7;">${parseMd(s.content)}</div>
+                            </div>`;
+                    }).join('');
+
+                    // Section count
+                    document.getElementById('briefing-count').textContent =
+                        `${b.section_count || b.sections?.length || 0} SECTIONS ANALYZED`;
+                } else {
+                    bSum.textContent = res.error || 'Failed to load briefing';
                 }
             }
         }
