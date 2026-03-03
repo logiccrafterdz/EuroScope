@@ -416,7 +416,7 @@ class APIServer:
 
             loop = asyncio.get_event_loop()
             bt_result = await asyncio.wait_for(
-                loop.run_in_executor(None, lambda: engine.run(candles, strategy_filter=strategy)),
+                loop.run_in_executor(None, lambda: engine.run_fast(candles, strategy_filter=strategy)),
                 timeout=45.0
             )
 

@@ -217,6 +217,181 @@ class BacktestEngine:
         self._compute_metrics(result)
         return result
 
+    def run_fast(self, candles: list[dict], strategy_filter: Optional[str] = None,
+                 lookback: int = 50, slippage_pips: float = 1.0,
+                 commission_pips: float = 0.5) -> BacktestResult:
+        """
+        Fast backtest — pre-computes all indicators once as arrays,
+        then iterates through pre-computed values.
+
+        ~50x faster than run() because it avoids creating DataFrames
+        and re-computing indicators for each bar.
+        """
+        result = BacktestResult(
+            strategy=strategy_filter or "all",
+            bars_tested=len(candles),
+        )
+
+        if len(candles) < lookback + 10:
+            logger.warning("Not enough candles for backtest")
+            return result
+
+        # ── Step 1: Build ONE DataFrame from all candles ──
+        df = pd.DataFrame(candles).rename(columns={
+            "open": "Open", "high": "High",
+            "low": "Low", "close": "Close",
+            "volume": "Volume",
+        })
+
+        close = df["Close"].astype(float)
+        high = df["High"].astype(float)
+        low = df["Low"].astype(float)
+        n = len(df)
+
+        # ── Step 2: Pre-compute ALL indicators as arrays (ONE pass) ──
+        from ..analysis.technical import rsi, macd, ema, bollinger_bands, atr, adx
+
+        rsi_arr = rsi(close)
+        macd_data = macd(close)
+        macd_hist = macd_data["histogram"]
+        ema20_arr = ema(close, 20)
+        ema50_arr = ema(close, 50)
+        bb = bollinger_bands(close)
+        bb_upper = bb["upper"]
+        bb_lower = bb["lower"]
+        bb_middle = bb["middle"]
+        atr_arr = atr(high, low, close)
+        adx_arr = adx(high, low, close)
+        # Rolling average ATR (14-period lookback)
+        atr_avg14 = atr_arr.rolling(14, min_periods=1).mean()
+        # Simple S/R from rolling highs/lows (20-period window)
+        rolling_high = high.rolling(20, min_periods=5).max()
+        rolling_low = low.rolling(20, min_periods=5).min()
+
+        logger.debug(f"Fast backtest: pre-computed {n} bars of indicators")
+
+        # ── Step 3: Iterate through pre-computed values ──
+        open_trade: Optional[BacktestTrade] = None
+
+        for i in range(lookback, n):
+            c_price = float(close.iloc[i])
+            c_high = float(high.iloc[i])
+            c_low = float(low.iloc[i])
+
+            # Check open trade SL/TP
+            if open_trade:
+                closed = self._check_exit(open_trade, c_high, c_low, i,
+                                          slippage=slippage_pips, commission=commission_pips)
+                if closed:
+                    result.trades.append(closed)
+                    open_trade = None
+                continue
+
+            # Build indicators dict from pre-computed arrays
+            r = float(rsi_arr.iloc[i]) if not pd.isna(rsi_arr.iloc[i]) else None
+            a = float(adx_arr.iloc[i]) if not pd.isna(adx_arr.iloc[i]) else None
+            a_prev = float(adx_arr.iloc[i-1]) if i > 0 and not pd.isna(adx_arr.iloc[i-1]) else None
+            e20 = float(ema20_arr.iloc[i]) if not pd.isna(ema20_arr.iloc[i]) else None
+            e50 = float(ema50_arr.iloc[i]) if not pd.isna(ema50_arr.iloc[i]) else None
+            hist = float(macd_hist.iloc[i]) if not pd.isna(macd_hist.iloc[i]) else None
+            atr_v = float(atr_arr.iloc[i]) if not pd.isna(atr_arr.iloc[i]) else None
+            atr_a = float(atr_avg14.iloc[i]) if not pd.isna(atr_avg14.iloc[i]) else None
+            bb_u = float(bb_upper.iloc[i]) if not pd.isna(bb_upper.iloc[i]) else None
+            bb_l = float(bb_lower.iloc[i]) if not pd.isna(bb_lower.iloc[i]) else None
+
+            if r is None or a is None:
+                continue
+
+            # Determine overall bias from EMAs + RSI
+            if e20 and e50:
+                if c_price > e20 > e50 and r > 50:
+                    bias = "bullish"
+                elif c_price < e20 < e50 and r < 50:
+                    bias = "bearish"
+                else:
+                    bias = "neutral"
+            else:
+                bias = "neutral"
+
+            indicators = {
+                "adx": a,
+                "adx_prev": a_prev,
+                "rsi": r,
+                "overall_bias": bias,
+                "ema_20": e20,
+                "ema_50": e50,
+                "macd": {"histogram_latest": hist},
+                "atr": {"current": atr_v, "avg_14": atr_a},
+                "bollinger": {
+                    "upper": bb_u,
+                    "lower": bb_l,
+                    "current_price": c_price,
+                },
+            }
+
+            # Simple S/R from rolling highs/lows
+            res_level = float(rolling_high.iloc[i]) if not pd.isna(rolling_high.iloc[i]) else c_price + 0.005
+            sup_level = float(rolling_low.iloc[i]) if not pd.isna(rolling_low.iloc[i]) else c_price - 0.005
+
+            levels_data = {
+                "current_price": c_price,
+                "support": [sup_level],
+                "resistance": [res_level],
+            }
+
+            # Detect strategy (cheap — just conditional logic)
+            sig = self.strategy_engine.detect_strategy(indicators, levels_data, [])
+
+            if strategy_filter and sig.strategy != strategy_filter:
+                continue
+            if sig.direction not in ("BUY", "SELL"):
+                continue
+            if sig.confidence < 50:
+                continue
+
+            # Risk assessment
+            trade_risk = self.risk_manager.assess_trade(
+                sig.direction, c_price, atr=atr_v,
+                support=[sup_level],
+                resistance=[res_level],
+            )
+
+            if not trade_risk.approved:
+                continue
+
+            # Simulate fill with slippage
+            slip_price = slippage_pips * 0.0001
+            entry_price, stop_loss, take_profit = self._simulate_fill(
+                sig.direction, c_price,
+                trade_risk.stop_loss, trade_risk.take_profit,
+                slip_price,
+            )
+
+            open_trade = BacktestTrade(
+                direction=sig.direction,
+                entry_price=entry_price,
+                stop_loss=stop_loss,
+                take_profit=take_profit,
+                strategy=sig.strategy,
+                entry_bar=i,
+                slippage_pips=slippage_pips,
+            )
+
+        # Close remaining trade
+        if open_trade:
+            last_price = float(close.iloc[-1])
+            open_trade.exit_price = last_price
+            open_trade.exit_bar = n - 1
+            if open_trade.direction == "BUY":
+                open_trade.pnl_pips = round((last_price - open_trade.entry_price) * 10000, 1)
+            else:
+                open_trade.pnl_pips = round((open_trade.entry_price - last_price) * 10000, 1)
+            open_trade.is_win = open_trade.pnl_pips > 0
+            result.trades.append(open_trade)
+
+        self._compute_metrics(result)
+        return result
+
     def compare_strategies(self, candles: list[dict],
                             strategies: list[str] = None,
                             slippage: float = 1.5,
