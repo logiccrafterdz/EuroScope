@@ -281,10 +281,11 @@ class APIServer:
                 mood_phrase = "EURUSD market status is unknown."
             
             res_sent = analyze_sentiment_onnx(mood_phrase)
+            raw_label = (res_sent.get("sentiment") or res_sent.get("label") or "neutral").upper()
             sentiment_data = {
-                "label": res_sent["label"],
-                "score": res_sent["score"],
-                "provider": res_sent["provider"]
+                "label": raw_label if raw_label in ("BULLISH", "BEARISH", "NEUTRAL") else "NEUTRAL",
+                "score": res_sent.get("score", 0.0),
+                "provider": res_sent.get("provider", "unknown")
             }
         except Exception as e:
             logger.warning(f"API: Sentiment analysis failed: {e}")

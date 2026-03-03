@@ -9,6 +9,9 @@ import os
 import logging
 from typing import Optional
 
+# Suppress noisy "PyTorch was not found" warning from transformers (we use ONNX Runtime)
+os.environ.setdefault("TRANSFORMERS_NO_ADVISORY_WARNINGS", "1")
+
 logger = logging.getLogger("euroscope.data.sentiment")
 
 # Global instances for lazy loading
