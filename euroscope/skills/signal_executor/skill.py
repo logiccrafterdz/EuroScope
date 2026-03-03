@@ -201,9 +201,19 @@ class SignalExecutorSkill(BaseSkill):
             "entry_price": entry_price,
             "stop_loss": stop_loss,
             "take_profit": take_profit,
-            "status": "open"
+            "status": "open",
+            "strategy": strategy,
+            "confidence": confidence
         }
         context.open_positions.append(trade_data)
+        
+        # Fire webhook
+        from ...bot.webhooks import WebhookDispatcher
+        try:
+            webhooks = WebhookDispatcher(self._config)
+            await webhooks.dispatch("trade_opened", trade_data)
+        except Exception as e:
+            logger.warning(f"Failed to dispatch trade_opened webhook: {e}")
         
         return SkillResult(success=True, data=trade_data, metadata={"signal_id": signal_id})
 
@@ -306,6 +316,14 @@ class SignalExecutorSkill(BaseSkill):
 
         result = await self._executor.close_signal(signal_id, exit_price, reason="manual")
         if result:
+            # Fire webhook
+            from ...bot.webhooks import WebhookDispatcher
+            try:
+                webhooks = WebhookDispatcher(self._config)
+                await webhooks.dispatch("trade_closed", result)
+            except Exception as e:
+                logger.warning(f"Failed to dispatch trade_closed webhook: {e}")
+                
             return SkillResult(success=True, data=result)
         return SkillResult(success=False, error=f"Signal #{signal_id} not found or not open")
 

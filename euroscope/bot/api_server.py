@@ -14,6 +14,7 @@ from datetime import datetime
 from aiohttp import web
 
 from ..skills.base import SkillContext
+from .webhooks import WebhookDispatcher
 
 logger = logging.getLogger("euroscope.api")
 
@@ -32,6 +33,9 @@ class APIServer:
         self._forecast_cache_ts = 0.0
         self._forecast_lock = asyncio.Lock()
         self._FORECAST_TTL = 300  # Cache forecast for 5 minutes
+        
+        # Initialize WebhookDispatcher for outbound events
+        self.webhooks = WebhookDispatcher(self.config)
 
     @web.middleware
     async def _cors_middleware(self, request, handler):
@@ -679,6 +683,8 @@ class APIServer:
                 web.get("/", self._serve_mini_app), 
                 web.get("/app", self._serve_mini_app), 
                 web.get("/healthz", self._api_health), 
+                
+                # Legacy v0 routes (For backwards compatibility with existing frontend)
                 web.get("/api/summary", self._api_summary), 
                 web.get("/api/signals", self._api_signals), 
                 web.get("/api/scan_signals", self._api_scan_signals), 
@@ -698,7 +704,29 @@ class APIServer:
                 web.get("/api/levels", self._api_levels),
                 web.get("/api/settings", self._api_settings),
                 web.post("/api/settings", self._api_settings_update),
-                web.post("/api/emergency", self._api_emergency)
+                web.post("/api/emergency", self._api_emergency),
+                
+                # New v1 versioned routes
+                web.get("/api/v1/summary", self._api_summary), 
+                web.get("/api/v1/signals", self._api_signals), 
+                web.get("/api/v1/scan_signals", self._api_scan_signals), 
+                web.get("/api/v1/alerts", self._api_alerts), 
+                web.get("/api/v1/analysis", self._api_analysis), 
+                web.get("/api/v1/candles", self._api_candles), 
+                web.get("/api/v1/status", self._api_status), 
+                web.get("/api/v1/forecast", self._api_forecast), 
+                web.get("/api/v1/macro", self._api_macro), 
+                web.get("/api/v1/backtest", self._api_backtest), 
+                web.get("/api/v1/performance", self._api_performance), 
+                web.get("/api/v1/account", self._api_account),
+                web.get("/api/v1/briefing", self._api_briefing), 
+                web.get("/api/v1/trades", self._api_trades), 
+                web.get("/api/v1/history", self._api_history),
+                web.get("/api/v1/patterns", self._api_patterns),
+                web.get("/api/v1/levels", self._api_levels),
+                web.get("/api/v1/settings", self._api_settings),
+                web.post("/api/v1/settings", self._api_settings_update),
+                web.post("/api/v1/emergency", self._api_emergency)
             ])
             port = int(os.getenv("PORT", 8080))
             runner = web.AppRunner(app)
