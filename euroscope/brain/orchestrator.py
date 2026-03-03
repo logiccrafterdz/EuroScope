@@ -213,6 +213,11 @@ class Orchestrator:
         if context is None:
             context = self.global_context
 
+        base_tf = market_params.get("timeframe", "H1") if market_params else "H1"
+        if self.storage:
+            prev_state = await self.storage.load_json(f"market_state_{base_tf}") or {}
+            context.metadata["previous_market_state"] = prev_state
+
         # 1. Detect session context first (needed by all safety checks)
         await self.run_skill("session_context", "detect", context=context)
 
@@ -242,7 +247,6 @@ class Orchestrator:
         params = {"market_data": market_params} if market_params else {}
 
         # --- Phase 2: MTF Confirmation (Higher Timeframe Bias) ---
-        base_tf = market_params.get("timeframe", "H1") if market_params else "H1"
         higher_tf = "D1" if base_tf in ("H1", "H4", "M15", "M30") else "W1"
         
         mtf_ctx = SkillContext()
@@ -278,6 +282,16 @@ class Orchestrator:
         market_state = self._infer_market_state(ctx) or {}
         if market_state:
             ctx.metadata.update(market_state)
+            
+            prev_state = ctx.metadata.get("previous_market_state", {})
+            if prev_state and prev_state.get("regime") and prev_state.get("regime") != market_state.get("regime"):
+                shift_msg = f"Shift from {prev_state.get('regime')} to {market_state.get('regime')}"
+                ctx.metadata["regime_shift"] = shift_msg
+                logger.warning(f"MARKET REGIME SHIFT DETECTED ({base_tf}): {shift_msg}")
+                
+            if self.storage:
+                market_state["updated_at"] = datetime.now(UTC).isoformat()
+                await self.storage.save_json(f"market_state_{base_tf}", market_state)
 
         if market_state.get("regime") in ("trending", "breakout") or market_state.get("volatility") == "high":
             await self.run_pipeline([("fundamental_analysis", "full")], ctx)
