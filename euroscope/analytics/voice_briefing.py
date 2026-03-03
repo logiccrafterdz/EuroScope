@@ -174,8 +174,8 @@ class VoiceBriefingEngine:
                 # The 'formatted' field contains the raw aggregated newsletter style bullet points
                 formatted_news = result.metadata.get("formatted") or str(result.data)
                 
-                # Truncate only for extreme length — 1200 chars keeps 2-3 full paragraphs
-                content = formatted_news[:1200] + "..." if len(formatted_news) > 1200 else formatted_news
+                # Truncate only for extreme length — 3000 chars keeps full newsletter context
+                content = formatted_news[:3000] + "..." if len(formatted_news) > 3000 else formatted_news
                 
                 return BriefingSection(
                     title="Macro & Geopolitics",
@@ -199,8 +199,8 @@ class VoiceBriefingEngine:
             mem = await self.storage.get_memory('active_forecast', {})
             if mem and mem.get('text'):
                 text = mem.get('text', '')
-                # 800 chars keeps most of the forecast reasoning intact
-                snippet = text[:800] + "..." if len(text) > 800 else text
+                # 2000 chars keeps the full forecast reasoning intact
+                snippet = text[:2000] + "..." if len(text) > 2000 else text
                 return BriefingSection(
                     title="Strategic Scenarios",
                     content=snippet,

@@ -147,13 +147,13 @@ class Forecaster:
             pred_id = await self.memory.record_prediction(
                 direction=direction,
                 confidence=confidence,
-                reasoning=forecast_text[:500],
+                reasoning=forecast_text,
                 target_price=price_info.get("price"),
                 timeframe=timeframe,
             )
             if self.agent.vector_memory:
                 self.agent.vector_memory.store_analysis(
-                    forecast_text[:800],
+                    forecast_text,
                     metadata={
                         "timeframe": timeframe,
                         "direction": direction,

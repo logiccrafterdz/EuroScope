@@ -15,6 +15,7 @@ from typing import Optional
 logger = logging.getLogger("euroscope.data.news")
 
 # Keywords that are highly relevant to EUR/USD
+# Keywords that are highly relevant to EUR/USD
 EURUSD_KEYWORDS = [
     "EUR/USD", "EURUSD", "euro dollar",
     "ECB", "European Central Bank", "Lagarde",
@@ -241,7 +242,7 @@ class NewsEngine:
         lines = ["📰 *EUR/USD News*\n"]
         for i, a in enumerate(articles, 1):
             title = a.get("title", "Untitled")
-            desc = a.get("description", "")[:120]
+            desc = a.get("description", "")[:400]
             source = a.get("source", "")
             age = a.get("published", "")
 
