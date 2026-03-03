@@ -443,8 +443,9 @@ class CronScheduler:
         """Phase 4: Autonomous Paper Trader that scans the market and executes trades."""
         async def auto_trade_task():
             logger.info("Auto Trader task starting...")
-            if getattr(self.config, "paper_trading_only", True) is False:
-                logger.warning("Paper trading is disabled. Auto-trader will not run.")
+            bot_settings = getattr(self.bot, "bot_settings", {})
+            if not bot_settings.get("auto_trading_enabled"):
+                logger.debug("Auto Trader skipped: auto_trading_enabled is OFF")
                 return
                 
             if self._is_quiet_time():

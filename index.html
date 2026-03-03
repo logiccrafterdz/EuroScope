@@ -878,6 +878,15 @@
         <!-- TRADES TAB -->
         <div id="signals-view" class="tab-content">
             <div style="margin-bottom: 16px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                    <div class="label-sm" style="font-size:0.7rem;">AUTO-TRADING</div>
+                    <div id="auto-trade-toggle" onclick="toggleAutoTrading()"
+                        style="width:44px; height:24px; border-radius:12px; background:rgba(255,255,255,0.1); border:1px solid var(--border-color); cursor:pointer; position:relative; transition:all 0.3s ease;">
+                        <div id="auto-trade-knob"
+                            style="width:18px; height:18px; border-radius:50%; background:var(--text-dim); position:absolute; top:2px; left:2px; transition:all 0.3s ease;">
+                        </div>
+                    </div>
+                </div>
                 <button class="action-btn" onclick="scanSignals()" id="scan-btn"
                     style="background: var(--accent-primary); color: #000; box-shadow: 0 0 15px var(--accent-glow); display: flex; align-items: center; justify-content: center; gap: 8px;">
                     <span id="scan-btn-text">AUTO-SCAN FOR TRADES</span> <span class="loading-spinner" id="scan-spinner"
@@ -1466,6 +1475,53 @@
             }
         }
 
+        let _autoTradingEnabled = false;
+
+        async function toggleAutoTrading() {
+            _autoTradingEnabled = !_autoTradingEnabled;
+            const toggle = document.getElementById('auto-trade-toggle');
+            const knob = document.getElementById('auto-trade-knob');
+            if (_autoTradingEnabled) {
+                toggle.style.background = 'rgba(0,255,157,0.25)';
+                toggle.style.borderColor = 'var(--accent-primary)';
+                knob.style.left = '22px';
+                knob.style.background = 'var(--accent-primary)';
+            } else {
+                toggle.style.background = 'rgba(255,255,255,0.1)';
+                toggle.style.borderColor = 'var(--border-color)';
+                knob.style.left = '2px';
+                knob.style.background = 'var(--text-dim)';
+            }
+            try {
+                await fetch(`${API}/settings_update`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ auto_trading_enabled: _autoTradingEnabled })
+                });
+                try { tg.HapticFeedback.impactOccurred('light'); } catch (e) { }
+            } catch (e) {
+                log('Failed to update auto-trading setting', 'error');
+            }
+        }
+
+        function setToggleUI(enabled) {
+            _autoTradingEnabled = !!enabled;
+            const toggle = document.getElementById('auto-trade-toggle');
+            const knob = document.getElementById('auto-trade-knob');
+            if (!toggle || !knob) return;
+            if (_autoTradingEnabled) {
+                toggle.style.background = 'rgba(0,255,157,0.25)';
+                toggle.style.borderColor = 'var(--accent-primary)';
+                knob.style.left = '22px';
+                knob.style.background = 'var(--accent-primary)';
+            } else {
+                toggle.style.background = 'rgba(255,255,255,0.1)';
+                toggle.style.borderColor = 'var(--border-color)';
+                knob.style.left = '2px';
+                knob.style.background = 'var(--text-dim)';
+            }
+        }
+
         async function scanSignals() {
             const btnText = document.getElementById('scan-btn-text');
             const spinner = document.getElementById('scan-spinner');
@@ -1851,6 +1907,13 @@
                     warnEl.style.display = 'none';
                 }
             } else if (activeTab === 'signals') {
+                // Load auto-trading toggle state
+                api('/settings').then(res => {
+                    if (res.success && res.data) {
+                        setToggleUI(res.data.auto_trading_enabled);
+                    }
+                });
+
                 const resTrades = await api('/trades');
                 const listOpen = document.getElementById('open-trades-list');
                 const countBadge = document.getElementById('open-trades-count');
