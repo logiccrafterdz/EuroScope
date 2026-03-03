@@ -61,6 +61,36 @@ class BacktestMetrics:
         
         execution_drag_usd = (total_slippage_pips + total_spread_pips) * (sum(p.size for p in self.positions) / len(self.positions) if self.positions else 0) * pip_value
         
+        # Risk-Adjusted Metrics
+        # Assuming returns are calculated per trade for simplicity (in a real scenario, this would be daily/monthly returns)
+        trade_returns_pct = [(p.pnl_pips * p.size * pip_value) / self.initial_balance * 100 for p in self.positions]
+        
+        sharpe_ratio = 0.0
+        sortino_ratio = 0.0
+        calmar_ratio = 0.0
+        
+        if len(trade_returns_pct) > 1:
+            mean_return = np.mean(trade_returns_pct)
+            std_dev = np.std(trade_returns_pct)
+            
+            # Annualization factor approximation (assuming ~252 trades/year for daily trading)
+            # In a real system, this should be time-based. We'll use a fixed multiplier for demonstration.
+            ann_factor = np.sqrt(252) 
+            
+            if std_dev > 0:
+                sharpe_ratio = (mean_return / std_dev) * ann_factor
+                
+            downside_returns = [r for r in trade_returns_pct if r < 0]
+            if downside_returns:
+                downside_std_dev = np.std(downside_returns)
+                if downside_std_dev > 0:
+                    sortino_ratio = (mean_return / downside_std_dev) * ann_factor
+                    
+        if max_dd_pct > 0:
+            # Assuming return_pct is total return, annualized for Calmar would be needed. 
+            # Using total return for simplicity in this tear sheet context.
+            calmar_ratio = return_pct / max_dd_pct
+            
         lines = [
             "===========================================================",
             "        EUROSCOPE BACKTEST TEAR SHEET (OFFLINE)            ",
@@ -70,6 +100,11 @@ class BacktestMetrics:
             f"Net Profit:          ${net_profit:.2f} ({return_pct:.2f}%)",
             f"Profit Factor:       {profit_factor:.2f}",
             f"Max Drawdown:        {max_dd_pct:.2f}%",
+            "-----------------------------------------------------------",
+            "RISK-ADJUSTED METRICS",
+            f"Sharpe Ratio:        {sharpe_ratio:.2f}",
+            f"Sortino Ratio:       {sortino_ratio:.2f}",
+            f"Calmar Ratio:        {calmar_ratio:.2f}",
             "-----------------------------------------------------------",
             "EXECUTION DEGRADATION ANALYSIS",
             f"Avg Slippage Drop:   {total_slippage_pips/total_trades:.2f} pips/trade",
