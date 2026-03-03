@@ -27,6 +27,11 @@ class APIServer:
     def __init__(self, bot_instance):
         self.bot = bot_instance
         self.config = bot_instance.config
+        # Forecast cache: prevents repeated slow LLM calls and fixes race conditions
+        self._forecast_cache = None
+        self._forecast_cache_ts = 0.0
+        self._forecast_lock = asyncio.Lock()
+        self._FORECAST_TTL = 300  # Cache forecast for 5 minutes
 
     @web.middleware
     async def _cors_middleware(self, request, handler):
@@ -95,20 +100,41 @@ class APIServer:
     async def _api_forecast(self, request):
         """API endpoint for deep AI forecasting and reasoning."""
         logger.debug("API: Running deep AI forecast...")
+        import time
         try:
             tf = request.query.get("timeframe", "24 hours")
-            result = await asyncio.wait_for(self.bot.forecaster.generate_forecast(tf), timeout=60)
-            return web.json_response({
-                "success": True,
-                "data": {
-                    "direction": result.get("direction", "NEUTRAL"),
-                    "confidence": result.get("confidence", 0) / 100,
-                    "reasoning": result.get("text", ""),
-                    "timeframe": tf,
-                    "price": result.get("price"),
-                    "timestamp": datetime.now().isoformat(),
+            now = time.monotonic()
+
+            # Return cached result if still fresh (avoids expensive parallel LLM calls)
+            if self._forecast_cache and (now - self._forecast_cache_ts) < self._FORECAST_TTL:
+                logger.debug("API: Returning cached forecast (TTL valid).")
+                return web.json_response(self._forecast_cache)
+
+            # Use a lock so only ONE in-flight forecast runs at a time
+            # If another request is already computing, it waits and then gets the cache
+            async with self._forecast_lock:
+                # Double-check cache after acquiring the lock
+                now = time.monotonic()
+                if self._forecast_cache and (now - self._forecast_cache_ts) < self._FORECAST_TTL:
+                    logger.debug("API: Returning cached forecast (post-lock TTL valid).")
+                    return web.json_response(self._forecast_cache)
+
+                result = await asyncio.wait_for(self.bot.forecaster.generate_forecast(tf), timeout=90)
+                response_payload = {
+                    "success": True,
+                    "data": {
+                        "direction": result.get("direction", "NEUTRAL"),
+                        "confidence": result.get("confidence", 0) / 100,
+                        "reasoning": result.get("text", ""),
+                        "timeframe": tf,
+                        "price": result.get("price"),
+                        "timestamp": datetime.now().isoformat(),
+                    }
                 }
-            })
+                # Store in cache
+                self._forecast_cache = response_payload
+                self._forecast_cache_ts = time.monotonic()
+                return web.json_response(response_payload)
         except asyncio.TimeoutError:
             return web.json_response({
                 "success": False,

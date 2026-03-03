@@ -1638,43 +1638,53 @@
                     statusEl.style.display = 'flex'; statusEl.textContent = "SYNC FAILED";
                 }
             } else if (activeTab === 'forecast') {
+                // --- RACE CONDITION GUARD ---
+                // Skip if a forecast request is already in-flight
+                if (window._forecastLoading) return;
+                window._forecastLoading = true;
+                // ---
+
                 const fText = document.getElementById('forecast-text');
                 let progressInterval;
-                if (fText.textContent.includes('Awaiting') || fText.textContent === '...') {
+                if (!fText.dataset.loaded) {
                     let progress = 0;
                     fText.innerHTML = `AI analyzing market conditions... <span id="forecast-progress" style="color:var(--accent-primary); font-family:'Fira Code'; font-weight:bold;">0%</span> <span class="loading-spinner"></span>`;
 
                     progressInterval = setInterval(() => {
                         progress += Math.floor(Math.random() * 5) + 1;
                         if (progress > 99) progress = 99;
-
                         const pSpan = document.getElementById('forecast-progress');
                         if (pSpan) pSpan.textContent = progress + '%';
                     }, 800);
                 }
-                const res = await api('/forecast');
-                if (progressInterval) clearInterval(progressInterval);
+                try {
+                    const res = await api('/forecast');
+                    if (progressInterval) clearInterval(progressInterval);
 
-                if (res.success && res.data) {
-                    const d = res.data;
-                    const dir = String(d.direction || 'NEUTRAL').toUpperCase();
-                    document.getElementById('forecast-dir').textContent = dir;
-                    const isUp = dir === 'BUY' || dir === 'BULLISH';
-                    const isDown = dir === 'SELL' || dir === 'BEARISH';
-                    document.getElementById('forecast-dir').style.color = isUp ? 'var(--up-color)' : isDown ? 'var(--down-color)' : 'var(--text-muted)';
-                    document.getElementById('forecast-dir').style.textShadow = `0 0 20px ${isUp ? 'var(--up-color)' : isDown ? 'var(--down-color)' : 'transparent'}`;
+                    if (res.success && res.data) {
+                        fText.dataset.loaded = 'true'; // Mark as loaded so we don't show loading next time
+                        const d = res.data;
+                        const dir = String(d.direction || 'NEUTRAL').toUpperCase();
+                        document.getElementById('forecast-dir').textContent = dir;
+                        const isUp = dir === 'BUY' || dir === 'BULLISH';
+                        const isDown = dir === 'SELL' || dir === 'BEARISH';
+                        document.getElementById('forecast-dir').style.color = isUp ? 'var(--up-color)' : isDown ? 'var(--down-color)' : 'var(--text-muted)';
+                        document.getElementById('forecast-dir').style.textShadow = `0 0 20px ${isUp ? 'var(--up-color)' : isDown ? 'var(--down-color)' : 'transparent'}`;
 
-                    // Dynamic Gradient for Confidence Bar
-                    const color = isUp ? 'var(--up-color)' : isDown ? 'var(--down-color)' : 'var(--text-muted)';
-                    const bar = document.getElementById('forecast-conf-bar');
-                    bar.style.width = `${(d.confidence || 0) * 100}%`;
-                    bar.style.background = `linear-gradient(90deg, transparent, ${color})`;
-                    bar.style.boxShadow = `0 0 15px ${color}`;
+                        // Dynamic Gradient for Confidence Bar
+                        const color = isUp ? 'var(--up-color)' : isDown ? 'var(--down-color)' : 'var(--text-muted)';
+                        const bar = document.getElementById('forecast-conf-bar');
+                        bar.style.width = `${(d.confidence || 0) * 100}%`;
+                        bar.style.background = `linear-gradient(90deg, transparent, ${color})`;
+                        bar.style.boxShadow = `0 0 15px ${color}`;
 
-                    document.getElementById('forecast-conf-text').textContent = `${((d.confidence || 0) * 100).toFixed(0)}%`;
-                    document.getElementById('forecast-text').innerHTML = parseMd(d.reasoning || "...");
-                } else if (res.error) {
-                    document.getElementById('forecast-text').innerHTML = `<span style="color:var(--down-color)">${res.error}</span>`;
+                        document.getElementById('forecast-conf-text').textContent = `${((d.confidence || 0) * 100).toFixed(0)}%`;
+                        document.getElementById('forecast-text').innerHTML = parseMd(d.reasoning || "...");
+                    } else if (res.error) {
+                        document.getElementById('forecast-text').innerHTML = `<span style="color:var(--down-color)">${res.error}</span>`;
+                    }
+                } finally {
+                    window._forecastLoading = false;
                 }
             } else if (activeTab === 'analysis') {
                 const res = await api('/analysis');
