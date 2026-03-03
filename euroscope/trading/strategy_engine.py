@@ -118,128 +118,54 @@ class StrategyEngine:
 
     def _detect_regime(self, indicators: dict) -> RegimeInfo:
         """
-        Determine market regime using multi-factor scoring.
-
-        Returns RegimeInfo with regime type, strength (0-1), direction,
-        and supporting evidence. Uses ADX + slope, EMA alignment,
-        Bollinger Band squeeze, MACD histogram, and RSI.
+        Determine market regime using RegimeAdaptiveEngine as the single source of truth.
         """
-        adx = indicators.get("adx")
-        adx_prev = indicators.get("adx_prev")  # Previous ADX for slope
-        rsi = indicators.get("rsi")
+        if not hasattr(self, '_regime_engine'):
+            from .regime_adaptive import RegimeAdaptiveEngine
+            self._regime_engine = RegimeAdaptiveEngine()
+            
+        # Map StrategyEngine indicators to the format expected by RegimeAdaptiveEngine
         bb = indicators.get("bollinger", {})
-        macd = indicators.get("macd", {})
+        mapped_inds = {
+            "ADX": {"value": indicators.get("adx", 20)},
+            "ATR": {"value": indicators.get("atr", 0), "average": indicators.get("atr_avg", 0)},
+            "BB": {
+                "upper": bb.get("upper", 0),
+                "lower": bb.get("lower", 0),
+                "current_price": bb.get("current_price", 0),
+            }
+        }
+        
+        # Calculate bandwidth if possible
+        if mapped_inds["BB"]["upper"] and mapped_inds["BB"]["lower"] and mapped_inds["BB"]["current_price"]:
+            width = (mapped_inds["BB"]["upper"] - mapped_inds["BB"]["lower"]) / mapped_inds["BB"]["current_price"] * 100
+            mapped_inds["BB"]["bandwidth"] = width
+            
+        regime_name = self._regime_engine.detect_regime(mapped_inds)
+        
+        # Determine direction
         overall_bias = indicators.get("overall_bias", "neutral")
         ema_20 = indicators.get("ema_20")
         ema_50 = indicators.get("ema_50")
-
-        # ── Score each regime ──
-        trend_score = 0.0
-        breakout_score = 0.0
-        ranging_score = 0.05  # Baseline: assume ranging until proven otherwise
-        details = {}
-
-        # --- ADX analysis (with slope) ---
-        adx_rising = None  # None = unknown slope
-        if adx is not None:
-            if adx_prev is not None:
-                adx_rising = adx > adx_prev
-                details["adx_slope"] = "rising" if adx_rising else "falling"
-
-            if adx > 30:
-                # Rising: 0.35, Unknown: 0.28, Falling: 0.20
-                trend_score += 0.35 if adx_rising else (0.20 if adx_rising is False else 0.28)
-                slope_icon = '↑' if adx_rising else ('↓' if adx_rising is False else '→')
-                details["adx"] = f"{adx:.0f} (strong{slope_icon})"
-            elif adx > 25:
-                # Rising: 0.25, Unknown: 0.20, Falling: 0.12
-                trend_score += 0.25 if adx_rising else (0.12 if adx_rising is False else 0.20)
-                slope_icon = '↑' if adx_rising else ('↓' if adx_rising is False else '→')
-                details["adx"] = f"{adx:.0f} (moderate{slope_icon})"
-            elif adx < 20:
-                ranging_score += 0.25
-                details["adx"] = f"{adx:.0f} (weak — favors ranging)"
-            else:
-                # ADX 20-25: ambiguous zone
-                ranging_score += 0.10
-                details["adx"] = f"{adx:.0f} (ambiguous)"
-
-        # --- EMA alignment ---
-        if ema_20 is not None and ema_50 is not None:
-            if ema_20 > ema_50:
-                trend_score += 0.20
-                details["ema_alignment"] = "bullish (EMA20 > EMA50)"
-            elif ema_20 < ema_50:
-                trend_score += 0.20
-                details["ema_alignment"] = "bearish (EMA20 < EMA50)"
-            else:
-                ranging_score += 0.10
-                details["ema_alignment"] = "flat"
-
-        # --- MACD histogram momentum ---
-        hist = macd.get("histogram_latest")
-        if hist is not None:
-            if abs(hist) > 0.0003:  # Meaningful momentum for EUR/USD
-                trend_score += 0.15
-                details["macd"] = f"strong ({'bullish' if hist > 0 else 'bearish'})"
-            else:
-                ranging_score += 0.10
-                details["macd"] = "flat"
-
-        # --- Bollinger Band analysis ---
-        bb_upper = bb.get("upper")
-        bb_lower = bb.get("lower")
-        current = bb.get("current_price", 0)
-
-        if bb_upper and bb_lower and current:
-            bb_width = (bb_upper - bb_lower) / current * 100 if current else 0
-            details["bb_width"] = f"{bb_width:.3f}%"
-
-            if bb_width < 0.3:  # Tight squeeze → breakout loading
-                breakout_score += 0.30
-                details["bb_squeeze"] = True
-            elif bb_width < 0.5:
-                breakout_score += 0.15
-            else:
-                ranging_score += 0.05
-
-            if current > bb_upper or current < bb_lower:
-                breakout_score += 0.25
-                details["bb_breakout"] = "above" if current > bb_upper else "below"
-
-        # --- RSI extremes ---
-        if rsi is not None:
-            if rsi > 75 or rsi < 25:
-                breakout_score += 0.15
-                details["rsi_extreme"] = f"{rsi:.0f}"
-            elif 40 < rsi < 60:
-                ranging_score += 0.10
-
-        # ── Determine direction ──
+        
         if overall_bias == "bullish" or (ema_20 and ema_50 and ema_20 > ema_50):
             direction = "bullish"
         elif overall_bias == "bearish" or (ema_20 and ema_50 and ema_20 < ema_50):
             direction = "bearish"
         else:
             direction = "neutral"
-
-        # ── Pick winning regime ──
-        scores = {
-            "trending": round(trend_score, 3),
-            "breakout": round(breakout_score, 3),
-            "ranging": round(ranging_score, 3),
-        }
-        details["scores"] = scores
-        regime = max(scores, key=scores.get)
-        strength = min(1.0, scores[regime])
-
-        logger.debug(f"Regime detection: {regime} (strength={strength:.2f}) scores={scores}")
-
+            
+        # Proxy strength from ADX (0-50 normalized to 0.1-1.0)
+        adx = indicators.get("adx", 20)
+        strength = min(1.0, max(0.1, adx / 50.0))
+        
+        logger.debug(f"Regime detection via RegimeAdaptiveEngine: {regime_name} (strength={strength:.2f})")
+        
         return RegimeInfo(
-            regime=regime,
+            regime=regime_name,
             strength=strength,
             direction=direction,
-            details=details,
+            details={"source": "RegimeAdaptiveEngine"}
         )
 
     # ─── Trend Following ─────────────────────────────────────
