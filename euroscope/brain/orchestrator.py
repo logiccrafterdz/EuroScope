@@ -241,6 +241,26 @@ class Orchestrator:
 
         params = {"market_data": market_params} if market_params else {}
 
+        # --- Phase 2: MTF Confirmation (Higher Timeframe Bias) ---
+        base_tf = market_params.get("timeframe", "H1") if market_params else "H1"
+        higher_tf = "D1" if base_tf in ("H1", "H4", "M15", "M30") else "W1"
+        
+        mtf_ctx = SkillContext()
+        mtf_params = {"market_data": {"timeframe": higher_tf, "count": 150}}
+        # We silently run market data & technical analysis on higher timeframe to get MTF bias
+        try:
+            await self._execute_pipeline([
+                ("market_data", "get_candles"),
+                ("technical_analysis", "full")
+            ], mtf_ctx, mtf_params)
+            
+            mtf_bias = mtf_ctx.analysis.get("indicators", {}).get("overall_bias", "neutral")
+            context.metadata["mtf_bias"] = mtf_bias
+            context.metadata["mtf_timeframe"] = higher_tf
+            logger.info(f"MTF Context ({higher_tf}): {mtf_bias}")
+        except Exception as e:
+            logger.warning(f"Failed to fetch MTF Context: {e}")
+
         # 2. Execute decision pipeline
         pipeline = [
             ("market_data", "get_candles"),

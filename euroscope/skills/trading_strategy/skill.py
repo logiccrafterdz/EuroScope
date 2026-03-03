@@ -76,6 +76,18 @@ class TradingStrategySkill(BaseSkill):
                 ind, levels, patterns, uncertainty=uncertainty, macro_data=macro_data
             )
 
+            # --- Phase 2: MTF Confirmation Check ---
+            mtf_bias = context.metadata.get("mtf_bias", "neutral")
+            if signal.direction in ("BUY", "SELL") and mtf_bias != "neutral":
+                is_conflict = (signal.direction == "BUY" and mtf_bias == "bearish") or \
+                              (signal.direction == "SELL" and mtf_bias == "bullish")
+                if is_conflict:
+                    signal.confidence *= 0.5  # Heavy penalty
+                    if isinstance(signal.reasoning, list):
+                        signal.reasoning.append(f"Warning: Counter H-TF Trend ({mtf_bias})")
+                    else:
+                        signal.reasoning += f" | Warning: Counter H-TF Trend ({mtf_bias})"
+
             if isinstance(signal, TradingSignal):
                 return self._build_from_fallback(
                     context,
