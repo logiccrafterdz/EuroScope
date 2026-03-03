@@ -126,8 +126,8 @@ class Forecaster:
             ta_results.get("fibonacci", {})
         )
 
-        # Generate AI forecast
-        forecast_text = await self.agent.forecast(
+        # Generate AI forecast (Ensemble)
+        forecast_texts_raw = await self.agent.forecast_ensemble(
             price_data=price_str,
             technical_summary=ta_str,
             patterns=patterns_str,
@@ -138,8 +138,41 @@ class Forecaster:
             timeframe=timeframe,
         )
 
-        # Extract direction and confidence from AI response
-        parsed_json = self._parse_forecast(forecast_text)
+        if not forecast_texts_raw:
+            # Fallback if both fail
+            parsed_json = self._parse_forecast("❌ Ensemble forecasting failed.")
+            forecast_text = "❌ Ensemble forecasting failed."
+        else:
+            # Process all responses
+            all_parsed = [self._parse_forecast(text) for text in forecast_texts_raw]
+            
+            # Aggregate Logic
+            bullish_conf = sum(p.get("confidence", 50.0) for p in all_parsed if p.get("direction") == "BULLISH")
+            bearish_conf = sum(p.get("confidence", 50.0) for p in all_parsed if p.get("direction") == "BEARISH")
+            
+            if bullish_conf > bearish_conf:
+                final_dir = "BULLISH"
+                final_conf = bullish_conf / len(all_parsed)
+            elif bearish_conf > bullish_conf:
+                final_dir = "BEARISH"
+                final_conf = bearish_conf / len(all_parsed)
+            else:
+                final_dir = "NEUTRAL"
+                final_conf = sum(p.get("confidence", 50.0) for p in all_parsed) / len(all_parsed) if all_parsed else 50.0
+
+            # Build a unified JSON structure
+            primary_res = all_parsed[0]
+            parsed_json = {
+                "direction": final_dir,
+                "confidence": round(final_conf, 1),
+                "core_signal": f"[Ensemble Consensus: {len(all_parsed)} models] {primary_res.get('core_signal', '')}",
+                "scenario_a": primary_res.get("scenario_a", ""),
+                "scenario_b": primary_res.get("scenario_b", ""),
+                "fundamental_alignment": primary_res.get("fundamental_alignment", ""),
+                "key_levels": primary_res.get("key_levels", "")
+            }
+            forecast_text = forecast_texts_raw[0]
+
         direction = parsed_json.get("direction", "NEUTRAL")
         confidence = parsed_json.get("confidence", 50.0)
 
@@ -157,8 +190,9 @@ class Forecaster:
                 timeframe=timeframe,
             )
             if self.agent.vector_memory:
+                # Use the generated output as the text to store
                 self.agent.vector_memory.store_analysis(
-                    forecast_text,
+                    telegram_output,
                     metadata={
                         "timeframe": timeframe,
                         "direction": direction,

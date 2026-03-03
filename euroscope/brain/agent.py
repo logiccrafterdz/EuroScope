@@ -1339,6 +1339,66 @@ class Agent:
         )
         return await self.chat(prompt, system_override=SYSTEM_PROMPT)
 
+    async def forecast_ensemble(self, price_data: str, technical_summary: str,
+                       patterns: str, levels: str, news: str,
+                       prediction_history: str, strategy_signal: str = "No strategy signal available.",
+                       timeframe: str = "24 hours") -> list[str]:
+        """Generate directional forecasts using an ensemble of primary and fallback models."""
+        prompt = FORECAST_PROMPT.format(
+            price_data=price_data,
+            technical_summary=technical_summary,
+            patterns=patterns,
+            levels=levels,
+            news=news,
+            strategy_signal=strategy_signal,
+            prediction_history=prediction_history,
+            timeframe=timeframe,
+        )
+        
+        # Primary call
+        coro_primary = self.chat(prompt, system_override=SYSTEM_PROMPT)
+        
+        # Fallback call (bypassing router if any, hitting fallback API directly)
+        async def call_fallback():
+            if not self.config.fallback_api_key:
+                return "❌ Fallback API key not configured."
+            messages = [
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": prompt}
+            ]
+            try:
+                async with httpx.AsyncClient(timeout=60) as client:
+                    response = await client.post(
+                        f"{self.config.fallback_api_base}/chat/completions",
+                        headers={
+                            "Authorization": f"Bearer {self.config.fallback_api_key}",
+                            "Content-Type": "application/json",
+                        },
+                        json={
+                            "model": self.config.fallback_model,
+                            "messages": messages,
+                            "max_tokens": self.config.max_tokens,
+                            "temperature": self.config.temperature,
+                        },
+                    )
+                    response.raise_for_status()
+                    data = response.json()
+                return data["choices"][0]["message"]["content"]
+            except Exception as e:
+                logger.error(f"Ensemble Fallback LLM call failed: {e}")
+                return "❌ Fallback LLM unavailable"
+                
+        # Run concurrently
+        results = await asyncio.gather(coro_primary, call_fallback(), return_exceptions=True)
+        
+        valid_responses = []
+        for r in results:
+            if isinstance(r, str) and not r.startswith("❌"):
+                valid_responses.append(r)
+                
+        # If both fail, return an empty list
+        return valid_responses
+
     async def ask(self, question: str, current_price: str = "N/A",
                   market_status: str = "N/A", advanced_context: str = "No advanced data provided.") -> str:
         """Answer a free-form question about EUR/USD."""
