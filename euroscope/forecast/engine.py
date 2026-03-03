@@ -34,7 +34,36 @@ class Forecaster:
         # Extract data from context
         price_info = ctx.get_result("market_data")["data"] if ctx.get_result("market_data") else {}
         ta_results = ctx.get_result("technical_analysis")["data"] if ctx.get_result("technical_analysis") else {}
-        news_text = ctx.get_result("fundamental_analysis")["data"].get("formatted", "No news available") if ctx.get_result("fundamental_analysis") else "No news available"
+
+        # The pipeline only runs get_macro (interest rates, CPI), NOT get_news.
+        # We must explicitly fetch news so the LLM always has geopolitical context.
+        news_text = "No news available"
+        try:
+            news_res = await self.orchestrator.run_skill("fundamental_analysis", "get_news", context=ctx)
+            if news_res.success and news_res.metadata and news_res.metadata.get("formatted"):
+                news_text = news_res.metadata["formatted"]
+            elif news_res.success and news_res.data:
+                # Fallback: format articles if formatted text is missing
+                articles = news_res.data if isinstance(news_res.data, list) else []
+                if articles:
+                    news_text = "\n".join(
+                        f"- {a.get('title', 'Untitled')} ({a.get('source', '?')})"
+                        for a in articles[:10]
+                    )
+        except Exception as e:
+            logger.warning(f"Forecast: Failed to fetch news: {e}")
+
+        # Also include macro context if available
+        macro_result = ctx.get_result("fundamental_analysis")
+        macro_text = ""
+        if macro_result and macro_result.get("metadata", {}).get("formatted"):
+            macro_text = macro_result["metadata"]["formatted"]
+
+        # Combine news + macro for comprehensive fundamental context
+        if macro_text and news_text != "No news available":
+            news_text = f"{news_text}\n\n--- MACRO CONTEXT ---\n{macro_text}"
+        elif macro_text and news_text == "No news available":
+            news_text = macro_text
         signal_data = {}
         strat_entry = ctx.get_result("trading_strategy")
         if strat_entry and isinstance(strat_entry.get("data"), dict):
