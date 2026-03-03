@@ -44,6 +44,27 @@ class StrategyEngine:
     - Breakout: trade level breaks with momentum
     """
 
+    def __init__(self):
+        self._tuning_params = self._load_params()
+        
+    def _load_params(self) -> dict:
+        import json
+        import os
+        defaults = {
+            "rsi_oversold": 30.0,
+            "rsi_overbought": 70.0,
+            "adx_threshold": 25.0,
+            "confidence_threshold": 60.0,
+        }
+        tuning_file = "data/tuning.json"
+        if os.path.exists(tuning_file):
+            try:
+                with open(tuning_file, "r") as f:
+                    defaults.update(json.load(f))
+            except Exception as e:
+                logger.error(f"StrategyEngine failed to load {tuning_file}: {e}")
+        return defaults
+
     def detect_strategy(self, indicators: dict, levels: dict,
                         patterns: list = None, uncertainty: Optional[dict] = None,
                         macro_data: Optional[dict] = None) -> StrategySignal:
@@ -214,11 +235,12 @@ class StrategyEngine:
                 confidence -= 5
 
         # ADX confirmation
-        if adx > 30:
-            entry_rules.append(f"ADX strong ({adx:.0f} > 30)")
+        adx_thresh = self._tuning_params.get("adx_threshold", 25.0)
+        if adx > adx_thresh + 5:
+            entry_rules.append(f"ADX strong ({adx:.0f} > {adx_thresh+5})")
             confidence += 15
-        elif adx > 25:
-            entry_rules.append(f"ADX moderate ({adx:.0f} > 25)")
+        elif adx > adx_thresh:
+            entry_rules.append(f"ADX moderate ({adx:.0f} > {adx_thresh})")
             confidence += 8
 
         # MACD alignment
@@ -274,11 +296,14 @@ class StrategyEngine:
         confidence = 35.0
         entry_rules = []
         direction = "WAIT"
+        
+        rsi_os = self._tuning_params.get("rsi_oversold", 30.0)
+        rsi_ob = self._tuning_params.get("rsi_overbought", 70.0)
 
         # Oversold at support → BUY
-        if rsi < 30:
+        if rsi < rsi_os:
             direction = "BUY"
-            entry_rules.append(f"RSI oversold ({rsi:.0f})")
+            entry_rules.append(f"RSI oversold ({rsi:.0f} < {rsi_os})")
             confidence += 15
 
             if support and current_price:
@@ -294,9 +319,9 @@ class StrategyEngine:
                 confidence += 10
 
         # Overbought at resistance → SELL
-        elif rsi > 70:
+        elif rsi > rsi_ob:
             direction = "SELL"
-            entry_rules.append(f"RSI overbought ({rsi:.0f})")
+            entry_rules.append(f"RSI overbought ({rsi:.0f} > {rsi_ob})")
             confidence += 15
 
             if resistance and current_price:

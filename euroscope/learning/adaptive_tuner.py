@@ -157,6 +157,73 @@ class AdaptiveTuner:
             new_value = max(bounds[0], min(bounds[1], new_value))
         return round(new_value, 2)
 
+    async def auto_tune(self) -> dict:
+        """Analyze, apply recommendations to current params, and save to tuning.json."""
+        import json
+        import os
+        
+        tuning_file = "data/tuning.json"
+        
+        # Default starting params
+        current_params = {
+            "rsi_oversold": 30.0,
+            "rsi_overbought": 70.0,
+            "adx_threshold": 25.0,
+            "confidence_threshold": 60.0,
+            "stop_loss_pips": 20.0,
+            "take_profit_pips": 40.0,
+            "risk_per_trade_pct": 1.0,
+            "trend_following_weight": 1.0,
+            "mean_reversion_weight": 1.0,
+            "breakout_weight": 1.0,
+        }
+        
+        if os.path.exists(tuning_file):
+            try:
+                with open(tuning_file, "r") as f:
+                    current_params.update(json.load(f))
+            except Exception as e:
+                logger.error(f"Failed to read {tuning_file}: {e}")
+                
+        result = await self.analyze()
+        if not result["ready"]:
+            return current_params
+            
+        changed = False
+        for rec in result["recommendations"]:
+            param = rec["param"]
+            change_str = rec.get("suggested_change", "0")
+            
+            # Direct string assignments
+            if param == "data_quality_threshold":
+                current_params[param] = "complete"
+                changed = True
+                continue
+                
+            try:
+                # Handle percentages e.g., "+10%"
+                if isinstance(change_str, str) and "%" in change_str:
+                    val = float(change_str.replace("%", "").replace("+", "")) / 100.0
+                    delta = current_params.get(param, 1.0) * val
+                else:
+                    delta = float(str(change_str).replace("+", ""))
+                    
+                current_val = current_params.get(param, 0.0)
+                new_value = self.apply_adjustment(param, current_val, delta)
+                if new_value != current_val:
+                    current_params[param] = new_value
+                    changed = True
+            except Exception as e:
+                logger.warning(f"Failed to apply tuning {change_str} to {param}: {e}")
+                
+        if changed:
+            os.makedirs("data", exist_ok=True)
+            with open(tuning_file, "w") as f:
+                json.dump(current_params, f, indent=4)
+            logger.info(f"AdaptiveTuner: Saved new configurations to {tuning_file}")
+            
+        return current_params
+
     async def format_report(self, strategy: str = None) -> str:
         """Generate a human-readable tuning report."""
         result = await self.analyze(strategy)

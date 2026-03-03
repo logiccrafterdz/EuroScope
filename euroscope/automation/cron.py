@@ -408,6 +408,7 @@ class CronScheduler:
                     return
 
                 tuner = AdaptiveTuner(storage=storage)
+                await tuner.auto_tune()
                 report = await tuner.format_report()
 
                 chat_ids = getattr(self.config, "proactive_alert_chat_ids", [])
