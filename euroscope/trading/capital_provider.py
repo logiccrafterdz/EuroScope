@@ -120,7 +120,7 @@ class CapitalProvider:
             logger.error(f"Capital.com login exception: {e}")
             return False
 
-    async def get_price(self, symbol: str = "EURUSD") -> Optional[Dict[str, float]]:
+    async def get_price(self, symbol: str = "EURUSD", _retry_count: int = 0) -> Optional[Dict[str, float]]:
         """Fetch current market prices for a symbol."""
         if not self.session_token:
             if not await self.login(): return None
@@ -135,9 +135,12 @@ class CapitalProvider:
         try:
             session = await self._get_session()
             async with session.get(url, headers=headers) as response:
-                if response.status == 401:
-                    await self.login() # Retry once
-                    return await self.get_price(symbol)
+                if response.status == 401 and _retry_count < 1:
+                    logger.warning("get_price: 401 received, re-authenticating...")
+                    if await self.login():
+                        return await self.get_price(symbol, _retry_count=_retry_count + 1)
+                    logger.error("get_price: re-login failed after 401")
+                    return None
                 
                 response.raise_for_status()
                 data = await response.json()
@@ -261,7 +264,7 @@ class CapitalProvider:
             logger.error(f"Trade execution failed: {e}")
             return {"success": False, "error": str(e)}
 
-    async def get_account_info(self) -> Dict[str, Any]:
+    async def get_account_info(self, _retry_count: int = 0) -> Dict[str, Any]:
         """Fetch account balance, equity, and other financial metrics."""
         if not self.session_token:
             if not await self.login(): return {"success": False, "error": "Login failed"}
@@ -276,9 +279,11 @@ class CapitalProvider:
         try:
             session = await self._get_session()
             async with session.get(url, headers=headers) as response:
-                if response.status == 401:
-                    await self.login() # Retry once
-                    return await self.get_account_info()
+                if response.status == 401 and _retry_count < 1:
+                    logger.warning("get_account_info: 401 received, re-authenticating...")
+                    if await self.login():
+                        return await self.get_account_info(_retry_count=_retry_count + 1)
+                    return {"success": False, "error": "Re-authentication failed"}
                 
                 response.raise_for_status()
                 data = await response.json()
