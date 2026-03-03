@@ -438,7 +438,7 @@ class APIServer:
                         "daily_pnl": rm._daily_pnl,
                         "daily_pnl_date": rm._daily_pnl_date,
                         "consecutive_losses": rm._consecutive_losses,
-                        "max_daily_loss_limit": rm.config.max_daily_loss
+                        "max_daily_loss_limit": rm.config.max_daily_drawdown
                     }
             except Exception as e:
                 logger.warning(f"API: Failed to get risk state: {e}")
