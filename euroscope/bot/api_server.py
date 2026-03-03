@@ -207,7 +207,7 @@ class APIServer:
 
     async def _api_scan_signals(self, request):
         """API endpoint to actively scan for and generate new trading signals."""
-        logger.debug("API: Actively scanning for new signals (Mini App request)...")
+        logger.info("API: Actively scanning for new signals (Mini App request)...")
         try:
             if self.bot.bot_settings.get("emergency_mode"):
                 return web.json_response({"success": False, "error": "SYSTEM IS IN EMERGENCY MODE. TRADING AND SCANNING HALTED."})
@@ -217,37 +217,73 @@ class APIServer:
             # 1. Fetch live market price
             mkt_res = await self.bot.orchestrator.run_skill("market_data", "get_price", context=ctx)
             if not mkt_res.success:
+                logger.warning(f"API scan: market_data failed: {mkt_res.error}")
                 return web.json_response({"success": False, "error": f"Market data failed: {mkt_res.error}"})
+            logger.info(f"API scan: price fetched OK")
                 
             ta_res = await self.bot.orchestrator.run_skill("technical_analysis", "analyze", context=ctx, timeframe="H1")
             if not ta_res.success:
+                logger.warning(f"API scan: TA failed: {ta_res.error}")
                 return web.json_response({"success": False, "error": f"TA failed: {ta_res.error}"})
+            logger.info(f"API scan: TA OK")
                 
             strat_res = await self.bot.orchestrator.run_skill("trading_strategy", "detect_signal", context=ctx)
             if not strat_res.success:
+                logger.warning(f"API scan: strategy failed: {strat_res.error}")
                 return web.json_response({"success": False, "error": f"Strategy failed: {strat_res.error}"})
                 
             signal_data = strat_res.data
             direction = signal_data.get("direction", "WAIT")
             confidence = signal_data.get("confidence", 0)
+            strategy = signal_data.get("strategy", "unknown")
+            logger.info(f"API scan: signal detected -> {direction} ({confidence}%) strategy={strategy}")
             
             if direction in ("BUY", "SELL") and confidence >= 50:
                 # 3. Calculate Risk Parameters
                 risk_res = await self.bot.orchestrator.run_skill("risk_management", "assess_trade", context=ctx)
                 if not risk_res.success:
-                    return web.json_response({"success": False, "error": f"Risk calculation failed: {risk_res.error}"})
+                    logger.warning(f"API scan: risk assessment failed: {risk_res.error}")
+                    return web.json_response({"success": False, "error": f"Risk calculation failed: {risk_res.error}", "signal": signal_data})
+                
+                risk_data = risk_res.data or {}
+                risk_status = risk_data.get("status", "unknown")
+                logger.info(f"API scan: risk assessment -> status={risk_status}, SL={risk_data.get('stop_loss')}, TP={risk_data.get('take_profit')}, reason={risk_data.get('reason')}")
+                
+                # If risk rejected the trade, return the reason
+                if risk_status == "rejected":
+                    rejection_reason = risk_data.get("reason", "Risk parameters not met")
+                    return web.json_response({
+                        "success": False, 
+                        "error": f"Trade rejected by risk management: {rejection_reason}", 
+                        "signal": signal_data,
+                        "risk": {"status": risk_status, "reason": rejection_reason}
+                    })
                     
                 # 4. Execute the paper trade IF auto-trading is enabled
                 if self.bot.bot_settings.get("auto_trading_enabled"):
                     exec_res = await self.bot.orchestrator.run_skill("signal_executor", "open_trade", context=ctx)
                     if exec_res.success:
+                        logger.info(f"API scan: trade EXECUTED successfully -> {exec_res.data}")
                         return web.json_response({"success": True, "signal": exec_res.data, "message": f"Found {direction} opportunity and execution successful!"})
                     else:
+                        logger.warning(f"API scan: execution blocked: {exec_res.error}")
                         return web.json_response({"success": False, "error": f"Signal generation aborted by guardrails: {exec_res.error}", "signal": signal_data})
                 else:
-                    return web.json_response({"success": True, "signal": signal_data, "execution_skipped": True, "message": f"Found {direction} opportunity! (Auto-trading is DISABLED)"})
+                    # Auto-trading OFF — return the signal with full details for display
+                    enriched_signal = dict(signal_data)
+                    enriched_signal["stop_loss"] = risk_data.get("stop_loss")
+                    enriched_signal["take_profit"] = risk_data.get("take_profit")
+                    enriched_signal["position_size"] = risk_data.get("position_size")
+                    enriched_signal["risk_pips"] = risk_data.get("risk_pips")
+                    enriched_signal["reward_pips"] = risk_data.get("reward_pips")
+                    enriched_signal["risk_reward_ratio"] = risk_data.get("risk_reward_ratio")
+                    return web.json_response({"success": True, "signal": enriched_signal, "execution_skipped": True, "message": f"Found {direction} opportunity! (Auto-trading is DISABLED)"})
             else:
-                return web.json_response({"success": False, "message": "No high-confidence opportunities currently available. Please exercise patience."})
+                return web.json_response({
+                    "success": False, 
+                    "message": f"No actionable signal: direction={direction}, confidence={confidence}%, strategy={strategy}. Market conditions do not favor entry.",
+                    "signal": {"direction": direction, "confidence": confidence, "strategy": strategy}
+                })
         except Exception as e:
             logger.error(f"API: Error scanning signals: {e}\n{traceback.format_exc()}")
             return web.json_response({"success": False, "error": str(e)})

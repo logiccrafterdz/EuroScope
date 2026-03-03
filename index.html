@@ -1539,29 +1539,53 @@
                 const res = await api('/scan_signals');
                 btnText.textContent = "SCAN MARKET";
                 if (res.success && res.signal) {
+                    const s = res.signal;
+                    const dirColor = s.direction === 'BUY' ? 'var(--up-color)' : 'var(--down-color)';
+
+                    // Build a signal card to inject into the recent-signals section
+                    const signalCard = `
+                        <div style="padding:16px; background:rgba(255,255,255,0.03); border-radius:12px; border-left:4px solid ${dirColor}; margin-top:12px;">
+                            <div style="display:flex; justify-content:space-between; margin-bottom:12px;">
+                                <span style="font-weight:800; color:${dirColor}; font-size:0.85rem; letter-spacing:2px;">${s.direction} SIGNAL</span>
+                                <span style="font-size:0.75rem; color:var(--text-dim);">${f2(s.confidence)}% CONF</span>
+                            </div>
+                            <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; text-align:center;">
+                                <div><div class="label-sm">ENTRY</div><div class="val-md">${f5(s.entry_price)}</div></div>
+                                <div><div class="label-sm">STOP</div><div class="val-md" style="color:var(--down-color)">${f5(s.stop_loss)}</div></div>
+                                <div><div class="label-sm">TARGET</div><div class="val-md" style="color:var(--up-color)">${f5(s.take_profit)}</div></div>
+                            </div>
+                            ${s.risk_reward_ratio ? `<div style="text-align:center; margin-top:8px; font-size:0.7rem; color:var(--text-muted);">R:R ${s.risk_reward_ratio} | Risk ${f2(s.risk_pips)}p | Reward ${f2(s.reward_pips)}p</div>` : ''}
+                        </div>`;
+
                     if (res.execution_skipped) {
-                        log(`Signal Found: ${res.signal.direction} @ ${f5(res.signal.entry_price)} (Auto-Trading: OFF)`, 'warn');
+                        log(`Signal Found: ${s.direction} @ ${f5(s.entry_price)} (Auto-Trading: OFF)`, 'warn');
                         btnText.textContent = "SIGNAL FOUND";
                         btn.style.background = 'var(--accent-primary)';
-                        if (emptyState) {
-                            emptyState.innerHTML = `<div style="text-align:center;"><span style="color:var(--accent-primary); font-size:1.2rem; display:block; margin-bottom:8px;">💡</span>` +
-                                `IDENTIFIED ${res.signal.direction} SIGNAL<br><span style="font-size:0.75rem; color:var(--text-dim);">Auto-trading is currently disabled in settings.</span></div>`;
-                        }
+                        const listSignals = document.getElementById('recent-signals-list');
+                        if (listSignals) listSignals.innerHTML = signalCard;
                         try { tg.HapticFeedback.notificationOccurred('warning'); } catch (e) { }
-                        setTimeout(() => { btnText.textContent = "SCAN MARKET"; btn.style.background = 'var(--accent-primary)'; }, 2000);
+                        setTimeout(() => { btnText.textContent = "SCAN MARKET"; btn.style.background = 'var(--accent-primary)'; }, 3000);
                     } else {
-                        // Success! Refresh the signals tab to show the new trade
-                        log(`Trade Executed: ${res.signal.direction} Position Opened`, 'success');
-                        btnText.textContent = "TRADE EXECUTED";
+                        log(`Trade Executed: ${s.direction} Position Opened`, 'success');
+                        btnText.textContent = "TRADE EXECUTED ✓";
                         btn.style.background = 'var(--up-color)';
                         await sync('signals');
                         try { tg.HapticFeedback.notificationOccurred('success'); } catch (e) { }
-                        setTimeout(() => { btnText.textContent = "SCAN MARKET"; btn.style.background = 'var(--accent-primary)'; }, 2000);
+                        setTimeout(() => { btnText.textContent = "SCAN MARKET"; btn.style.background = 'var(--accent-primary)'; }, 3000);
                     }
                 } else {
-                    // No high confidence signal found
-                    if (emptyState) {
-                        emptyState.innerHTML = `<span style="color:var(--warn-color); font-size:1.2rem; display:block; margin-bottom:8px;">⚠️</span>` + (res.message || "NO OPPORTUNITIES AT THE MOMENT. EXERCISE PATIENCE.");
+                    // No actionable signal or risk rejected
+                    const reason = res.error || res.message || "No opportunities found.";
+                    const sigInfo = res.signal ? ` (${res.signal.direction || '?'} ${f2(res.signal.confidence || 0)}%)` : '';
+                    log(`Scan: ${reason}${sigInfo}`, 'warn');
+
+                    const listSignals = document.getElementById('recent-signals-list');
+                    if (listSignals) {
+                        listSignals.innerHTML = `
+                            <div style="padding:16px; text-align:center;">
+                                <span style="color:var(--warn-color); font-size:1.2rem; display:block; margin-bottom:8px;">⚠️</span>
+                                <div style="font-size:0.75rem; color:var(--text-muted); line-height:1.6;">${reason}</div>
+                            </div>`;
                     }
                     try { tg.HapticFeedback.notificationOccurred('warning'); } catch (e) { }
                 }
