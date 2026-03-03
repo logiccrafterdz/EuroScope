@@ -160,28 +160,35 @@ class Forecaster:
         return "\n\n".join(p for p in parts if p)
 
     def _parse_forecast(self, text: str) -> tuple[str, float]:
-        """Extract direction and confidence from AI forecast text."""
+        """Extract direction and confidence from AI forecast text using strict parsing."""
         text_upper = text.upper()
 
-        # Direction
+        # 1. Stricter Direction Matching (Prioritize Explicit Bias)
         direction = "NEUTRAL"
-        if "BULLISH" in text_upper:
-            direction = "BULLISH"
-        elif "BEARISH" in text_upper:
-            direction = "BEARISH"
+        bias_match = re.search(r'(?i)bias:\s*\*?\**(BULLISH|BEARISH|NEUTRAL)', text_upper)
+        if bias_match:
+            direction = bias_match.group(1).upper()
+        else:
+            # Fallback to broader search if explicit header is missing
+            if "BULLISH" in text_upper:
+                direction = "BULLISH"
+            elif "BEARISH" in text_upper:
+                direction = "BEARISH"
 
-        # Confidence
+        # 2. Stricter Confidence Matching (Avoid grabbing unrelated percentages like inflation rate)
         confidence = 50.0
-        # Try to find percentage
-        match = re.search(r'(\d{1,3})%', text)
-        if match:
-            confidence = float(match.group(1))
-        elif "HIGH" in text_upper:
-            confidence = 75.0
-        elif "MEDIUM" in text_upper:
-            confidence = 55.0
-        elif "LOW" in text_upper:
-            confidence = 35.0
+        # Match "Conviction: 75%", "AI Conviction: 80%", etc.
+        conf_match = re.search(r'(?i)(?:conviction|confidence)(?:[^\d]*)(\d{1,3})(?:%)?', text)
+        if conf_match:
+            confidence = float(conf_match.group(1))
+        else:
+            # Only fallback to raw keywords if explicit percentage is missing
+            if "HIGH" in text_upper:
+                confidence = 75.0
+            elif "MEDIUM" in text_upper:
+                confidence = 55.0
+            elif "LOW" in text_upper:
+                confidence = 35.0
 
         return direction, min(confidence, 95.0)
 

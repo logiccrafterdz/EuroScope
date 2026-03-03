@@ -89,6 +89,11 @@ FORECAST_PROMPT = """Based on the following comprehensive data about EUR/USD, ac
 Your job is NOT to invent a new forecast. Your job is to EXPLAIN the `strategy_signal` using the provided data.
 You must construct the output as clear, realistic trading Scenarios.
 
+**CRITICAL FORMATTING RULES:**
+You MUST start your response exactly with these two lines:
+**AI Bias:** [BULLISH or BEARISH or NEUTRAL]
+**AI Conviction:** [0-100]%
+
 Provide:
 1. **The Core Algorithmic Signal**: Clearly state what the strategy engine has decided (e.g. BULLISH Trend Following).
 2. **Scenario A (Bullish/Primary)**: What needs to happen for the price to go up, and what the targets are based on the algorithm's TP/SL.
