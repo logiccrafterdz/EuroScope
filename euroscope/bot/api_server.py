@@ -373,12 +373,26 @@ class APIServer:
         strategy = request.query.get("strategy", None)
         timeframe = request.query.get("timeframe", "H1")
         try:
+            import time as _time
+            t0 = _time.monotonic()
+
+            # Step 1: Fetch candles (reduced from 500→200 for speed)
             ctx = SkillContext()
-            result = await self.bot.orchestrator.run_skill("market_data", "get_candles", context=ctx, timeframe=timeframe, count=500)
-            if not result.success or result.data is None or result.data.empty:
-                return web.json_response({"success": False, "error": "No candle data available"})
-                
+            result = await self.bot.orchestrator.run_skill(
+                "market_data", "get_candles", context=ctx,
+                timeframe=timeframe, count=200
+            )
+            if not result.success or result.data is None:
+                return web.json_response({"success": False, "error": f"No candle data: {result.error}"})
+            
             df = result.data
+            if hasattr(df, 'empty') and df.empty:
+                return web.json_response({"success": False, "error": "Empty candle data from broker"})
+
+            t1 = _time.monotonic()
+            logger.info(f"API: Backtest got {len(df)} candles in {t1-t0:.1f}s")
+
+            # Step 2: Convert DataFrame to candle dicts
             candles = []
             for _, row in df.iterrows():
                 try:
@@ -392,12 +406,38 @@ class APIServer:
                 except (ValueError, TypeError):
                     continue
             if len(candles) < 60:
-                return web.json_response({"success": False, "error": f"Need 60+ candles, have {len(candles)}"})
-                
+                return web.json_response({"success": False, "error": f"Need 60+ candles, got {len(candles)}"})
+
+            logger.info(f"API: Backtest converted {len(candles)} candles, running engine...")
+
+            # Step 3: Run backtest in executor thread with timeout (avoid blocking event loop)
             from ..analytics.backtest_engine import BacktestEngine
             engine = BacktestEngine()
-            bt_result = engine.run(candles, strategy_filter=strategy)
-            
+
+            loop = asyncio.get_event_loop()
+            bt_result = await asyncio.wait_for(
+                loop.run_in_executor(None, lambda: engine.run(candles, strategy_filter=strategy)),
+                timeout=45.0
+            )
+
+            t2 = _time.monotonic()
+            logger.info(
+                f"API: Backtest complete in {t2-t0:.1f}s — "
+                f"{bt_result.total_trades} trades, WR={bt_result.win_rate}%, PnL={bt_result.total_pnl}"
+            )
+
+            # Build individual trade list for frontend
+            trades_list = []
+            for t in bt_result.trades[-20:]:  # Last 20 trades
+                trades_list.append({
+                    "direction": t.direction,
+                    "entry": round(t.entry_price, 5),
+                    "exit": round(t.exit_price, 5),
+                    "pnl": round(t.pnl_pips, 1),
+                    "win": t.is_win,
+                    "strategy": t.strategy,
+                })
+
             return web.json_response({
                 "success": True,
                 "data": {
@@ -415,10 +455,16 @@ class APIServer:
                     "worst_trade": round(bt_result.worst_trade, 1),
                     "equity_curve": bt_result.equity_curve[-50:],
                     "bars_tested": bt_result.bars_tested,
+                    "trades": trades_list,
+                    "timeframe": timeframe,
+                    "elapsed_s": round(t2 - t0, 1),
                 }
             })
+        except asyncio.TimeoutError:
+            logger.error("API: Backtest timed out after 45s")
+            return web.json_response({"success": False, "error": "Backtest timed out (45s limit). Try a shorter timeframe."})
         except Exception as e:
-            logger.error(f"API: Backtest error: {e}")
+            logger.error(f"API: Backtest error: {e}", exc_info=True)
             return web.json_response({"success": False, "error": str(e)})
 
     async def _api_performance(self, request):

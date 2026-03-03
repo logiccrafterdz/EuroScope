@@ -923,66 +923,136 @@
         <div id="stats-view" class="tab-content">
             <!-- Backtest Section -->
             <div class="glass-card bento-full" style="margin-bottom: 12px; padding-bottom:12px;">
-                <div class="label-sm" style="margin-bottom: 12px;">Backtest Engine</div>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+                    <div class="label-sm" style="margin:0;">BACKTEST ENGINE</div>
+                    <div id="bt-status"
+                        style="font-size:0.6rem; color:var(--text-dim); font-family:'Fira Code'; letter-spacing:0.5px;">
+                    </div>
+                </div>
                 <div style="display: flex; gap: 6px; margin-bottom: 16px;">
-                    <button class="action-btn action-outline" onclick="runBacktest(null)"
-                        style="margin:0; padding:8px; font-size:0.6rem;">All</button>
-                    <button class="action-btn action-outline" onclick="runBacktest('trend_following')"
-                        style="margin:0; padding:8px; font-size:0.6rem;">Trend</button>
-                    <button class="action-btn action-outline" onclick="runBacktest('mean_reversion')"
-                        style="margin:0; padding:8px; font-size:0.6rem;">MR</button>
+                    <button class="action-btn action-outline bt-filter-btn" data-strategy="" onclick="runBacktest(null)"
+                        style="margin:0; padding:8px 12px; font-size:0.6rem; flex:1;">ALL STRATEGIES</button>
+                    <button class="action-btn action-outline bt-filter-btn" data-strategy="trend_following"
+                        onclick="runBacktest('trend_following')"
+                        style="margin:0; padding:8px 12px; font-size:0.6rem; flex:1;">TREND</button>
+                    <button class="action-btn action-outline bt-filter-btn" data-strategy="mean_reversion"
+                        onclick="runBacktest('mean_reversion')"
+                        style="margin:0; padding:8px 12px; font-size:0.6rem; flex:1;">MR</button>
                 </div>
-                <div class="bento" style="margin-bottom: 12px;">
-                    <div style="padding:10px 0;">
-                        <div class="label-sm" style="margin-bottom:4px;">Win Rate</div>
-                        <div id="bt-wr" class="val-md">--%</div>
+
+                <!-- Loading state -->
+                <div id="bt-loading" style="display:none; text-align:center; padding:30px 0;">
+                    <span class="loading-spinner"></span>
+                    <div style="font-size:0.7rem; color:var(--text-dim); margin-top:10px; letter-spacing:1px;">RUNNING
+                        BACKTEST...</div>
+                </div>
+
+                <!-- Results container -->
+                <div id="bt-results">
+                    <!-- Row 1: Key Metrics -->
+                    <div style="display:grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap:8px; margin-bottom: 12px;">
+                        <div style="text-align:center; padding:10px 0;">
+                            <div class="label-sm" style="margin-bottom:4px;">WIN RATE</div>
+                            <div id="bt-wr" class="val-md" style="font-family:'Fira Code';">--%</div>
+                        </div>
+                        <div style="text-align:center; padding:10px 0;">
+                            <div class="label-sm" style="margin-bottom:4px;">NET P/L</div>
+                            <div id="bt-pnl" class="val-md" style="font-family:'Fira Code';">--</div>
+                        </div>
+                        <div style="text-align:center; padding:10px 0;">
+                            <div class="label-sm" style="margin-bottom:4px;">TRADES</div>
+                            <div id="bt-trades" class="val-md" style="font-family:'Fira Code';">--</div>
+                        </div>
+                        <div style="text-align:center; padding:10px 0;">
+                            <div class="label-sm" style="margin-bottom:4px;">MAX DD</div>
+                            <div id="bt-dd" class="val-md" style="font-family:'Fira Code';">--</div>
+                        </div>
                     </div>
-                    <div style="padding:10px 0;">
-                        <div class="label-sm" style="margin-bottom:4px;">Net P/L</div>
-                        <div id="bt-pnl" class="val-md">--</div>
+
+                    <!-- Row 2: Advanced Metrics -->
+                    <div
+                        style="display:grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap:8px; margin-bottom: 12px; padding:10px; background:rgba(255,255,255,0.02); border-radius:12px; border:1px solid var(--border-color);">
+                        <div style="text-align:center;">
+                            <div class="label-sm" style="margin-bottom:4px; color:var(--accent-primary);">PROFIT F.
+                            </div>
+                            <div id="bt-pf"
+                                style="font-size:0.9rem; font-weight:700; font-family:'Fira Code'; color:var(--text-main);">
+                                --</div>
+                        </div>
+                        <div style="text-align:center;">
+                            <div class="label-sm" style="margin-bottom:4px; color:var(--accent-primary);">SHARPE</div>
+                            <div id="bt-sharpe"
+                                style="font-size:0.9rem; font-weight:700; font-family:'Fira Code'; color:var(--text-main);">
+                                --</div>
+                        </div>
+                        <div style="text-align:center;">
+                            <div class="label-sm" style="margin-bottom:4px;">BEST</div>
+                            <div id="bt-best"
+                                style="font-size:0.9rem; font-weight:700; font-family:'Fira Code'; color:var(--up-color);">
+                                --</div>
+                        </div>
+                        <div style="text-align:center;">
+                            <div class="label-sm" style="margin-bottom:4px;">WORST</div>
+                            <div id="bt-worst"
+                                style="font-size:0.9rem; font-weight:700; font-family:'Fira Code'; color:var(--down-color);">
+                                --</div>
+                        </div>
                     </div>
-                    <div style="padding:10px 0;">
-                        <div class="label-sm" style="margin-bottom:4px;">Trades</div>
-                        <div id="bt-trades" class="val-md">--</div>
+
+                    <!-- Equity Curve -->
+                    <div style="margin-bottom:12px;">
+                        <div
+                            style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                            <div class="label-sm" style="margin:0;">EQUITY CURVE</div>
+                            <div id="bt-bars"
+                                style="font-size:0.55rem; color:var(--text-dim); font-family:'Fira Code';"></div>
+                        </div>
+                        <div id="bt-equity"
+                            style="height: 120px; width: 100%; border-radius:10px; overflow:hidden; background:rgba(0,0,0,0.2);">
+                        </div>
                     </div>
-                    <div style="padding:10px 0;">
-                        <div class="label-sm" style="margin-bottom:4px;">Max DD</div>
-                        <div id="bt-dd" class="val-md">--</div>
+
+                    <!-- Trade History -->
+                    <div id="bt-trade-history" style="display:none;">
+                        <div class="label-sm" style="margin-bottom:8px;">RECENT TRADES</div>
+                        <div id="bt-trade-list" style="max-height:150px; overflow-y:auto;"></div>
                     </div>
                 </div>
-                <div class="label-sm" style="margin-top: 10px;">Equity Curve</div>
-                <div id="bt-equity" style="height: 80px; width: 100%; margin-top: 8px;"></div>
             </div>
 
             <!-- Performance Section -->
             <div class="glass-card bento-full">
-                <div class="label-sm" style="margin-bottom: 16px;">Live Performance</div>
-                <div class="bento" style="margin-bottom:0;">
-                    <div style="padding:10px 0;">
-                        <div class="label-sm" style="margin-bottom:4px;">Win Rate</div>
-                        <div id="perf-wr" class="val-md">--%</div>
+                <div class="label-sm" style="margin-bottom: 16px;">LIVE PERFORMANCE</div>
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-bottom:12px;">
+                    <div
+                        style="padding:12px; text-align:center; background:rgba(255,255,255,0.02); border-radius:12px; border:1px solid var(--border-color);">
+                        <div class="label-sm" style="margin-bottom:6px;">WIN RATE</div>
+                        <div id="perf-wr" class="val-md" style="font-size:1.3rem; font-family:'Fira Code';">--%</div>
                     </div>
-                    <div style="padding:10px 0;">
-                        <div class="label-sm" style="margin-bottom:4px;">Total P/L</div>
-                        <div id="perf-pnl" class="val-md">--</div>
+                    <div
+                        style="padding:12px; text-align:center; background:rgba(255,255,255,0.02); border-radius:12px; border:1px solid var(--border-color);">
+                        <div class="label-sm" style="margin-bottom:6px;">TOTAL P/L</div>
+                        <div id="perf-pnl" class="val-md" style="font-size:1.3rem; font-family:'Fira Code';">--</div>
                     </div>
                 </div>
-                <!-- Risk Stats (Fix 13) -->
-                <div class="bento"
-                    style="margin-bottom:0; background:rgba(255,255,255,0.02); border-radius:16px; border:1px solid var(--border-color); padding:10px;">
-                    <div style="padding:5px 0;">
+                <!-- Risk Stats -->
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-bottom:12px;">
+                    <div
+                        style="padding:10px; text-align:center; background:rgba(255,255,255,0.02); border-radius:12px; border:1px solid var(--border-color); border-top:2px solid var(--accent-primary);">
                         <div class="label-sm" style="margin-bottom:4px; color:var(--accent-primary);">DAILY DRAWDOWN
                         </div>
-                        <div id="risk-daily-pnl" class="val-md">--.--</div>
+                        <div id="risk-daily-pnl" class="val-md" style="font-family:'Fira Code';">--.--</div>
                     </div>
-                    <div style="padding:5px 0;">
+                    <div
+                        style="padding:10px; text-align:center; background:rgba(255,255,255,0.02); border-radius:12px; border:1px solid var(--border-color); border-top:2px solid var(--warn-color);">
                         <div class="label-sm" style="margin-bottom:4px;">LOSS STREAK</div>
-                        <div id="risk-streak" class="val-md">--</div>
+                        <div id="risk-streak" class="val-md" style="font-family:'Fira Code';">--</div>
                     </div>
                 </div>
+                <div class="label-sm" style="margin-bottom:8px;">AI TUNING RECOMMENDATIONS</div>
                 <div id="perf-recommendations"
-                    style="margin-top:12px; padding-top:12px; border-top:1px solid var(--border-color);">
-                    <div class="empty-state" style="padding:20px 0;">ANALYZING...</div>
+                    style="padding:10px; background:rgba(255,255,255,0.02); border-radius:12px; border:1px solid var(--border-color);">
+                    <div class="empty-state" style="padding:12px 0;">ANALYZING...</div>
                 </div>
             </div>
         </div>
@@ -1389,46 +1459,121 @@
 
         async function runBacktest(strategy) {
             const q = strategy ? `?strategy=${strategy}` : '';
+            const loadingEl = document.getElementById('bt-loading');
+            const resultsEl = document.getElementById('bt-results');
+            const statusEl = document.getElementById('bt-status');
+
+            // Highlight active filter button
+            document.querySelectorAll('.bt-filter-btn').forEach(b => {
+                const bStrat = b.getAttribute('data-strategy') || '';
+                b.style.background = bStrat === (strategy || '') ? 'var(--accent-primary)' : '';
+                b.style.color = bStrat === (strategy || '') ? '#000' : '';
+            });
+
+            // Show loading
+            loadingEl.style.display = 'block';
+            resultsEl.style.display = 'none';
+            statusEl.textContent = '';
+
             try {
                 const res = await api(`/backtest${q}`);
+                loadingEl.style.display = 'none';
+                resultsEl.style.display = 'block';
+
                 if (res.success && res.data) {
                     const d = res.data;
+
+                    // Row 1: Key Metrics
                     document.getElementById('bt-wr').textContent = `${d.win_rate}%`;
                     document.getElementById('bt-wr').style.color = d.win_rate >= 50 ? 'var(--up-color)' : 'var(--down-color)';
                     document.getElementById('bt-pnl').textContent = `${d.total_pnl > 0 ? '+' : ''}${d.total_pnl}p`;
                     document.getElementById('bt-pnl').style.color = d.total_pnl >= 0 ? 'var(--up-color)' : 'var(--down-color)';
-                    document.getElementById('bt-trades').textContent = d.total_trades;
+                    document.getElementById('bt-trades').textContent = `${d.wins}W / ${d.losses}L`;
                     document.getElementById('bt-dd').textContent = `${d.max_drawdown}p`;
+                    document.getElementById('bt-dd').style.color = d.max_drawdown > 50 ? 'var(--down-color)' : 'var(--text-main)';
+
+                    // Row 2: Advanced Metrics
+                    const pf = d.profit_factor === Infinity ? '∞' : d.profit_factor;
+                    document.getElementById('bt-pf').textContent = pf;
+                    document.getElementById('bt-pf').style.color = d.profit_factor >= 1.5 ? 'var(--up-color)' : d.profit_factor >= 1.0 ? 'var(--text-main)' : 'var(--down-color)';
+                    document.getElementById('bt-sharpe').textContent = d.sharpe_ratio;
+                    document.getElementById('bt-sharpe').style.color = d.sharpe_ratio >= 1.0 ? 'var(--up-color)' : d.sharpe_ratio >= 0 ? 'var(--text-main)' : 'var(--down-color)';
+                    document.getElementById('bt-best').textContent = `+${d.best_trade}p`;
+                    document.getElementById('bt-worst').textContent = `${d.worst_trade}p`;
+
+                    // Status badge
+                    const strat = d.strategy === 'all' ? 'ALL' : d.strategy.replace('_', ' ').toUpperCase();
+                    statusEl.textContent = `${strat} · ${d.bars_tested} bars · ${d.timeframe || 'H1'} · ${d.elapsed_s || '?'}s`;
+
+                    // Bars info
+                    document.getElementById('bt-bars').textContent = `${d.total_trades} trades from ${d.bars_tested} bars`;
+
+                    // Equity Curve
                     const eqEl = document.getElementById('bt-equity');
                     const curve = d.equity_curve || [];
                     eqEl.innerHTML = '';
                     if (curve.length > 0) {
                         const eqChart = LightweightCharts.createChart(eqEl, {
-                            width: eqEl.clientWidth, height: 80,
+                            width: eqEl.clientWidth, height: 120,
                             layout: { background: { type: 'solid', color: 'transparent' }, textColor: '#8b949e' },
-                            grid: { vertLines: { visible: false }, horzLines: { visible: false } },
-                            timeScale: { visible: false }, rightPriceScale: { visible: false },
-                            handleScroll: false, handleScale: false
+                            grid: { vertLines: { visible: false }, horzLines: { color: 'rgba(255,255,255,0.03)' } },
+                            timeScale: { visible: false }, rightPriceScale: { borderVisible: false },
+                            handleScroll: false, handleScale: false, crosshair: { mode: 0 }
                         });
-                        const lSeries = eqChart.addLineSeries({ color: 'var(--accent-primary)', lineWidth: 2 });
+                        const finalPnl = curve[curve.length - 1] || 0;
+                        const lineColor = finalPnl >= 0 ? '#00ff9d' : '#ff3366';
+                        const lSeries = eqChart.addAreaSeries({
+                            lineColor: lineColor, lineWidth: 2,
+                            topColor: finalPnl >= 0 ? 'rgba(0,255,157,0.15)' : 'rgba(255,51,102,0.15)',
+                            bottomColor: 'transparent',
+                        });
                         const baseTime = Math.floor(Date.now() / 1000) - curve.length * 86400;
                         lSeries.setData(curve.map((v, i) => ({ time: baseTime + i * 86400, value: v })));
                         eqChart.timeScale().fitContent();
                     } else {
-                        eqEl.innerHTML = '<div class="empty-state" style="width:100%">NO TRADES GENERATED</div>';
+                        eqEl.innerHTML = '<div class="empty-state" style="width:100%; padding:40px 0;">NO TRADES GENERATED</div>';
                     }
+
+                    // Trade History
+                    const histEl = document.getElementById('bt-trade-history');
+                    const listEl = document.getElementById('bt-trade-list');
+                    const trades = d.trades || [];
+                    if (trades.length > 0) {
+                        histEl.style.display = 'block';
+                        listEl.innerHTML = trades.map(t => {
+                            const dirColor = t.direction === 'BUY' ? 'var(--up-color)' : 'var(--down-color)';
+                            const pnlColor = t.pnl >= 0 ? 'var(--up-color)' : 'var(--down-color)';
+                            return `
+                                <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-bottom:1px solid rgba(255,255,255,0.03);">
+                                    <div style="display:flex; align-items:center; gap:8px;">
+                                        <span style="font-size:0.6rem; font-weight:800; color:${dirColor}; letter-spacing:1px; width:28px;">${t.direction}</span>
+                                        <span style="font-size:0.65rem; color:var(--text-dim); font-family:'Fira Code';">${t.entry.toFixed(5)} → ${t.exit.toFixed(5)}</span>
+                                    </div>
+                                    <span style="font-size:0.7rem; font-weight:700; font-family:'Fira Code'; color:${pnlColor};">${t.pnl >= 0 ? '+' : ''}${t.pnl}p</span>
+                                </div>`;
+                        }).join('');
+                    } else {
+                        histEl.style.display = 'none';
+                    }
+
+                    try { tg.HapticFeedback.notificationOccurred('success'); } catch (e) { }
                 } else {
-                    const errMsg = res.error || res.message || 'Backtest failed';
+                    const errMsg = res.error || 'Backtest failed';
                     log('Backtest: ' + errMsg, 'warn');
-                    document.getElementById('bt-wr').textContent = '--';
-                    document.getElementById('bt-pnl').textContent = '--';
-                    document.getElementById('bt-trades').textContent = '--';
-                    document.getElementById('bt-dd').textContent = '--';
-                    document.getElementById('bt-equity').innerHTML = `<div class="empty-state" style="width:100%; font-size:0.65rem; color:var(--warn-color);">${errMsg}</div>`;
+                    statusEl.textContent = 'ERROR';
+                    statusEl.style.color = 'var(--down-color)';
+                    ['bt-wr', 'bt-pnl', 'bt-trades', 'bt-dd', 'bt-pf', 'bt-sharpe', 'bt-best', 'bt-worst'].forEach(id => {
+                        const el = document.getElementById(id);
+                        if (el) el.textContent = '--';
+                    });
+                    document.getElementById('bt-equity').innerHTML = `<div class="empty-state" style="width:100%; padding:30px 0; font-size:0.7rem; color:var(--warn-color);">${errMsg}</div>`;
+                    document.getElementById('bt-trade-history').style.display = 'none';
                 }
             } catch (e) {
+                loadingEl.style.display = 'none';
+                resultsEl.style.display = 'block';
                 log('Backtest error: ' + e.message, 'error');
-                document.getElementById('bt-equity').innerHTML = `<div class="empty-state" style="width:100%; color:var(--down-color);">ERROR: ${e.message}</div>`;
+                document.getElementById('bt-equity').innerHTML = `<div class="empty-state" style="width:100%; padding:30px 0; color:var(--down-color);">CONNECTION ERROR: ${e.message}</div>`;
             }
         }
 
