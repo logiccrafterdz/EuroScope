@@ -26,6 +26,21 @@ class CapitalWebsocketClient:
         # Keep references to background tasks so they don't get garbage collected
         self._listen_task: Optional[asyncio.Task] = None
         self._ping_task: Optional[asyncio.Task] = None
+        
+        # Tick volume buffer: epic -> list of tick timestamps
+        self._tick_volume: Dict[str, List[float]] = {}
+
+    def get_tick_volume(self, epic: str, window_seconds: int = 60) -> int:
+        """Get the number of ticks received for a symbol in the last N seconds."""
+        if epic not in self._tick_volume:
+            return 0
+        try:
+            now = asyncio.get_running_loop().time()
+            # Prune old ticks
+            self._tick_volume[epic] = [ts for ts in self._tick_volume[epic] if now - ts <= window_seconds]
+            return len(self._tick_volume[epic])
+        except RuntimeError:
+            return 0
 
     def add_callback(self, callback: Callable[[str, float, float], None]):
         """Register a callback for incoming tick updates."""
@@ -126,17 +141,23 @@ class CapitalWebsocketClient:
 
     async def _listen(self):
         """Continuously listen for incoming WebSocket messages."""
+        reconnect_delay = 5.0
+        max_delay = 60.0
+        
         while self._running:
             try:
                 if not self.ws or getattr(self.ws.state, 'name', '') != 'OPEN':
-                    logger.warning("WS socket not open in listener; attempting reconnect...")
+                    logger.warning(f"WS socket not open in listener; attempting reconnect in {reconnect_delay}s...")
                     if await self._establish_connection():
+                        reconnect_delay = 5.0  # Reset on success
                         continue
                     else:
-                        await asyncio.sleep(10)
+                        await asyncio.sleep(reconnect_delay)
+                        reconnect_delay = min(max_delay, reconnect_delay * 1.5)
                         continue
 
                 message = await self.ws.recv()
+                reconnect_delay = 5.0  # Reset on successful message receive
                 data = json.loads(message)
                 
                 # Handle tick updates
@@ -147,21 +168,28 @@ class CapitalWebsocketClient:
                     ask = payload.get("ofr") # Capital.com uses 'ofr' for offer/ask
                     
                     if epic and bid and ask:
+                        # Record tick for volume tracking
+                        now = asyncio.get_running_loop().time()
+                        if epic not in self._tick_volume:
+                            self._tick_volume[epic] = []
+                        self._tick_volume[epic].append(now)
+
                         logger.debug(f"Tick received: {epic} {bid}/{ask}")
                         for cb in self._callbacks:
                             asyncio.create_task(self._safe_invoke(cb, epic, float(bid), float(ask)))
                                 
             except websockets.exceptions.ConnectionClosed:
-                logger.warning("Capital.com WS Connection closed. Re-establishing socket...")
-                await asyncio.sleep(5)
-                # Loop continues and calls _establish_connection()
+                logger.warning(f"Capital.com WS Connection closed. Re-establishing in {reconnect_delay}s...")
+                await asyncio.sleep(reconnect_delay)
+                reconnect_delay = min(max_delay, reconnect_delay * 1.5)
             except json.JSONDecodeError:
                 pass
             except asyncio.CancelledError:
                 break
             except Exception as e:
                 logger.error(f"Capital.com WS Listen Error: {e}")
-                await asyncio.sleep(5)
+                await asyncio.sleep(reconnect_delay)
+                reconnect_delay = min(max_delay, reconnect_delay * 1.5)
 
     async def _safe_invoke(self, cb: Callable, symbol: str, bid: float, ask: float):
         try:

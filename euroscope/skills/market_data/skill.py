@@ -18,11 +18,16 @@ class MarketDataSkill(BaseSkill):
     def __init__(self, provider=None):
         super().__init__()
         self._provider = provider
+        self._ws_client = None
         self._buffer: dict = {}
 
     def set_provider(self, provider):
         """Standard setter for price provider (DI)."""
         self._provider = provider
+
+    def set_ws_client(self, ws_client):
+        """Standard setter for WebSocket client (DI)."""
+        self._ws_client = ws_client
 
     async def execute(self, context: SkillContext, action: str, **params) -> SkillResult:
         if action == "get_price":
@@ -56,6 +61,15 @@ class MarketDataSkill(BaseSkill):
                 return SkillResult(success=False, error="No candle data returned")
             context.market_data["candles"] = df
             context.market_data["timeframe"] = timeframe
+            
+            # Inject live tick volume if WS is available
+            if self._ws_client:
+                # Default to EURUSD since the system is currently hardcoded for it
+                tick_vol = self._ws_client.get_tick_volume("EURUSD", window_seconds=300)
+                context.market_data["tick_volume_5m"] = tick_vol
+            else:
+                context.market_data["tick_volume_5m"] = 0
+                
             from datetime import timezone
             self._buffer = {
                 "candles": df,

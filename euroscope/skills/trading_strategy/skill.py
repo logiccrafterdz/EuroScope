@@ -50,6 +50,7 @@ class TradingStrategySkill(BaseSkill):
             "ema": indicators.get("indicators", {}).get("EMA", {}),
             "atr": indicators.get("indicators", {}).get("ATR", {}),
             "stochastic": indicators.get("indicators", {}).get("Stochastic", {}),
+            "tick_volume_5m": context.market_data.get("tick_volume_5m", 0),
         }
 
         if ind["adx"] is None or ind["rsi"] is None:

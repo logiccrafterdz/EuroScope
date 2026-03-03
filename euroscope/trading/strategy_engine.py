@@ -383,6 +383,11 @@ class StrategyEngine:
                     entry_rules.append(f"RSI bullish ({rsi:.0f})")
                     confidence += 5
 
+                tick_vol = indicators.get("tick_volume_5m", 0)
+                if tick_vol > 60:
+                    entry_rules.append(f"Strong tick momentum validates breakout ({tick_vol} ticks/5m)")
+                    confidence += 15
+
         # Breakdown below support
         if direction == "WAIT" and support and current_price:
             nearest_s = support[0]
@@ -407,6 +412,11 @@ class StrategyEngine:
                 if rsi < 50:
                     entry_rules.append(f"RSI bearish ({rsi:.0f})")
                     confidence += 5
+                    
+                tick_vol = indicators.get("tick_volume_5m", 0)
+                if tick_vol > 60:
+                    entry_rules.append(f"Strong tick momentum validates breakdown ({tick_vol} ticks/5m)")
+                    confidence += 15
 
         # Breakout patterns
         for p in patterns:
