@@ -424,17 +424,39 @@
             margin-bottom: 8px;
         }
 
-        .val-lg {
-            font-size: 1.4rem;
-            font-weight: 700;
+        .num-hero {
             font-family: 'Fira Code', monospace;
-            letter-spacing: -1px;
+            font-size: 2.4rem;
+            font-weight: 800;
+            letter-spacing: -1.5px;
         }
 
-        .val-md {
-            font-size: 1rem;
-            font-weight: 600;
+        .num-lg {
             font-family: 'Fira Code', monospace;
+            font-size: 1.25rem;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+
+        .num-md {
+            font-family: 'Fira Code', monospace;
+            font-size: 0.95rem;
+            font-weight: 600;
+            letter-spacing: 0px;
+        }
+
+        .num-sm {
+            font-family: 'Fira Code', monospace;
+            font-size: 0.85rem;
+            font-weight: 600;
+            letter-spacing: 0px;
+        }
+
+        .num-xs {
+            font-family: 'Fira Code', monospace;
+            font-size: 0.75rem;
+            font-weight: 500;
+            letter-spacing: 0px;
         }
 
         .text-glow {
@@ -755,24 +777,19 @@
                 style="text-align: center; padding: 40px 20px; border-color: rgba(255,255,255,0.1); margin-bottom: 16px;">
                 <div class="hero-glow"></div>
                 <div class="label-sm" style="color:var(--text-main); font-weight:800; opacity:0.8;">EUR/USD LIVE</div>
-                <div id="price"
-                    style="font-size:3.3rem; font-weight:800; font-family:'Fira Code'; letter-spacing:-2px; margin-bottom:4px; margin-top:8px; color:#fff;"
-                    class="text-glow">-.-----</div>
-                <div id="price-change" style="font-size:1rem; font-weight:700; font-family:'Fira Code';">--.---
-                    (---%)</div>
+                <div id="price" class="num-hero text-glow" style="margin-bottom:4px; margin-top:8px; color:#fff;">
+                    -.-----</div>
+                <div id="price-change" class="num-sm">--.--- (---%)</div>
             </div>
 
             <div class="bento">
                 <div class="glass-card" style="padding:16px;">
                     <div class="label-sm">Broker Balance</div>
-                    <div id="stat-balance" class="val-md"
-                        style="font-size:0.95rem; letter-spacing:-0.5px; white-space:nowrap;">--.--</div>
+                    <div id="stat-balance" class="num-md" style="white-space:nowrap;">--.--</div>
                 </div>
                 <div class="glass-card" style="padding:16px;">
                     <div class="label-sm">Account Equity</div>
-                    <div id="stat-equity" class="val-md"
-                        style="color:var(--accent-primary); font-size:0.95rem; letter-spacing:-0.5px; white-space:nowrap;">
-                        --.--
+                    <div id="stat-equity" class="num-md" style="color:var(--accent-primary); white-space:nowrap;">--.--
                     </div>
                 </div>
             </div>
@@ -780,12 +797,11 @@
             <div class="bento">
                 <div class="glass-card" style="padding:16px;">
                     <div class="label-sm">Vol. Reach</div>
-                    <div id="stat-range" class="val-md" style="font-size:0.9rem;">--- pips</div>
+                    <div id="stat-range" class="num-sm">--- pips</div>
                 </div>
                 <div class="glass-card" style="padding:16px;">
                     <div class="label-sm">Day Range</div>
-                    <div id="stat-hilo" class="val-md"
-                        style="font-size: 0.75rem; letter-spacing:-0.5px; white-space:nowrap;">-.--- / -.---</div>
+                    <div id="stat-hilo" class="num-sm" style="white-space:nowrap;">-.--- / -.---</div>
                 </div>
             </div>
 
@@ -953,19 +969,19 @@
                     <div style="display:grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap:8px; margin-bottom: 12px;">
                         <div style="text-align:center; padding:10px 0;">
                             <div class="label-sm" style="margin-bottom:4px;">WIN RATE</div>
-                            <div id="bt-wr" class="val-md" style="font-family:'Fira Code';">--%</div>
+                            <div id="bt-wr" class="num-md">--%</div>
                         </div>
                         <div style="text-align:center; padding:10px 0;">
                             <div class="label-sm" style="margin-bottom:4px;">NET P/L</div>
-                            <div id="bt-pnl" class="val-md" style="font-family:'Fira Code';">--</div>
+                            <div id="bt-pnl" class="num-md">--</div>
                         </div>
                         <div style="text-align:center; padding:10px 0;">
                             <div class="label-sm" style="margin-bottom:4px;">TRADES</div>
-                            <div id="bt-trades" class="val-md" style="font-family:'Fira Code';">--</div>
+                            <div id="bt-trades" class="num-md">--</div>
                         </div>
                         <div style="text-align:center; padding:10px 0;">
                             <div class="label-sm" style="margin-bottom:4px;">MAX DD</div>
-                            <div id="bt-dd" class="val-md" style="font-family:'Fira Code';">--</div>
+                            <div id="bt-dd" class="num-md">--</div>
                         </div>
                     </div>
 
@@ -975,27 +991,19 @@
                         <div style="text-align:center;">
                             <div class="label-sm" style="margin-bottom:4px; color:var(--accent-primary);">PROFIT F.
                             </div>
-                            <div id="bt-pf"
-                                style="font-size:0.9rem; font-weight:700; font-family:'Fira Code'; color:var(--text-main);">
-                                --</div>
+                            <div id="bt-pf" class="num-sm" style="color:var(--text-main);">--</div>
                         </div>
                         <div style="text-align:center;">
                             <div class="label-sm" style="margin-bottom:4px; color:var(--accent-primary);">SHARPE</div>
-                            <div id="bt-sharpe"
-                                style="font-size:0.9rem; font-weight:700; font-family:'Fira Code'; color:var(--text-main);">
-                                --</div>
+                            <div id="bt-sharpe" class="num-sm" style="color:var(--text-main);">--</div>
                         </div>
                         <div style="text-align:center;">
                             <div class="label-sm" style="margin-bottom:4px;">BEST</div>
-                            <div id="bt-best"
-                                style="font-size:0.9rem; font-weight:700; font-family:'Fira Code'; color:var(--up-color);">
-                                --</div>
+                            <div id="bt-best" class="num-sm" style="color:var(--up-color);">--</div>
                         </div>
                         <div style="text-align:center;">
                             <div class="label-sm" style="margin-bottom:4px;">WORST</div>
-                            <div id="bt-worst"
-                                style="font-size:0.9rem; font-weight:700; font-family:'Fira Code'; color:var(--down-color);">
-                                --</div>
+                            <div id="bt-worst" class="num-sm" style="color:var(--down-color);">--</div>
                         </div>
                     </div>
 
@@ -1027,12 +1035,12 @@
                     <div
                         style="padding:12px; text-align:center; background:rgba(255,255,255,0.02); border-radius:12px; border:1px solid var(--border-color);">
                         <div class="label-sm" style="margin-bottom:6px;">WIN RATE</div>
-                        <div id="perf-wr" class="val-md" style="font-size:1.3rem; font-family:'Fira Code';">--%</div>
+                        <div id="perf-wr" class="num-lg">--%</div>
                     </div>
                     <div
                         style="padding:12px; text-align:center; background:rgba(255,255,255,0.02); border-radius:12px; border:1px solid var(--border-color);">
                         <div class="label-sm" style="margin-bottom:6px;">TOTAL P/L</div>
-                        <div id="perf-pnl" class="val-md" style="font-size:1.3rem; font-family:'Fira Code';">--</div>
+                        <div id="perf-pnl" class="num-lg">--</div>
                     </div>
                 </div>
                 <!-- Risk Stats -->
@@ -1041,12 +1049,12 @@
                         style="padding:10px; text-align:center; background:rgba(255,255,255,0.02); border-radius:12px; border:1px solid var(--border-color); border-top:2px solid var(--accent-primary);">
                         <div class="label-sm" style="margin-bottom:4px; color:var(--accent-primary);">DAILY DRAWDOWN
                         </div>
-                        <div id="risk-daily-pnl" class="val-md" style="font-family:'Fira Code';">--.--</div>
+                        <div id="risk-daily-pnl" class="num-md">--.--</div>
                     </div>
                     <div
                         style="padding:10px; text-align:center; background:rgba(255,255,255,0.02); border-radius:12px; border:1px solid var(--border-color); border-top:2px solid var(--warn-color);">
                         <div class="label-sm" style="margin-bottom:4px;">LOSS STREAK</div>
-                        <div id="risk-streak" class="val-md" style="font-family:'Fira Code';">--</div>
+                        <div id="risk-streak" class="num-md">--</div>
                     </div>
                 </div>
                 <div class="label-sm" style="margin-bottom:8px;">AI TUNING RECOMMENDATIONS</div>
@@ -1745,9 +1753,9 @@
                                 <span style="font-size:0.75rem; color:var(--text-dim);">${f2(s.confidence)}% CONF</span>
                             </div>
                             <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; text-align:center;">
-                                <div><div class="label-sm">ENTRY</div><div class="val-md">${f5(s.entry_price)}</div></div>
-                                <div><div class="label-sm">STOP</div><div class="val-md" style="color:var(--down-color)">${f5(s.stop_loss)}</div></div>
-                                <div><div class="label-sm">TARGET</div><div class="val-md" style="color:var(--up-color)">${f5(s.take_profit)}</div></div>
+                                <div><div class="label-sm">ENTRY</div><div class="num-md">${f5(s.entry_price)}</div></div>
+                                <div><div class="label-sm">STOP</div><div class="num-md" style="color:var(--down-color)">${f5(s.stop_loss)}</div></div>
+                                <div><div class="label-sm">TARGET</div><div class="num-md" style="color:var(--up-color)">${f5(s.take_profit)}</div></div>
                             </div>
                             ${s.risk_reward_ratio ? `<div style="text-align:center; margin-top:8px; font-size:0.7rem; color:var(--text-muted);">R:R ${s.risk_reward_ratio} | Risk ${f2(s.risk_pips)}p | Reward ${f2(s.reward_pips)}p</div>` : ''}
                         </div>`;
@@ -1985,7 +1993,7 @@
                                 </div>
                                 <div style="text-align:right">
                                     <div class="label-sm" style="margin-bottom:2px;">CONVICTION</div>
-                                    <div style="font-family:'Fira Code'; font-size:0.95rem; font-weight:700;">${(s.score * 100).toFixed(1)}%</div>
+                                    <div class="num-md">${(s.score * 100).toFixed(1)}%</div>
                                 </div>
                             </div>
                         `;
@@ -2002,12 +2010,12 @@
                         <div class="gauge-wrap">
                             <div class="label-sm" style="width:40px; margin:0;">RSI</div>
                             <div class="gauge-bar-bg"><div class="gauge-fill" style="width:${rsiVal}%; background:${rsiColor}"></div></div>
-                            <div class="val-md" style="width:40px; text-align:right;">${f2(rsiVal)}</div>
+                            <div class="num-md" style="width:40px; text-align:right;">${f2(rsiVal)}</div>
                         </div>
                         <div class="gauge-wrap">
                             <div class="label-sm" style="width:40px; margin:0;">ADX</div>
                             <div class="gauge-bar-bg"><div class="gauge-fill" style="width:${Math.min(adxVal, 100)}%; background:${adxColor}"></div></div>
-                            <div class="val-md" style="width:40px; text-align:right;">${f2(adxVal)}</div>
+                            <div class="num-md" style="width:40px; text-align:right;">${f2(adxVal)}</div>
                         </div>
                         <div class="info-row"><span class="label">MACD</span><span class="val">${ind.MACD?.signal_text || '---'}</span></div>
                         <div class="info-row"><span class="label">EMA 50 / 200</span><span class="val">${f5(ind.EMA?.ema50)} / ${f5(ind.EMA?.ema200)}</span></div>
@@ -2083,26 +2091,26 @@
                     <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-bottom:16px;">
                         <div class="glass-card" style="padding:16px; border-top: 2px solid var(--accent-primary);">
                             <div class="label-sm" style="margin-bottom:8px;">FED FUND RATE</div>
-                            <div style="font-size:1.25rem; font-weight:800; font-family:'Fira Code'; color:var(--text-main);">${f2(us.fed?.rate)}%</div>
+                            <div class="num-lg" style="color:var(--text-main);">${f2(us.fed?.rate)}%</div>
                         </div>
                         <div class="glass-card" style="padding:16px; border-top: 2px solid #3b82f6;">
                             <div class="label-sm" style="margin-bottom:8px;">ECB MAIN RATE</div>
-                            <div style="font-size:1.25rem; font-weight:800; font-family:'Fira Code'; color:var(--text-main);">${f2(eu.ecb?.value)}%</div>
+                            <div class="num-lg" style="color:var(--text-main);">${f2(eu.ecb?.value)}%</div>
                         </div>
                         <div class="glass-card" style="padding:16px;">
                             <div class="label-sm" style="margin-bottom:8px;">US CPI (YoY)</div>
-                            <div style="font-size:1.25rem; font-weight:800; font-family:'Fira Code'; color:var(--text-main);">${f2(us.cpi?.value)}%</div>
+                            <div class="num-lg" style="color:var(--text-main);">${f2(us.cpi?.value)}%</div>
                         </div>
                         <div class="glass-card" style="padding:16px;">
                             <div class="label-sm" style="margin-bottom:8px;">EU CPI (YoY)</div>
-                            <div style="font-size:1.25rem; font-weight:800; font-family:'Fira Code'; color:var(--text-main);">${f2(eu.cpi?.value)}%</div>
+                            <div class="num-lg" style="color:var(--text-main);">${f2(eu.cpi?.value)}%</div>
                         </div>
                     </div>
                     <div class="glass-card bento-full" style="padding:16px; margin-bottom:12px;">
                         <div style="display:flex; justify-content:space-between; align-items:center;">
                             <div>
                                 <div class="label-sm" style="margin-bottom:4px;">10Y YIELD SPREAD (US-DE)</div>
-                                <div style="font-size:1.25rem; font-weight:800; font-family:'Fira Code'; color:${getTrendColor(eu.yield_spread?.spread, 0)};">${f2(eu.yield_spread?.spread)}%</div>
+                                <div class="num-lg" style="color:${getTrendColor(eu.yield_spread?.spread, 0)};">${f2(eu.yield_spread?.spread)}%</div>
                             </div>
                             <div style="text-align:right;">
                                 <div class="label-sm" style="margin-bottom:4px;">GLOBAL MACRO BIAS</div>
@@ -2146,9 +2154,9 @@
                                 <span style="font-size: 0.8rem; color: ${t.pnl_pips >= 0 ? 'var(--up-color)' : 'var(--down-color)'}; font-weight:700;">${t.pnl_pips >= 0 ? '+' : ''}${t.pnl_pips?.toFixed(1) || 0} pips</span>
                             </div>
                             <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; text-align:center;">
-                                <div><div class="label-sm">ENTRY</div><div class="val-md">${f5(t.entry_price)}</div></div>
-                                <div><div class="label-sm">STOP</div><div class="val-md" style="color:var(--down-color)">${f5(t.stop_loss)}</div></div>
-                                <div><div class="label-sm">TARGET</div><div class="val-md" style="color:var(--up-color)">${f5(t.take_profit)}</div></div>
+                                <div><div class="label-sm">ENTRY</div><div class="num-md">${f5(t.entry_price)}</div></div>
+                                <div><div class="label-sm">STOP</div><div class="num-md" style="color:var(--down-color)">${f5(t.stop_loss)}</div></div>
+                                <div><div class="label-sm">TARGET</div><div class="num-md" style="color:var(--up-color)">${f5(t.take_profit)}</div></div>
                             </div>
                         </div>`).join('');
                 } else {
@@ -2169,9 +2177,9 @@
                                     <span style="font-size:0.75rem; color:var(--text-dim); font-weight:700;">${s.timeframe || '-'}</span>
                                 </div>
                                 <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; text-align:center;">
-                                    <div><div class="label-sm">ENTRY</div><div class="val-md">${f5(s.entry_price)}</div></div>
-                                    <div><div class="label-sm">STOP</div><div class="val-md" style="color:var(--down-color)">${f5(s.stop_loss)}</div></div>
-                                    <div><div class="label-sm">TARGET</div><div class="val-md" style="color:var(--up-color)">${f5(s.take_profit)}</div></div>
+                                    <div><div class="label-sm">ENTRY</div><div class="num-md">${f5(s.entry_price)}</div></div>
+                                    <div><div class="label-sm">STOP</div><div class="num-md" style="color:var(--down-color)">${f5(s.stop_loss)}</div></div>
+                                    <div><div class="label-sm">TARGET</div><div class="num-md" style="color:var(--up-color)">${f5(s.take_profit)}</div></div>
                                 </div>
                                 <div style="display:flex; justify-content:space-between; margin-top:12px; font-size:0.7rem; color:var(--text-dim);">
                                     <span>CONF: ${f2(s.confidence)}%</span>
@@ -2194,7 +2202,7 @@
                                 <div style="font-size:0.7rem; color:var(--text-dim);">${t.strategy}</div>
                             </div>
                             <div style="text-align:right;">
-                                <div style="font-family:'Fira Code'; font-weight:700; font-size:0.85rem; color:${t.pnl_pips >= 0 ? 'var(--up-color)' : 'var(--down-color)'};">${t.pnl_pips >= 0 ? '+' : ''}${t.pnl_pips?.toFixed(1) || 0} p</div>
+                                <div class="num-sm" style="color:${t.pnl_pips >= 0 ? 'var(--up-color)' : 'var(--down-color)'};">${t.pnl_pips >= 0 ? '+' : ''}${t.pnl_pips?.toFixed(1) || 0} p</div>
                                 <div style="font-size:0.75rem; color:var(--text-muted);">${new Date(t.timestamp * 1000).toLocaleDateString()}</div>
                             </div>
                         </div>`).join('');
