@@ -73,9 +73,13 @@ def setup_structured_logging(level: str = "INFO", log_dir: str = "data/logs"):
     # Clear existing handlers to prevent duplicates on re-init
     root.handlers.clear()
 
-    # Console handler — human-readable
+    # Console handler — human-readable or JSON
+    import os
     console = logging.StreamHandler(sys.stdout)
-    console.setFormatter(ConsoleFormatter())
+    if os.getenv("EUROSCOPE_JSON_CONSOLE", "0") == "1":
+        console.setFormatter(JSONFormatter())
+    else:
+        console.setFormatter(ConsoleFormatter())
     console.setLevel(getattr(logging, level.upper(), logging.INFO))
     root.addHandler(console)
 

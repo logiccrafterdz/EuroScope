@@ -70,8 +70,32 @@ class Config:
     safety_volatility_stop_min: int = 25
 
     @classmethod
+    def _validate_env_syntax(cls, filepath=".env"):
+        """Check for common syntax errors in .env file (L-4)."""
+        import logging
+        logger = logging.getLogger("euroscope.config")
+        if not os.path.exists(filepath):
+            return
+        try:
+            with open(filepath, "r", encoding="utf-8") as f:
+                for i, line in enumerate(f):
+                    line = line.strip()
+                    if not line or line.startswith("#"):
+                        continue
+                    if "=" not in line:
+                        logger.warning(f"Malformed line {i+1} in {filepath}: Missing '='")
+                    else:
+                        key, val = line.split("=", 1)
+                        if val.count('"') % 2 != 0 or val.count("'") % 2 != 0:
+                            logger.warning(f"Malformed line {i+1} in {filepath}: Unclosed quote in {key.strip()}")
+        except Exception as e:
+            logger.debug(f"Could not validate .env syntax: {e}")
+
+    @classmethod
     def from_env(cls) -> "Config":
         """Load configuration from environment variables."""
+        cls._validate_env_syntax()
+        
         # Parse allowed users
         allowed_raw = os.getenv("EUROSCOPE_TELEGRAM_ALLOWED_USERS", "")
         allowed_users = []
