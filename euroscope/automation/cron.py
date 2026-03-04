@@ -387,16 +387,15 @@ class CronScheduler:
                 resolved = await ft.resolve_all(current_price)
                 if resolved:
                     logger.info(f"Learning: resolved {len(resolved)} forecasts")
-                    
                     # Store the lessons in Vector Memory
-                    from ..brain.vector_memory import VectorMemory
-                    vm = VectorMemory()
-                    for fc in resolved:
-                        if hasattr(fc, "_lesson_text") and fc._lesson_text:
-                            vm.store_analysis(
-                                text=fc._lesson_text,
-                                metadata={"skill": fc.skill, "outcome": fc.outcome, "type": "learning_lesson"}
-                            )
+                    vm = getattr(self.bot, "vector_memory", None)
+                    if vm:
+                        for fc in resolved:
+                            if hasattr(fc, "_lesson_text") and fc._lesson_text:
+                                vm.store_analysis(
+                                    text=fc._lesson_text,
+                                    metadata={"skill": fc.skill, "outcome": fc.outcome, "type": "learning_lesson"}
+                                )
 
             except Exception as e:
                 logger.error(f"Learning tick failed: {e}")

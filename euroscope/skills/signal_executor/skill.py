@@ -53,10 +53,14 @@ class SignalExecutorSkill(BaseSkill):
         self._temp_db_path = None
         self._config_injected = False
         self._open: list[PaperTrade] = []
+        self._recent_signals = {}
+        self._webhooks = None
 
     def set_config(self, config):
         self._config = config
         self._guardrail = SafetyGuardrail(config, storage=self._storage)
+        from ...bot.webhooks import WebhookDispatcher
+        self._webhooks = WebhookDispatcher(config)
         self._config_injected = True
         value = getattr(config, "paper_trading_only", None)
         if value is None:
@@ -172,6 +176,18 @@ class SignalExecutorSkill(BaseSkill):
         reasoning = signal.get("reasoning", "")
         atr = context.analysis.get("indicators", {}).get("atr")
 
+        # M-5: Trade Deduplication within 60 seconds
+        import time
+        now = time.monotonic()
+        signal_hash = f"{direction}:{round(entry_price, 4)}:{strategy}"
+        self._recent_signals = {k: v for k, v in getattr(self, '_recent_signals', {}).items() if now - v < 60}
+        
+        if signal_hash in self._recent_signals:
+            logger.warning(f"SignalExecutor: Blocked duplicate signal '{signal_hash}' (trade deduplication)")
+            return SkillResult(success=False, error="Duplicate signal blocked (trade deduplication)")
+            
+        self._recent_signals[signal_hash] = now
+
         if not self._executor:
             self._init_executor()
             
@@ -209,10 +225,8 @@ class SignalExecutorSkill(BaseSkill):
         
         # Fire webhook
         try:
-            if not hasattr(self, '_webhooks'):
-                from ...bot.webhooks import WebhookDispatcher
-                self._webhooks = WebhookDispatcher(self._config)
-            await self._webhooks.dispatch("trade_opened", trade_data)
+            if getattr(self, '_webhooks', None):
+                await self._webhooks.dispatch("trade_opened", trade_data)
         except Exception as e:
             logger.warning(f"Failed to dispatch trade_opened webhook: {e}")
         

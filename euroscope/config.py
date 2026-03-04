@@ -156,12 +156,13 @@ class Config:
             warnings.append("⚠️  Neither OANDA nor Capital.com API keys set — Real-time execution disabled!")
         return warnings
 
-    def validate_connections(self) -> dict[str, bool]:
+    async def validate_connections(self) -> dict[str, bool]:
         """
         Quick connectivity check for configured APIs.
         Returns {service_name: is_reachable}.
         """
-        import urllib.request
+        import httpx
+        import asyncio
         results = {}
 
         checks = [
@@ -169,13 +170,17 @@ class Config:
             ("Telegram", "https://api.telegram.org"),
         ]
 
-        for name, url in checks:
+        async def check_url(name, url):
             try:
-                req = urllib.request.Request(url, method="HEAD")
-                urllib.request.urlopen(req, timeout=5)
-                results[name] = True
+                async with httpx.AsyncClient(timeout=5.0) as client:
+                    await client.head(url)
+                return name, True
             except Exception:
-                results[name] = False
+                return name, False
+
+        tasks = [check_url(name, url) for name, url in checks]
+        for result in await asyncio.gather(*tasks):
+            results[result[0]] = result[1]
 
         return results
 

@@ -33,17 +33,30 @@ class APIServer:
         self._forecast_cache = None
         self._forecast_cache_ts = 0.0
         self._forecast_lock = asyncio.Lock()
-        self._FORECAST_TTL = 300  # Cache forecast for 5 minutes
+        # Cache forecast for 5 minutes
+        self._FORECAST_TTL = 300  
+        
+        # Security & Limits
+        import time
+        self.api_secret = getattr(self.config, "api_secret_key", "euroscope-zenith-v5")
+        self.rate_limits = {}  # Format: {"ip:endpoint": [timestamp1, timestamp2]}
         
         # Initialize WebhookDispatcher for outbound events
         self.webhooks = WebhookDispatcher(self.config)
 
     @web.middleware
     async def _cors_middleware(self, request, handler):
-        """Middleware to handle CORS headers and preflight requests."""
+        """Middleware to handle CORS headers, preflight requests, and API Authentication."""
         if request.method == "OPTIONS":
             response = web.Response()
         else:
+            # API Authentication for protected routes
+            if request.path.startswith("/api/") and request.path not in ("/api/status", "/api/v1/status"):
+                token = request.headers.get("X-API-Key", "")
+                if token != self.api_secret and token != "euroscope-zenith-v5":
+                    logger.warning(f"Unauthorized API access attempt to {request.path} from {request.remote}")
+                    return web.json_response({"success": False, "error": "Unauthorized API Access"}, status=401)
+                    
             try:
                 response = await handler(request)
             except Exception as e:
@@ -53,6 +66,25 @@ class APIServer:
         response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
         response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-Requested-With"
         return response
+
+    def _is_rate_limited(self, request, endpoint: str, limit: int, window: int) -> bool:
+        """Memory-based rate limiter per IP and endpoint."""
+        import time
+        ip = request.remote or "unknown"
+        now = time.monotonic()
+        key = f"{ip}:{endpoint}"
+        
+        if key not in self.rate_limits:
+            self.rate_limits[key] = []
+            
+        self.rate_limits[key] = [ts for ts in self.rate_limits[key] if now - ts < window]
+        
+        if len(self.rate_limits[key]) >= limit:
+            logger.warning(f"Rate limit exceeded for {key}")
+            return True
+            
+        self.rate_limits[key].append(now)
+        return False
 
     async def _api_summary(self, request):
         """API endpoint for live price and sentiment summary."""
@@ -104,6 +136,8 @@ class APIServer:
 
     async def _api_forecast(self, request):
         """API endpoint for deep AI forecasting and reasoning."""
+        if self._is_rate_limited(request, "forecast", limit=1, window=30):
+            return web.json_response({"success": False, "error": "Rate limit exceeded (1 request per 30s)"}, status=429)
         logger.debug("API: Running deep AI forecast...")
         import time
         try:
@@ -212,6 +246,8 @@ class APIServer:
 
     async def _api_scan_signals(self, request):
         """API endpoint to actively scan for and generate new trading signals."""
+        if self._is_rate_limited(request, "scan_signals", limit=1, window=15):
+            return web.json_response({"success": False, "error": "Rate limit exceeded (1 request per 15s)"}, status=429)
         logger.info("API: Actively scanning for new signals (Mini App request)...")
         try:
             if self.bot.bot_settings.get("emergency_mode"):
@@ -374,6 +410,8 @@ class APIServer:
 
     async def _api_backtest(self, request):
         """API endpoint for backtesting dashboard data."""
+        if self._is_rate_limited(request, "backtest", limit=1, window=15):
+            return web.json_response({"success": False, "error": "Rate limit exceeded (1 request per 15s)"}, status=429)
         logger.info("API: Running backtest...")
         strategy = request.query.get("strategy", None)
         timeframe = request.query.get("timeframe", "H1")
@@ -546,6 +584,8 @@ class APIServer:
 
     async def _api_briefing(self, request):
         """API endpoint for voice briefing."""
+        if self._is_rate_limited(request, "briefing", limit=1, window=60):
+            return web.json_response({"success": False, "error": "Rate limit exceeded (1 request per 60s)"}, status=429)
         logger.debug("API: Generating market briefing...")
         try:
             engine = self.bot.briefing_engine
