@@ -28,6 +28,8 @@ def main():
 
     # Load configuration
     config = Config.from_env()
+    import os
+    os.makedirs(config.data_dir, exist_ok=True)
     setup_logging(config.log_level)
 
     logger = logging.getLogger("euroscope")
