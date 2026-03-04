@@ -1158,29 +1158,46 @@
 
         <!-- BRIEFING TAB -->
         <div id="briefing-view" class="tab-content">
-            <!-- Header Card -->
-            <div class="glass-card bento-full" style="padding:20px;">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-                    <div style="display:flex; align-items:center; gap:10px;">
-                        <div style="font-size:1.5rem;">🎙️</div>
-                        <div>
-                            <div class="label-sm" style="margin:0; font-size:0.7rem;">MARKET BRIEFING</div>
-                            <div id="briefing-time"
-                                style="font-size:0.55rem; color:var(--text-dim); font-family:'Fira Code'; margin-top:2px;">
-                            </div>
-                        </div>
-                    </div>
-                    <div id="briefing-urgency"
-                        style="font-size:0.6rem; font-weight:800; letter-spacing:2px; padding:4px 10px; border-radius:6px; background:rgba(0,255,157,0.1); color:var(--accent-primary); border:1px solid rgba(0,255,157,0.2);">
-                        NORMAL</div>
+
+            <!-- Hero Price Header -->
+            <div class="glass-card bento-full" style="padding:20px; position:relative; overflow:hidden;">
+                <div
+                    style="position:absolute; top:-20px; right:-20px; width:120px; height:120px; border-radius:50%; background:radial-gradient(circle, rgba(0,255,157,0.08) 0%, transparent 70%);">
                 </div>
+                <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:14px;">
+                    <div>
+                        <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px;">
+                            <div class="label-sm" style="margin:0; font-size:0.6rem; letter-spacing:2px; opacity:0.6;">
+                                MARKET INTELLIGENCE</div>
+                            <div id="briefing-urgency"
+                                style="font-size:0.5rem; font-weight:800; letter-spacing:2px; padding:2px 8px; border-radius:4px; background:rgba(0,255,157,0.1); color:var(--accent-primary); border:1px solid rgba(0,255,157,0.2);">
+                                NORMAL</div>
+                        </div>
+                        <div id="briefing-time"
+                            style="font-size:0.5rem; color:var(--text-dim); font-family:'Fira Code';"></div>
+                    </div>
+                    <div id="b-session-pill"
+                        style="font-size:0.55rem; font-weight:800; letter-spacing:1.5px; padding:4px 12px; border-radius:20px; background:rgba(59,130,246,0.12); color:#60a5fa; border:1px solid rgba(59,130,246,0.2);">
+                        ---</div>
+                </div>
+
+                <!-- Live Price Display -->
+                <div style="display:flex; align-items:baseline; gap:12px; margin-bottom:6px;">
+                    <div id="b-price"
+                        style="font-size:2rem; font-weight:900; font-family:'Fira Code'; color:var(--text-main); letter-spacing:-0.5px;">
+                        —</div>
+                    <div id="b-change-badge"
+                        style="font-size:0.75rem; font-weight:700; padding:3px 10px; border-radius:6px; font-family:'Fira Code';">
+                        —</div>
+                </div>
+                <div id="b-price-range" style="font-size:0.6rem; color:var(--text-dim); font-family:'Fira Code';">H — /
+                    L — · Range —P</div>
+
                 <!-- Executive Summary -->
                 <div
-                    style="padding:14px; background:rgba(255,255,255,0.02); border-radius:12px; border:1px solid var(--border-color); border-left:3px solid var(--accent-primary);">
-                    <div class="label-sm" style="margin-bottom:6px; color:var(--accent-primary);">EXECUTIVE SUMMARY
-                    </div>
+                    style="margin-top:16px; padding:12px; background:rgba(255,255,255,0.02); border-radius:10px; border:1px solid var(--border-color);">
                     <p id="briefing-summary"
-                        style="font-size:0.85rem; color:var(--text-main); line-height:1.6; font-weight:500; margin:0;">
+                        style="font-size:0.78rem; color:var(--text-muted); line-height:1.7; margin:0; font-style:italic;">
                         Loading briefing...</p>
                 </div>
             </div>
@@ -1189,15 +1206,117 @@
             <div id="briefing-loading" style="display:none; text-align:center; padding:30px 0;">
                 <span class="loading-spinner"></span>
                 <div style="font-size:0.7rem; color:var(--text-dim); margin-top:10px; letter-spacing:1px;">COMPILING
-                    BRIEFING...</div>
+                    INTELLIGENCE...</div>
             </div>
 
-            <!-- Section Cards -->
-            <div id="briefing-sections" style="display:flex; flex-direction:column; gap:10px; margin-top:10px;"></div>
+            <!-- Technical Snapshot -->
+            <div id="b-technical-card" class="glass-card bento-full" style="padding:16px; display:none;">
+                <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;">
+                    <div class="label-sm" style="margin:0; font-size:0.65rem;">TECHNICAL SNAPSHOT</div>
+                    <div id="b-bias-pill"
+                        style="font-size:0.55rem; font-weight:900; letter-spacing:2px; padding:3px 10px; border-radius:4px;">
+                        NEUTRAL</div>
+                </div>
+                <!-- RSI Gauge -->
+                <div style="margin-bottom:10px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                        <span
+                            style="font-size:0.6rem; color:var(--text-dim); font-weight:700; letter-spacing:1px;">RSI</span>
+                        <span id="b-rsi-val"
+                            style="font-size:0.7rem; font-family:'Fira Code'; font-weight:700;">—</span>
+                    </div>
+                    <div style="height:6px; background:rgba(255,255,255,0.05); border-radius:3px; overflow:hidden;">
+                        <div id="b-rsi-bar"
+                            style="height:100%; width:50%; border-radius:3px; transition:width 0.8s ease, background 0.8s ease;">
+                        </div>
+                    </div>
+                </div>
+                <!-- ADX Gauge -->
+                <div style="margin-bottom:12px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                        <span style="font-size:0.6rem; color:var(--text-dim); font-weight:700; letter-spacing:1px;">ADX
+                            (Trend Strength)</span>
+                        <span id="b-adx-val"
+                            style="font-size:0.7rem; font-family:'Fira Code'; font-weight:700;">—</span>
+                    </div>
+                    <div style="height:6px; background:rgba(255,255,255,0.05); border-radius:3px; overflow:hidden;">
+                        <div id="b-adx-bar"
+                            style="height:100%; width:25%; border-radius:3px; transition:width 0.8s ease;"></div>
+                    </div>
+                </div>
+                <!-- Indicators Row -->
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+                    <div
+                        style="padding:8px 10px; background:rgba(255,255,255,0.02); border-radius:8px; border:1px solid var(--border-color);">
+                        <div style="font-size:0.5rem; color:var(--text-dim); letter-spacing:1px; margin-bottom:2px;">
+                            MACD</div>
+                        <div id="b-macd-val" style="font-size:0.7rem; font-weight:700; color:var(--text-main);">---
+                        </div>
+                    </div>
+                    <div
+                        style="padding:8px 10px; background:rgba(255,255,255,0.02); border-radius:8px; border:1px solid var(--border-color);">
+                        <div style="font-size:0.5rem; color:var(--text-dim); letter-spacing:1px; margin-bottom:2px;">EMA
+                            CROSS</div>
+                        <div id="b-ema-val" style="font-size:0.7rem; font-weight:700; color:var(--text-main);">---</div>
+                    </div>
+                </div>
+            </div>
 
-            <!-- Section Count Badge -->
+            <!-- Key Levels -->
+            <div id="b-levels-card" class="glass-card bento-full" style="padding:16px; display:none;">
+                <div class="label-sm" style="margin-bottom:12px; font-size:0.65rem;">KEY LEVELS</div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+                    <div>
+                        <div
+                            style="font-size:0.5rem; color:var(--up-color); font-weight:800; letter-spacing:1.5px; margin-bottom:6px;">
+                            ▲ SUPPORT</div>
+                        <div id="b-support-levels" style="display:flex; flex-direction:column; gap:4px;"></div>
+                    </div>
+                    <div>
+                        <div
+                            style="font-size:0.5rem; color:var(--down-color); font-weight:800; letter-spacing:1.5px; margin-bottom:6px;">
+                            ▼ RESISTANCE</div>
+                        <div id="b-resistance-levels" style="display:flex; flex-direction:column; gap:4px;"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Active Signals -->
+            <div id="b-signals-card" class="glass-card bento-full" style="padding:16px; display:none;">
+                <div class="label-sm" style="margin-bottom:10px; font-size:0.65rem;">ACTIVE SIGNALS</div>
+                <div id="b-signals-list"></div>
+            </div>
+
+            <!-- Patterns -->
+            <div id="b-patterns-card" class="glass-card bento-full" style="padding:16px; display:none;">
+                <div class="label-sm" style="margin-bottom:10px; font-size:0.65rem;">CHART PATTERNS</div>
+                <div id="b-patterns-list" style="display:flex; flex-wrap:wrap; gap:6px;"></div>
+            </div>
+
+            <!-- News & Macro -->
+            <div id="b-news-card" class="glass-card bento-full" style="padding:16px; display:none;">
+                <div class="label-sm" style="margin-bottom:10px; font-size:0.65rem;">NEWS & MACRO</div>
+                <div id="b-news-list" style="display:flex; flex-direction:column; gap:8px;"></div>
+            </div>
+
+            <!-- Performance + Risk Footer -->
+            <div id="b-footer" class="glass-card bento-full" style="padding:14px; display:none;">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <div>
+                        <div style="font-size:0.5rem; color:var(--text-dim); letter-spacing:1px; margin-bottom:2px;">
+                            PERFORMANCE</div>
+                        <div id="b-perf-line"
+                            style="font-size:0.7rem; font-family:'Fira Code'; color:var(--text-muted);">—</div>
+                    </div>
+                    <div id="b-risk-badge"
+                        style="font-size:0.55rem; font-weight:800; padding:4px 10px; border-radius:6px; letter-spacing:1px;">
+                        0 ALERTS</div>
+                </div>
+            </div>
+
+            <!-- Data Sources Badge -->
             <div id="briefing-count"
-                style="text-align:center; padding:10px 0; font-size:0.55rem; color:var(--text-dim); letter-spacing:1px;">
+                style="text-align:center; padding:10px 0; font-size:0.5rem; color:var(--text-dim); letter-spacing:1.5px;">
             </div>
         </div>
     </div>
@@ -2328,14 +2447,11 @@
                 if (!_btLoaded) runBacktest(null);
                 loadPerformance();
             } else if (activeTab === 'briefing') {
-                if (_briefingLoaded) return; // Don't re-fetch on sync cycle
+                if (_briefingLoaded) return;
                 const bLoading = document.getElementById('briefing-loading');
-                const bSections = document.getElementById('briefing-sections');
                 const bSum = document.getElementById('briefing-summary');
 
-                // Show loading
                 bLoading.style.display = 'block';
-                bSections.innerHTML = '';
                 bSum.textContent = 'Compiling market intelligence...';
 
                 const res = await api('/briefing');
@@ -2344,7 +2460,7 @@
                 if (res.success && res.data) {
                     const b = res.data;
 
-                    // Urgency badge
+                    // ── Urgency Badge ──
                     const urgEl = document.getElementById('briefing-urgency');
                     const urgColors = {
                         normal: { bg: 'rgba(0,255,157,0.1)', color: 'var(--accent-primary)', border: 'rgba(0,255,157,0.2)' },
@@ -2353,44 +2469,143 @@
                     };
                     const uc = urgColors[b.urgency] || urgColors.normal;
                     urgEl.textContent = (b.urgency || 'normal').toUpperCase();
-                    urgEl.style.color = uc.color;
-                    urgEl.style.background = uc.bg;
-                    urgEl.style.borderColor = uc.border;
+                    urgEl.style.cssText = `font-size:0.5rem;font-weight:800;letter-spacing:2px;padding:2px 8px;border-radius:4px;color:${uc.color};background:${uc.bg};border:1px solid ${uc.border}`;
 
-                    // Timestamp
-                    if (b.timestamp) {
-                        document.getElementById('briefing-time').textContent = formatDate(b.timestamp);
-                    }
-
-                    // Executive Summary (no duplication — backend now generates a proper one-liner)
+                    if (b.timestamp) document.getElementById('briefing-time').textContent = formatDate(b.timestamp);
                     bSum.innerHTML = parseMd(b.summary || 'No data available');
 
-                    // Section Cards with icons and priority-based accent colors
-                    const priorityColors = {
-                        1: 'var(--down-color)',      // Critical = red
-                        2: 'var(--accent-primary)',   // High = green
-                        3: '#3b82f6',                 // Medium = blue
-                        4: 'var(--text-dim)',          // Low = dim
-                        5: 'var(--text-dim)',          // Default = dim
-                    };
+                    // ── Market Pulse (Hero Price) ──
+                    const pulse = b.market_pulse || {};
+                    const price = pulse.price || 0;
+                    const change = pulse.change || 0;
+                    const changePct = pulse.change_pct || 0;
+                    const isUp = change >= 0;
+                    const sign = isUp ? '+' : '';
 
-                    bSections.innerHTML = (b.sections || []).map(s => {
-                        const accentColor = priorityColors[s.priority] || 'var(--text-dim)';
-                        const icon = s.icon || '\ud83d\udccb';
-                        return `
-                            <div class="glass-card bento-full" style="border-left:3px solid ${accentColor}; padding:16px;">
-                                <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
-                                    <span style="font-size:1rem;">${icon}</span>
-                                    <h4 style="font-size:0.7rem; color:var(--text-main); margin:0; text-transform:uppercase; letter-spacing:1.5px; font-weight:800;">${s.title}</h4>
+                    document.getElementById('b-price').textContent = price ? price.toFixed(5) : '—';
+                    const changeBadge = document.getElementById('b-change-badge');
+                    changeBadge.textContent = price ? `${sign}${changePct.toFixed(2)}%` : '—';
+                    changeBadge.style.cssText = `font-size:0.75rem;font-weight:700;padding:3px 10px;border-radius:6px;font-family:'Fira Code';color:${isUp ? 'var(--up-color)' : 'var(--down-color)'};background:${isUp ? 'rgba(0,255,157,0.1)' : 'rgba(255,51,102,0.1)'}`;
+
+                    const hi = pulse.high ? f5(pulse.high) : '—';
+                    const lo = pulse.low ? f5(pulse.low) : '—';
+                    const rng = pulse.spread_pips ? pulse.spread_pips.toFixed(1) : '—';
+                    document.getElementById('b-price-range').textContent = `H ${hi} / L ${lo} · Range ${rng}P`;
+
+                    const sessionPill = document.getElementById('b-session-pill');
+                    sessionPill.textContent = pulse.session || '---';
+
+                    // ── Technical Snapshot ──
+                    const tech = b.technical || {};
+                    const techCard = document.getElementById('b-technical-card');
+                    techCard.style.display = 'block';
+
+                    const biasPill = document.getElementById('b-bias-pill');
+                    const bias = (tech.bias || 'NEUTRAL').toUpperCase();
+                    biasPill.textContent = bias;
+                    const biasColors = { BULLISH: { c: 'var(--up-color)', bg: 'rgba(0,255,157,0.12)' }, BEARISH: { c: 'var(--down-color)', bg: 'rgba(255,51,102,0.12)' }, NEUTRAL: { c: 'var(--text-dim)', bg: 'rgba(255,255,255,0.05)' } };
+                    const bc = biasColors[bias] || biasColors.NEUTRAL;
+                    biasPill.style.cssText = `font-size:0.55rem;font-weight:900;letter-spacing:2px;padding:3px 10px;border-radius:4px;color:${bc.c};background:${bc.bg}`;
+
+                    // RSI gauge
+                    const rsi = tech.rsi || 0;
+                    document.getElementById('b-rsi-val').textContent = rsi.toFixed(1);
+                    const rsiBar = document.getElementById('b-rsi-bar');
+                    rsiBar.style.width = `${Math.min(rsi, 100)}%`;
+                    rsiBar.style.background = rsi > 70 ? 'var(--down-color)' : rsi < 30 ? 'var(--up-color)' : 'var(--accent-primary)';
+
+                    // ADX gauge
+                    const adx = tech.adx || 0;
+                    document.getElementById('b-adx-val').textContent = adx.toFixed(1);
+                    const adxBar = document.getElementById('b-adx-bar');
+                    adxBar.style.width = `${Math.min(adx, 100)}%`;
+                    adxBar.style.background = adx > 25 ? 'var(--warn-color)' : 'var(--text-dim)';
+
+                    document.getElementById('b-macd-val').textContent = tech.macd_signal || '---';
+                    document.getElementById('b-ema-val').textContent = tech.ema_cross || '---';
+
+                    // ── Key Levels ──
+                    const sup = tech.support || [];
+                    const resist = tech.resistance || [];
+                    if (sup.length || resist.length) {
+                        document.getElementById('b-levels-card').style.display = 'block';
+                        const mkTag = (val, color) => `<div style="font-size:0.75rem;font-family:'Fira Code';font-weight:700;padding:4px 10px;border-radius:6px;background:rgba(255,255,255,0.03);border:1px solid var(--border-color);color:${color}">${val.toFixed(4)}</div>`;
+                        document.getElementById('b-support-levels').innerHTML = sup.length ? sup.slice(0, 3).map(v => mkTag(v, 'var(--up-color)')).join('') : '<div style="font-size:0.7rem;color:var(--text-dim)">—</div>';
+                        document.getElementById('b-resistance-levels').innerHTML = resist.length ? resist.slice(0, 3).map(v => mkTag(v, 'var(--down-color)')).join('') : '<div style="font-size:0.7rem;color:var(--text-dim)">—</div>';
+                    }
+
+                    // ── Active Signals ──
+                    const signals = b.signals || [];
+                    if (signals.length) {
+                        document.getElementById('b-signals-card').style.display = 'block';
+                        document.getElementById('b-signals-list').innerHTML = signals.map(s => {
+                            const dirColor = s.direction === 'BUY' ? 'var(--up-color)' : 'var(--down-color)';
+                            const arrow = s.direction === 'BUY' ? '▲' : '▼';
+                            return `
+                            <div style="display:flex;align-items:center;gap:12px;padding:10px;background:rgba(255,255,255,0.02);border-radius:10px;border:1px solid var(--border-color);">
+                                <div style="font-size:1.4rem;color:${dirColor};font-weight:900;">${arrow}</div>
+                                <div style="flex:1;">
+                                    <div style="font-size:0.8rem;font-weight:800;color:${dirColor};letter-spacing:1px;">${s.direction}</div>
+                                    <div style="font-size:0.6rem;color:var(--text-dim);margin-top:2px;">${s.strategy || 'AI'}</div>
                                 </div>
-                                <div style="font-size:0.82rem; color:var(--text-muted); line-height:1.7;">${parseMd(s.content)}</div>
+                                <div style="text-align:right;">
+                                    <div style="font-size:0.85rem;font-weight:900;font-family:'Fira Code';color:var(--text-main);">${s.confidence}%</div>
+                                    <div style="height:4px;width:60px;background:rgba(255,255,255,0.05);border-radius:2px;margin-top:4px;overflow:hidden;">
+                                        <div style="height:100%;width:${s.confidence}%;background:${dirColor};border-radius:2px;"></div>
+                                    </div>
+                                </div>
                             </div>`;
-                    }).join('');
+                        }).join('');
+                    }
 
-                    // Section count
-                    document.getElementById('briefing-count').textContent =
-                        `${b.section_count || b.sections?.length || 0} SECTIONS ANALYZED`;
-                    _briefingLoaded = true; // Don't re-fetch on next sync cycle
+                    // ── Patterns ──
+                    const patterns = b.patterns || [];
+                    if (patterns.length) {
+                        document.getElementById('b-patterns-card').style.display = 'block';
+                        document.getElementById('b-patterns-list').innerHTML = patterns.map(p => {
+                            const sigColor = p.significance === 'high' ? 'var(--accent-primary)' : p.significance === 'medium' ? '#3b82f6' : 'var(--text-dim)';
+                            return `<div style="font-size:0.65rem;font-weight:700;padding:4px 10px;border-radius:20px;background:rgba(255,255,255,0.03);border:1px solid ${sigColor};color:${sigColor};letter-spacing:0.5px;">${p.name}</div>`;
+                        }).join('');
+                    }
+
+                    // ── News ──
+                    const news = b.news || [];
+                    if (news.length) {
+                        document.getElementById('b-news-card').style.display = 'block';
+                        document.getElementById('b-news-list').innerHTML = news.map(n =>
+                            `<div style="display:flex;gap:8px;align-items:flex-start;">
+                                <div style="color:var(--accent-primary);font-size:0.7rem;margin-top:2px;">●</div>
+                                <div>
+                                    <div style="font-size:0.75rem;color:var(--text-main);line-height:1.5;">${n.title}</div>
+                                    <div style="font-size:0.55rem;color:var(--text-dim);margin-top:2px;">${n.source}</div>
+                                </div>
+                            </div>`
+                        ).join('');
+                    }
+
+                    // ── Performance + Risk Footer ──
+                    const perf = b.performance || {};
+                    const alerts = b.risk_alerts || 0;
+                    document.getElementById('b-footer').style.display = 'block';
+                    document.getElementById('b-perf-line').textContent = perf.total > 0
+                        ? `${perf.total} trades · ${(perf.win_rate || 0).toFixed(0)}% WR · ${(perf.total_pnl || 0) >= 0 ? '+' : ''}${(perf.total_pnl || 0).toFixed(1)}p`
+                        : 'No trades yet';
+                    const riskBadge = document.getElementById('b-risk-badge');
+                    riskBadge.textContent = `${alerts} ALERT${alerts !== 1 ? 'S' : ''}`;
+                    riskBadge.style.cssText = alerts > 0
+                        ? 'font-size:0.55rem;font-weight:800;padding:4px 10px;border-radius:6px;letter-spacing:1px;color:var(--warn-color);background:rgba(255,171,0,0.1);border:1px solid rgba(255,171,0,0.2)'
+                        : 'font-size:0.55rem;font-weight:800;padding:4px 10px;border-radius:6px;letter-spacing:1px;color:var(--text-dim);background:rgba(255,255,255,0.03);border:1px solid var(--border-color)';
+
+                    // Source count
+                    let srcCount = 0;
+                    if (price) srcCount++;
+                    if (tech.rsi) srcCount++;
+                    if (signals.length) srcCount++;
+                    if (patterns.length) srcCount++;
+                    if (news.length) srcCount++;
+                    if (perf.total) srcCount++;
+                    document.getElementById('briefing-count').textContent = `${srcCount} DATA SOURCES · COMPILED IN REAL-TIME`;
+                    _briefingLoaded = true;
                 } else {
                     bSum.textContent = res.error || 'Failed to load briefing';
                 }
