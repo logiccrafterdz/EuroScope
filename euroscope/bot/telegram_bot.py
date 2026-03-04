@@ -450,12 +450,23 @@ class EuroScopeBot:
         await self.heartbeat.stop()
         await self.cron.stop()
         
-        # Close all data and service sessions
-        await self.price_provider.close()
-        await self.storage.close()
-        await self.news_engine.close()
-        await self.macro_provider.close()
-        await self.risk_manager.close()
+        # Close all data and service sessions safely
+        for service_name, service in [
+            ("price_provider", self.price_provider),
+            ("storage", self.storage),
+            ("news_engine", self.news_engine),
+            ("macro_provider", self.macro_provider),
+            ("risk_manager", self.risk_manager),
+            ("ws_client", getattr(self, "ws_client", None)),
+            ("webhooks", getattr(self.api, "webhooks", None) if hasattr(self, "api") else None),
+        ]:
+            if service and hasattr(service, 'close'):
+                try:
+                    res = service.close()
+                    if asyncio.iscoroutine(res):
+                        await res
+                except Exception as e:
+                    logger.warning(f"Shutdown: {service_name} close failed: {e}")
         
         logger.info('✅ Background services stopped.')
 
