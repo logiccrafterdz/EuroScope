@@ -377,7 +377,9 @@ class CronScheduler:
                     return
 
                 # 1. Resolve pending patterns
-                pt = PatternTracker(storage=storage)
+                pt = getattr(self.bot, "pattern_tracker", None)
+                if not pt:
+                    pt = PatternTracker(storage=storage)
                 await pt.resolve_pending(current_price)
 
                 # 2. Resolve open forecasts
@@ -408,7 +410,10 @@ class CronScheduler:
                     logger.error("Learning tick failed: No storage available")
                     return
 
-                tuner = AdaptiveTuner(storage=storage)
+                tuner = getattr(self.bot, "adaptive_tuner", None)
+                if not tuner:
+                    from ..learning.adaptive_tuner import AdaptiveTuner
+                    tuner = AdaptiveTuner(storage=storage)
                 await tuner.auto_tune()
                 report = await tuner.format_report()
 

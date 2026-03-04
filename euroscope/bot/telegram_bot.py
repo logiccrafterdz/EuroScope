@@ -415,8 +415,7 @@ class EuroScopeBot:
             self._bg_tasks.add(cron_task)
             cron_task.add_done_callback(self._bg_tasks.discard)
             
-        self.cron.schedule('resolve_patterns', TaskFrequency.HOURLY, self.tasks.task_resolve_patterns)
-        self.cron.schedule('daily_tuning', TaskFrequency.DAILY, self.tasks.task_daily_tuning, delay=3600)
+
         self.cron.schedule('weekly_reflection', TaskFrequency.WEEKLY, self.tasks.task_weekly_reflection, delay=7200)
         self.cron.schedule('daily_trading_journal', TaskFrequency.DAILY, self.daily_tracker.run, delay=self.cron._seconds_until(23, 55))
         self.cron.schedule('daily_briefing', TaskFrequency.DAILY, self.tasks.task_daily_briefing, delay=self.cron._seconds_until(7, 0))
