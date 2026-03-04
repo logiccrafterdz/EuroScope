@@ -121,6 +121,7 @@ class EuroScopeBot:
         self.evolution_tracker = EvolutionTracker(storage=self.storage)
         self.daily_tracker = DailyTracker(storage=self.storage)
         self.briefing_engine = BriefingEngine(self.config, storage=self.storage, orchestrator=self.orchestrator)
+        self.briefing_engine.agent = self.agent
         
         # Inject pattern tracker into forecaster now that it exists
         self.forecaster.pattern_tracker = self.pattern_tracker
