@@ -243,14 +243,14 @@ class Forecaster:
         try:
             # Strip potential markdown code blocks
             clean_text = text.strip()
-            if clean_text.startswith("```json"):
-                clean_text = clean_text[7:]
-            elif clean_text.startswith("```"):
-                clean_text = clean_text[3:]
-            if clean_text.endswith("```"):
-                clean_text = clean_text[:-3]
             
-            clean_text = clean_text.strip()
+            # Use regex to find the first JSON object block to avoid prefix/suffix text
+            match = re.search(r'\{.*\}', clean_text, re.DOTALL)
+            if match:
+                clean_text = match.group(0)
+            else:
+                raise json.JSONDecodeError("No JSON object found in text", clean_text, 0)
+                
             parsed = json.loads(clean_text)
             
             # Normalize enum values
