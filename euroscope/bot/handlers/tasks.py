@@ -70,7 +70,8 @@ class BotTasks:
     async def task_daily_briefing(self):
         """Generate and broadcast the morning briefing."""
         logger.info('Cron: Running daily briefing...')
-        report = await self.bot.briefing_engine.generate_briefing()
+        data = await self.bot.briefing_engine.generate_briefing()
+        report = self.bot.briefing_engine.format_for_telegram(data)
         chat_ids = self.config.proactive_alert_chat_ids
         if chat_ids:
             await self.bot.notifications.broadcast_message(report, chat_ids=chat_ids, parse_mode='HTML')
