@@ -148,7 +148,7 @@ class EuroScopeBot:
         # Load Mini App Settings
         # Load Persistent Settings (Risk, AutoTrade)
         try:
-            import json, os
+            import json
             settings_path = os.path.join(self.config.data_dir, 'bot_settings.json')
             if os.path.exists(settings_path):
                 with open(settings_path, 'r') as f:
@@ -200,7 +200,7 @@ class EuroScopeBot:
             logger.warning('Alert triggered outside event loop — skipped.')
 
     async def _send_emergency_message(self, chat_ids: list[int], text: str):
-        await self.notifications.broadcast_message(chat_ids, text)
+        await self.notifications.broadcast_message(chat_ids, text, parse_mode='HTML')
 
     def _is_authorized(self, user_id: int) -> bool:
         """Check if user is authorized."""

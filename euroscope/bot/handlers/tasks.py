@@ -40,13 +40,15 @@ class BotTasks:
         """Analyze trade history once a day and report recommendations."""
         logger.info('Cron: Running daily strategy tuning...')
         report = await self.bot.adaptive_tuner.format_report()
-        await self.bot.notifications.broadcast_message(f'🧠 *Daily Strategy Optimization*\n\n{report}', parse_mode='Markdown')
+        chat_ids = getattr(self.config, 'proactive_alert_chat_ids', []) or getattr(self.config.telegram, 'allowed_users', []) or []
+        if chat_ids:
+            await self.bot.notifications.broadcast_message(chat_ids, f'🧠 *Daily Strategy Optimization*\n\n{report}', parse_mode='Markdown')
         logger.info('Cron: Daily tuning complete.')
 
     async def task_weekly_reflection(self):
         logger.info('Cron: Running weekly reflection...')
         accuracy = await self.bot.storage.get_accuracy_stats(30)
-        patterns = self.bot.pattern_tracker.get_success_rates()
+        patterns = await self.bot.pattern_tracker.get_success_rates()
         stats = await self.bot.storage.get_trade_journal_stats()
         tuner = await self.bot.adaptive_tuner.analyze()
         lines = ['Weekly Reflection', f"Prediction accuracy (30d): {accuracy.get('accuracy', 0)}% ({accuracy.get('total', 0)})", f"Trades: {stats.get('total', 0)} | Win rate: {stats.get('win_rate', 0)}% | Avg PnL: {stats.get('avg_pnl', 0):+.1f}p"]
@@ -58,11 +60,11 @@ class BotTasks:
         if tuner.get('ready') and tuner.get('recommendations'):
             lines.append('Tuning focus: ' + ', '.join((r['param'] for r in tuner['recommendations'][:3])))
         insight = ' | '.join(lines)
-        self.bot.memory.save_insight(insight)
+        await self.bot.memory.save_insight(insight)
         if self.bot.vector_memory:
             self.bot.vector_memory.store_insight(insight, tags=['reflection', 'weekly'])
-        self.bot.workspace.refresh_memory(self.bot.storage)
-        self.bot.workspace.refresh_identity(self.bot.storage)
+        await self.bot.workspace.refresh_memory(self.bot.storage)
+        await self.bot.workspace.refresh_identity(self.bot.storage)
         logger.info('Cron: Weekly reflection complete.')
 
     async def task_daily_briefing(self):

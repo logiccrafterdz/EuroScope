@@ -15,7 +15,9 @@ try:
     from reportlab.lib import colors
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
     from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
+    _REPORTLAB_AVAILABLE = True
 except ImportError:
+    _REPORTLAB_AVAILABLE = False
     logging.warning("reportlab not installed. PDF generation will fail. Run: pip install reportlab")
 
 from ..data.storage import Storage
@@ -35,6 +37,9 @@ class PDFReportGenerator:
 
     async def generate_weekly_report(self) -> str:
         """Fetch last 7 days of trades and generate a PDF report."""
+        if not _REPORTLAB_AVAILABLE:
+            logger.error("Cannot generate PDF report: reportlab is not installed.")
+            return ""
         now = datetime.now(UTC)
         start_date = now.strftime("%Y-%m-%d") # simplified logic: just getting today's trades for demo
         
