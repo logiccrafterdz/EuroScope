@@ -1574,9 +1574,11 @@
             }
         }
 
+        let syncCounter = 0;
         async function sync(activeTab = null) {
             if (!activeTab) activeTab = document.querySelector('.tab-content.active').id.replace('-view', '');
 
+            // Always fetch lightweight status
             api('/status').then(res => {
                 if (res.success && res.data) {
                     const s = res.data; const mkt = document.getElementById('mkt-status');
@@ -1598,69 +1600,73 @@
                 }
             });
 
-            api('/alerts').then(res => {
-                const alertList = document.getElementById('alert-list');
-                if (!alertList) return;
-                if (res.success && res.alerts?.length > 0) {
-                    alertList.innerHTML = res.alerts.map(a => {
-                        const cond = (a.condition || '').toLowerCase();
-                        const label = cond === 'above' ? 'ABOVE' : cond === 'below' ? 'BELOW' : (cond || 'ALERT').toUpperCase();
-                        const color = cond === 'above' ? 'var(--up-color)' : cond === 'below' ? 'var(--down-color)' : 'var(--text-muted)';
-                        const when = a.created_at ? new Date(a.created_at).toLocaleString() : '';
-                        return `
-                            <div class="glass-card" style="padding:10px; margin-bottom:8px;">
-                                <div style="display:flex; justify-content:space-between; align-items:center;">
-                                    <span style="font-weight:800; font-size:0.65rem; letter-spacing:1px; color:${color};">${label}</span>
-                                    <span style="font-size:0.6rem; color:var(--text-muted);">${when}</span>
+            // Only fetch global heavy data every 3rd tick (45 seconds) to save VPS resources
+            if (syncCounter % 3 === 0) {
+                api('/alerts').then(res => {
+                    const alertList = document.getElementById('alert-list');
+                    if (!alertList) return;
+                    if (res.success && res.alerts?.length > 0) {
+                        alertList.innerHTML = res.alerts.map(a => {
+                            const cond = (a.condition || '').toLowerCase();
+                            const label = cond === 'above' ? 'ABOVE' : cond === 'below' ? 'BELOW' : (cond || 'ALERT').toUpperCase();
+                            const color = cond === 'above' ? 'var(--up-color)' : cond === 'below' ? 'var(--down-color)' : 'var(--text-muted)';
+                            const when = a.created_at ? new Date(a.created_at).toLocaleString() : '';
+                            return `
+                                <div class="glass-card" style="padding:10px; margin-bottom:8px;">
+                                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                                        <span style="font-weight:800; font-size:0.65rem; letter-spacing:1px; color:${color};">${label}</span>
+                                        <span style="font-size:0.6rem; color:var(--text-muted);">${when}</span>
+                                    </div>
+                                    <div style="margin-top:6px; font-size:0.75rem; color:var(--text-main); font-weight:700;">
+                                        EUR/USD ${label} ${f5(a.target_value)}
+                                    </div>
                                 </div>
-                                <div style="margin-top:6px; font-size:0.75rem; color:var(--text-main); font-weight:700;">
-                                    EUR/USD ${label} ${f5(a.target_value)}
-                                </div>
-                            </div>
-                        `;
-                    }).join('');
-                } else {
-                    alertList.innerHTML = `<div class="empty-state" style="padding: 10px 0;">NO ACTIVE ALERTS</div>`;
-                }
-            });
-
-            api('/summary').then(sum => {
-                if (sum.success) {
-                    const oldPrice = parseFloat(document.getElementById('price').textContent);
-                    const newPrice = sum.price;
-                    document.getElementById('price').textContent = f5(newPrice);
-
-                    // Live Glow Animation
-                    if (oldPrice && newPrice !== oldPrice) {
-                        const priceEl = document.getElementById('price');
-                        priceEl.style.transition = 'none';
-                        priceEl.style.color = newPrice > oldPrice ? 'var(--up-color)' : 'var(--down-color)';
-                        priceEl.style.textShadow = `0 0 30px ${newPrice > oldPrice ? 'var(--up-color)' : 'var(--down-color)'}`;
-                        setTimeout(() => {
-                            priceEl.style.transition = 'all 1s ease';
-                            priceEl.style.color = '#fff';
-                            priceEl.style.textShadow = '0 0 20px var(--accent-glow)';
-                        }, 100);
+                            `;
+                        }).join('');
+                    } else {
+                        alertList.innerHTML = `<div class="empty-state" style="padding: 10px 0;">NO ACTIVE ALERTS</div>`;
                     }
+                });
 
-                    const el = document.getElementById('price-change');
-                    const change = typeof sum.change === 'number' ? sum.change : 0;
-                    const changePct = typeof sum.change_pct === 'number' ? sum.change_pct : 0;
-                    const sign = change >= 0 ? '+' : '';
-                    el.textContent = `${sign}${f5(change)} (${sign}${f2(changePct)}%)`;
-                    el.style.color = change >= 0 ? 'var(--up-color)' : 'var(--down-color)';
-                    document.getElementById('stat-range').textContent = `${(sum.range_pips || 0).toFixed(1)} P`;
-                    document.getElementById('stat-hilo').textContent = `${f5(sum.low)} / ${f5(sum.high)}`;
-                }
-            });
+                api('/summary').then(sum => {
+                    if (sum.success) {
+                        const oldPrice = parseFloat(document.getElementById('price').textContent);
+                        const newPrice = sum.price;
+                        document.getElementById('price').textContent = f5(newPrice);
 
-            // Fetch Account Info
-            api('/account').then(acc => {
-                if (acc.success) {
-                    document.getElementById('stat-balance').textContent = `${f2(acc.balance)} ${acc.currency}`;
-                    document.getElementById('stat-equity').textContent = `${f2(acc.equity)} ${acc.currency}`;
-                }
-            });
+                        // Live Glow Animation
+                        if (oldPrice && newPrice !== oldPrice) {
+                            const priceEl = document.getElementById('price');
+                            priceEl.style.transition = 'none';
+                            priceEl.style.color = newPrice > oldPrice ? 'var(--up-color)' : 'var(--down-color)';
+                            priceEl.style.textShadow = `0 0 30px ${newPrice > oldPrice ? 'var(--up-color)' : 'var(--down-color)'}`;
+                            setTimeout(() => {
+                                priceEl.style.transition = 'all 1s ease';
+                                priceEl.style.color = '#fff';
+                                priceEl.style.textShadow = '0 0 20px var(--accent-glow)';
+                            }, 100);
+                        }
+
+                        const el = document.getElementById('price-change');
+                        const change = typeof sum.change === 'number' ? sum.change : 0;
+                        const changePct = typeof sum.change_pct === 'number' ? sum.change_pct : 0;
+                        const sign = change >= 0 ? '+' : '';
+                        el.textContent = `${sign}${f5(change)} (${sign}${f2(changePct)}%)`;
+                        el.style.color = change >= 0 ? 'var(--up-color)' : 'var(--down-color)';
+                        document.getElementById('stat-range').textContent = `${(sum.range_pips || 0).toFixed(1)} P`;
+                        document.getElementById('stat-hilo').textContent = `${f5(sum.low)} / ${f5(sum.high)}`;
+                    }
+                });
+
+                // Fetch Account Info
+                api('/account').then(acc => {
+                    if (acc.success) {
+                        document.getElementById('stat-balance').textContent = `${f2(acc.balance)} ${acc.currency}`;
+                        document.getElementById('stat-equity').textContent = `${f2(acc.equity)} ${acc.currency}`;
+                    }
+                });
+            }
+            syncCounter++;
 
             if (activeTab === 'terminal') {
                 const statusEl = document.getElementById('chart-status');
@@ -1994,8 +2000,29 @@
                 }
             }
         }
+        async function loadInitialSettings() {
+            try {
+                const res = await api('/settings');
+                if (res.success && res.data) {
+                    isEmergency = !res.data.auto_trading_enabled;
+                    const btn = document.getElementById('btn-killswitch');
+                    if (isEmergency) {
+                        btn.textContent = 'SYSTEM HALTED (RESTART)';
+                        btn.style.background = 'rgba(255, 51, 102, 0.2)';
+                        btn.style.color = '#fff';
+                        btn.style.borderColor = 'var(--down-color)';
+                        btn.style.boxShadow = 'inset 0 0 20px rgba(255,51,102,0.4)';
+                        document.getElementById('mkt-status').textContent = 'HALTED';
+                        document.getElementById('mkt-status').className = 'market-badge status-closed';
+                        document.getElementById('mkt-status').style.backgroundColor = 'var(--down-color)';
+                    }
+                }
+            } catch (e) { log("Failed to load initial settings", "warn"); }
+        }
+
         async function runInit() {
             initChart();
+            await loadInitialSettings();
             await sync();
             setInterval(() => sync(), 15000);
         }

@@ -15,6 +15,7 @@ from aiohttp import web
 
 from ..skills.base import SkillContext
 from .webhooks import WebhookDispatcher
+from ..analytics.voice_briefing import VoiceBriefingEngine
 
 logger = logging.getLogger("euroscope.api")
 
@@ -533,7 +534,12 @@ class APIServer:
         
         try:
             acc_info = await self.bot.broker.get_account_info()
-            return web.json_response(acc_info)
+            return web.json_response({
+                "success": True,
+                "balance": acc_info.get("balance", 0),
+                "equity": acc_info.get("equity", 0),
+                "currency": acc_info.get("currency", "USD")
+            })
         except Exception as e:
             logger.error(f"API: Account info error: {e}")
             return web.json_response({"success": False, "error": str(e)})
@@ -542,8 +548,7 @@ class APIServer:
         """API endpoint for voice briefing."""
         logger.debug("API: Generating market briefing...")
         try:
-            from ..analytics.voice_briefing import VoiceBriefingEngine
-            engine = VoiceBriefingEngine(orchestrator=self.bot.orchestrator, storage=self.bot.storage)
+            engine = self.bot.briefing_engine
             briefing = await engine.generate_briefing()
             return web.json_response({"success": True, "data": engine.format_for_api(briefing)})
         except Exception as e:
@@ -619,7 +624,7 @@ class APIServer:
                 risk_skill = self.bot.orchestrator.registry.get("risk_management")
                 if risk_skill and hasattr(risk_skill, "manager"):
                     risk_skill.manager.config.risk_per_trade = float(data.get("risk_per_trade", 1.0))
-                    risk_skill.manager.config.max_daily_loss = float(data.get("max_daily_loss", 3.0))
+                    risk_skill.manager.config.max_daily_drawdown = float(data.get("max_daily_loss", 3.0))
             except Exception as e:
                 logger.warning(f"API: Failed to hot-reload risk manager config: {e}")
 
