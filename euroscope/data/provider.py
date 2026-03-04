@@ -92,7 +92,7 @@ class PriceProvider:
             return {"error": str(e)}
 
     @async_retry(max_attempts=3, delay=1.0, exceptions=(Exception,))
-    async def get_candles(self, timeframe: str = "H1", count: int = 100) -> Optional[pd.DataFrame]:
+    async def get_candles(self, timeframe: str = "H1", count: int = 100, **kwargs) -> Optional[pd.DataFrame]:
         """
         Get OHLCV candle data for the specified timeframe.
 

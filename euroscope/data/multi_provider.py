@@ -107,7 +107,7 @@ class MultiSourceProvider:
             await asyncio.gather(*tasks, return_exceptions=True)
         logger.info("MultiSourceProvider: All sessions closed.")
 
-    async def get_candles(self, timeframe: str = "H1", count: int = 100) -> Optional[pd.DataFrame]:
+    async def get_candles(self, timeframe: str = "H1", count: int = 100, symbol: str = "EURUSD", **kwargs) -> Optional[pd.DataFrame]:
         """Get OHLCV candles with automatic failover."""
         # Try Capital.com
         if self.capital:
