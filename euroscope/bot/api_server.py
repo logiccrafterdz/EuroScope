@@ -64,7 +64,7 @@ class APIServer:
                 response = web.json_response({"success": False, "error": str(e)}, status=500)
         response.headers["Access-Control-Allow-Origin"] = "*"
         response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
-        response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-Requested-With"
+        response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-Requested-With, X-API-Key"
         return response
 
     def _is_rate_limited(self, request, endpoint: str, limit: int, window: int) -> bool:
