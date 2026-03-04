@@ -17,9 +17,10 @@ class BriefingEngine:
     Aggregates multi-source intelligence into a human-readable daily briefing.
     """
     
-    def __init__(self, config=None, storage: Storage = None):
+    def __init__(self, config=None, storage: Storage = None, orchestrator=None):
         self.config = config
         self.storage = storage
+        self.orchestrator = orchestrator
         
     async def generate_briefing(self) -> Dict[str, Any]:
         """
@@ -28,18 +29,50 @@ class BriefingEngine:
         logger.info("Generating daily briefing data...")
         
         # 1. Overnight Summary (News & Sentiment)
-        overnight_news = await self.storage.get_recent_news(limit=5, min_impact=0.7)
+        overnight_news = await self.storage.get_recent_news(limit=5, min_impact=0.7) if self.storage else []
         
-        # 2. Key Levels (Fetch from technical analysis or storage)
-        key_levels = "• Support: 1.0780, 1.0750\n• Resistance: 1.0850, 1.0880"
-        
+        # 2. Key Levels (Fetch from technical analysis)
+        key_levels = "• Data unavailable"
+        if self.orchestrator:
+            from ..skills.base import SkillContext
+            ctx = SkillContext()
+            await self.orchestrator.run_skill("market_data", "get_price", context=ctx)
+            ta_res = await self.orchestrator.run_skill("technical_analysis", "analyze", context=ctx, timeframe="H1")
+            if ta_res.success and ta_res.data:
+                levels = ta_res.data.get("levels", {})
+                sup = levels.get("support", [])
+                res = levels.get("resistance", [])
+                
+                sup_str = ", ".join([f"{l:.4f}" for l in sup[:2]]) if sup else "None"
+                res_str = ", ".join([f"{l:.4f}" for l in res[:2]]) if res else "None"
+                key_levels = f"• Support: {sup_str}\n• Resistance: {res_str}"
+                
         # 3. High-Probability Setups
-        setups = "• Bullish Engulfing at H1 Support (1.0790)\n• Liquidity Sweep at 1.0820 pending"
+        setups = "• No significant setups detected"
+        if self.orchestrator:
+            from ..skills.base import SkillContext
+            ctx2 = SkillContext()
+            await self.orchestrator.run_skill("market_data", "get_price", context=ctx2)
+            pattern_res = await self.orchestrator.run_skill("technical_analysis", "detect_patterns", context=ctx2, timeframe="H1")
+            signal_res = await self.orchestrator.run_skill("trading_strategy", "detect_signal", context=ctx2)
+            
+            setup_lines = []
+            if signal_res.success and signal_res.data and signal_res.data.get("direction") in ("BUY", "SELL"):
+                sig = signal_res.data
+                setup_lines.append(f"• Active {sig['direction']} Signal via {sig.get('strategy', 'AI')} ({sig.get('confidence', 0)}% conf)")
+                
+            if pattern_res.success and pattern_res.data:
+                patterns = [p for p in pattern_res.data if p.get('status') == 'active']
+                for p in patterns[:2]:
+                    setup_lines.append(f"• {p.get('name', 'Pattern')} marked as active")
+                    
+            if setup_lines:
+                setups = "\n".join(setup_lines)
         
         # 4. Learning Insights & Trade Review (Yesterday)
         yesterday_str = (datetime.now(UTC) - timedelta(days=1)).strftime("%Y-%m-%d")
-        trades_yesterday = await self.storage.get_trade_journal_for_date(yesterday_str)
-        insights = await self.storage.get_recent_learning_insights(limit=3)
+        trades_yesterday = await self.storage.get_trade_journal_for_date(yesterday_str) if self.storage else []
+        insights = await self.storage.get_recent_learning_insights(limit=3) if self.storage else []
         
         return {
             "timestamp": datetime.now(UTC).isoformat(),
