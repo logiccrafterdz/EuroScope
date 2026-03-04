@@ -267,7 +267,7 @@ class CronScheduler:
                     return
                 decision = await asyncio.wait_for(
                     agent.run_proactive_analysis(),
-                    timeout=90,
+                    timeout=300,
                 )
                 if not decision.get("should_alert"):
                     logger.debug("Proactive analysis: No alert warranted")
