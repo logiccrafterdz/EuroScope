@@ -136,8 +136,8 @@ class APIServer:
 
     async def _api_forecast(self, request):
         """API endpoint for deep AI forecasting and reasoning."""
-        if self._is_rate_limited(request, "forecast", limit=1, window=30):
-            return web.json_response({"success": False, "error": "Rate limit exceeded (1 request per 30s)"}, status=429)
+        if self._is_rate_limited(request, "forecast", limit=3, window=10):
+            return web.json_response({"success": False, "error": "Rate limit exceeded (3 requests per 10s)"}, status=429)
         logger.debug("API: Running deep AI forecast...")
         import time
         try:

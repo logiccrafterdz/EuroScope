@@ -2030,7 +2030,9 @@
                             statusEl.style.display = 'flex'; statusEl.textContent = "CHART RENDER ERROR";
                         }
                     } else {
-                        statusEl.style.display = 'flex'; statusEl.textContent = "NO CANDLE DATA";
+                        console.error("API Candles response failed:", data);
+                        statusEl.style.display = 'flex';
+                        statusEl.innerHTML = `NO CANDLE DATA<br><span style="font-size:10px;opacity:0.6">${data.error || 'Empty array from server'}</span>`;
                     }
                 } catch (e) {
                     statusEl.style.display = 'flex'; statusEl.textContent = "SYNC FAILED";
