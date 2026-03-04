@@ -40,8 +40,12 @@ class Storage:
 
     def _sync_init(self):
         """Create tables synchronously at startup."""
-        conn = sqlite3.connect(str(self.db_path))
+        conn = sqlite3.connect(str(self.db_path), timeout=30.0)
         try:
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA synchronous=NORMAL")
+            conn.execute("PRAGMA busy_timeout=30000")
+            
             conn.executescript("""
                 CREATE TABLE IF NOT EXISTS predictions (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -228,10 +232,11 @@ class Storage:
     async def _get_db(self) -> aiosqlite.Connection:
         """Get or create the async database connection with WAL mode."""
         if self._db is None:
-            self._db = await aiosqlite.connect(str(self.db_path))
+            self._db = await aiosqlite.connect(str(self.db_path), timeout=30.0)
             self._db.row_factory = aiosqlite.Row
             await self._db.execute("PRAGMA journal_mode=WAL")
-            await self._db.execute("PRAGMA busy_timeout=5000")
+            await self._db.execute("PRAGMA synchronous=NORMAL")
+            await self._db.execute("PRAGMA busy_timeout=30000")
         return self._db
 
     async def close(self):

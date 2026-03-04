@@ -39,8 +39,12 @@ class VectorMemory:
         try:
             os.makedirs(self.persist_dir, exist_ok=True)
             db_path = os.path.join(self.persist_dir, "memory.db")
-            self._conn = sqlite3.connect(db_path)
+            self._conn = sqlite3.connect(db_path, timeout=30.0)
             self._conn.row_factory = sqlite3.Row
+            
+            self._conn.execute("PRAGMA journal_mode=WAL")
+            self._conn.execute("PRAGMA synchronous=NORMAL")
+            self._conn.execute("PRAGMA busy_timeout=30000")
 
             # Create FTS5 virtual tables for full-text search
             self._conn.executescript("""
