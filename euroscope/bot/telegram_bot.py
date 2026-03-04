@@ -6,25 +6,21 @@ and integrated notification system.
 """
 import asyncio
 import logging
-import re
 import os
-import traceback
 from datetime import datetime
 from typing import Optional
-from aiohttp import web
-from telegram import Update, InputFile, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo, MenuButtonWebApp
-from telegram.ext import Application, CommandHandler, ContextTypes, filters
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo, MenuButtonWebApp
+from telegram.ext import Application, CommandHandler, ContextTypes
 from telegram import BotCommand
 from telegram.error import Conflict
 from ..config import Config
 from ..brain.agent import Agent
 from ..brain.memory import Memory
 from ..brain.orchestrator import Orchestrator
-from ..brain.llm_router import LLMRouter, LLMProvider
+from ..brain.llm_router import LLMRouter
 from ..brain.vector_memory import VectorMemory
 from ..learning.pattern_tracker import PatternTracker
 from ..learning.adaptive_tuner import AdaptiveTuner
-from ..data.provider import PriceProvider
 from ..data.multi_provider import MultiSourceProvider
 from ..data.news import NewsEngine
 from ..data.calendar import EconomicCalendar
@@ -34,17 +30,13 @@ from ..forecast.engine import Forecaster
 from ..trading.risk_manager import RiskManager
 from ..trading.capital_provider import CapitalProvider
 from ..trading.capital_ws import CapitalWebsocketClient
-from ..trading.strategy_engine import StrategyEngine
-from ..trading.signal_executor import SignalExecutor
-from ..utils.charts import generate_chart
-from ..utils.formatting import truncate, safe_markdown, rich_header, thematic_divider, priority_label, progress_bar
+from ..utils.formatting import truncate, safe_markdown, rich_header, thematic_divider
 from .rate_limiter import RateLimiter
 from .user_settings import UserSettings
 from .notification_manager import NotificationManager
 from ..brain.briefing_engine import BriefingEngine
 from ..analytics.evolution_tracker import EvolutionTracker
 from ..skills.registry import SkillsRegistry
-from ..skills.base import SkillContext
 from ..workspace import WorkspaceManager
 from ..automation import HeartbeatService, EventBus, SmartAlerts, AlertChannel, setup_default_alerts, CronScheduler, TaskFrequency, SignalExecutorSubscriber, AlertSuppressionSubscriber, TelegramEmergencySubscriber
 from ..automation.daily_tracker import DailyTracker
@@ -301,7 +293,6 @@ class EuroScopeBot:
                     logger.warning(f'Could not create topic {key} for {chat_id}: {e}')
         return threads
 
-        # Command handlers have been moved to handlers/commands.py
     def _format_risk(self, data: dict) -> str:
         lines = ['🛡️ *Risk Assessment*']
         lines.append(f"Approved: {('✅' if data.get('approved') else '❌')}")

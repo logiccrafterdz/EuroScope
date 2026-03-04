@@ -48,9 +48,9 @@ class WebhookDispatcher:
             "data": payload,
         }
         
-        asyncio.create_task(self._send_all(urls, data))
+        asyncio.create_task(self._send_all(urls, data, event_type))
 
-    async def _send_all(self, urls: List[str], payload: dict):
+    async def _send_all(self, urls: List[str], payload: dict, event_type: str = "unknown"):
         for url in urls:
             try:
                 response = await self.client.post(url, json=payload)

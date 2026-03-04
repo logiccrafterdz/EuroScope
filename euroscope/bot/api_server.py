@@ -495,6 +495,24 @@ class APIServer:
 
             # AdaptiveTuner analyze is async now
             tuning = await self.bot.adaptive_tuner.analyze()
+            # Build live equity curve from closed trades
+            try:
+                closed_trades = await self.bot.storage.get_trade_journal(status="closed", limit=200)
+                if closed_trades:
+                    # Sort by timestamp ascending
+                    closed_trades.sort(key=lambda t: t.get('timestamp', ''))
+                    equity_curve = []
+                    cumulative = 0.0
+                    for t in closed_trades:
+                        cumulative += t.get('pnl_pips', 0.0)
+                        equity_curve.append(round(cumulative, 1))
+                    stats['equity_curve'] = equity_curve[-100:]  # Last 100 points
+                else:
+                    stats['equity_curve'] = []
+            except Exception as eq_err:
+                logger.warning(f"API: Failed to build equity curve: {eq_err}")
+                stats['equity_curve'] = []
+
             return web.json_response({
                 "success": True, 
                 "data": {

@@ -208,10 +208,11 @@ class SignalExecutorSkill(BaseSkill):
         context.open_positions.append(trade_data)
         
         # Fire webhook
-        from ...bot.webhooks import WebhookDispatcher
         try:
-            webhooks = WebhookDispatcher(self._config)
-            await webhooks.dispatch("trade_opened", trade_data)
+            if not hasattr(self, '_webhooks'):
+                from ...bot.webhooks import WebhookDispatcher
+                self._webhooks = WebhookDispatcher(self._config)
+            await self._webhooks.dispatch("trade_opened", trade_data)
         except Exception as e:
             logger.warning(f"Failed to dispatch trade_opened webhook: {e}")
         
@@ -317,10 +318,11 @@ class SignalExecutorSkill(BaseSkill):
         result = await self._executor.close_signal(signal_id, exit_price, reason="manual")
         if result:
             # Fire webhook
-            from ...bot.webhooks import WebhookDispatcher
             try:
-                webhooks = WebhookDispatcher(self._config)
-                await webhooks.dispatch("trade_closed", result)
+                if not hasattr(self, '_webhooks'):
+                    from ...bot.webhooks import WebhookDispatcher
+                    self._webhooks = WebhookDispatcher(self._config)
+                await self._webhooks.dispatch("trade_closed", result)
             except Exception as e:
                 logger.warning(f"Failed to dispatch trade_closed webhook: {e}")
                 

@@ -45,10 +45,10 @@ class BotTasks:
 
     async def task_weekly_reflection(self):
         logger.info('Cron: Running weekly reflection...')
-        accuracy = self.bot.storage.get_accuracy_stats(30)
+        accuracy = await self.bot.storage.get_accuracy_stats(30)
         patterns = self.bot.pattern_tracker.get_success_rates()
-        stats = self.bot.storage.get_trade_journal_stats()
-        tuner = self.bot.adaptive_tuner.analyze()
+        stats = await self.bot.storage.get_trade_journal_stats()
+        tuner = await self.bot.adaptive_tuner.analyze()
         lines = ['Weekly Reflection', f"Prediction accuracy (30d): {accuracy.get('accuracy', 0)}% ({accuracy.get('total', 0)})", f"Trades: {stats.get('total', 0)} | Win rate: {stats.get('win_rate', 0)}% | Avg PnL: {stats.get('avg_pnl', 0):+.1f}p"]
         if patterns:
             top = sorted(patterns.values(), key=lambda x: x['success_rate'], reverse=True)[:3]
