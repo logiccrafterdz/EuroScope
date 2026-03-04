@@ -206,14 +206,31 @@ class CapitalProvider:
                     return bid if bid is not None else ask
 
                 records = []
+                last_valid_price = None
+                
                 for p in prices:
                     snapshot = p.get("snapshotTimeUTC", "").replace("T", " ")
                     open_mid = _extract_mid(p.get("openPrice"))
                     high_mid = _extract_mid(p.get("highPrice"))
                     low_mid = _extract_mid(p.get("lowPrice"))
                     close_mid = _extract_mid(p.get("closePrice"))
-                    if open_mid is None or high_mid is None or low_mid is None or close_mid is None:
+                    
+                    # If all are None, skip
+                    if all(x is None for x in [open_mid, high_mid, low_mid, close_mid]):
                         continue
+                        
+                    # Interpolate from partial data
+                    default_price = close_mid or open_mid or high_mid or low_mid or last_valid_price
+                    if default_price is None:
+                        continue # Cannot interpolate at all
+                        
+                    open_mid = open_mid if open_mid is not None else default_price
+                    high_mid = high_mid if high_mid is not None else default_price
+                    low_mid = low_mid if low_mid is not None else default_price
+                    close_mid = close_mid if close_mid is not None else default_price
+                    
+                    last_valid_price = close_mid
+                    
                     records.append({
                         "time": pd.to_datetime(snapshot),
                         "Open": open_mid,

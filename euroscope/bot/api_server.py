@@ -410,8 +410,8 @@ class APIServer:
 
     async def _api_backtest(self, request):
         """API endpoint for backtesting dashboard data."""
-        if self._is_rate_limited(request, "backtest", limit=1, window=15):
-            return web.json_response({"success": False, "error": "Rate limit exceeded (1 request per 15s)"}, status=429)
+        if self._is_rate_limited(request, "backtest", limit=3, window=10):
+            return web.json_response({"success": False, "error": "Rate limit exceeded (3 requests per 10s)"}, status=429)
         logger.info("API: Running backtest...")
         strategy = request.query.get("strategy", None)
         timeframe = request.query.get("timeframe", "H1")
