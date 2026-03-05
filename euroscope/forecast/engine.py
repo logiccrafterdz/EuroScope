@@ -241,17 +241,25 @@ class Forecaster:
     def _parse_forecast(self, text: str) -> dict:
         """Extract structured JSON from the AI forecast text."""
         try:
-            # Strip potential markdown code blocks
+            # 1. Strip potential markdown code blocks like ```json ... ```
             clean_text = text.strip()
+            if clean_text.startswith("```"):
+                # Remove first line of code block (e.g. ```json)
+                clean_text = "\n".join(clean_text.split("\n")[1:])
+            if clean_text.endswith("```"):
+                # Remove last line
+                clean_text = "\n".join(clean_text.split("\n")[:-1])
+            clean_text = clean_text.strip()
             
-            # Use regex to find the first JSON object block to avoid prefix/suffix text
-            match = re.search(r'\{.*\}', clean_text, re.DOTALL)
-            if match:
-                clean_text = match.group(0)
-            else:
+            # 2. Extract the JSON object intelligently to avoid text outside braces
+            start_idx = clean_text.find('{')
+            end_idx = clean_text.rfind('}')
+            
+            if start_idx == -1 or end_idx == -1 or end_idx < start_idx:
                 raise json.JSONDecodeError("No JSON object found in text", clean_text, 0)
                 
-            parsed = json.loads(clean_text)
+            json_str = clean_text[start_idx:end_idx+1]
+            parsed = json.loads(json_str)
             
             # Normalize enum values
             direction = str(parsed.get("direction", "NEUTRAL")).upper()
