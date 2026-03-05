@@ -41,19 +41,33 @@ class BriefingEngine:
         self.storage = storage
         self.orchestrator = orchestrator
         self.agent = None  # Set by telegram_bot after init
+        self._cached_briefing = None
+        self._last_briefing_time = None
 
     async def generate_briefing(self) -> Dict[str, Any]:
         """
         Generate a rich AI-synthesized market briefing.
         Wrapped in a global timeout to prevent HTTP deadline exceeded errors.
+        Caches the result for 15 minutes to save API requests and LLM tokens.
         """
+        # Return cached briefing if it's less than 15 minutes old
+        if self._cached_briefing and self._last_briefing_time:
+            time_since = (datetime.now(UTC) - self._last_briefing_time).total_seconds()
+            if time_since < 900:  # 15 minutes
+                logger.debug(f"Briefing: returning cached version ({time_since:.0f}s old)")
+                return self._cached_briefing
+
         logger.info("Generating AI-synthesized briefing...")
 
         try:
-            return await asyncio.wait_for(
+            briefing = await asyncio.wait_for(
                 self._generate_briefing_inner(),
                 timeout=BRIEFING_TIMEOUT,
             )
+            # Update cache on success
+            self._cached_briefing = briefing
+            self._last_briefing_time = datetime.now(UTC)
+            return briefing
         except asyncio.TimeoutError:
             logger.warning("Briefing: global timeout exceeded — returning fallback")
             return self._make_timeout_response()

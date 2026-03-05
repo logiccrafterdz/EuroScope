@@ -583,9 +583,10 @@ class APIServer:
             return web.json_response({"success": False, "error": str(e)})
 
     async def _api_briefing(self, request):
-        """API endpoint for voice briefing."""
-        if self._is_rate_limited(request, "briefing", limit=1, window=60):
-            return web.json_response({"success": False, "error": "Rate limit exceeded (1 request per 60s)"}, status=429)
+        """API endpoint for voice/text briefing."""
+        # Relaxed rate limit because BriefingEngine now caches the result internally for 15m
+        if self._is_rate_limited(request, "briefing", limit=10, window=60):
+            return web.json_response({"success": False, "error": "Rate limit exceeded please wait."}, status=429)
         logger.debug("API: Generating market briefing...")
         try:
             engine = self.bot.briefing_engine
