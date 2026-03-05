@@ -7,6 +7,7 @@ and tracks accuracy over time.
 
 import logging
 import re
+import json
 from typing import Optional
 
 from ..brain.agent import Agent

@@ -93,7 +93,7 @@ You must construct the output as realistic trading Scenarios, and return it in S
 You MUST return ONLY valid JSON. Do not include markdown codeblocks, conversational text, or anything else before or after the JSON.
 
 REQUIRED JSON STRUCTURE:
-{
+{{
     "direction": "BULLISH" | "BEARISH" | "NEUTRAL",
     "confidence": 0-100,
     "core_signal": "Explanation of the algorithm's decision",
@@ -101,7 +101,7 @@ REQUIRED JSON STRUCTURE:
     "scenario_b": "Alternative Scenario details and targets",
     "fundamental_alignment": "How news aligns with the signal",
     "key_levels": "Specific S/R levels to watch"
-}
+}}
 """
 
 QUESTION_PROMPT = """You are EuroScope, the EUR/USD expert. Answer the following question.

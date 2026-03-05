@@ -38,7 +38,9 @@ def test_parsing():
     forecaster = Forecaster(DummyAgent(), DummyMemory(), DummyOrch())
     
     for i, text in enumerate(mock_ai_outputs):
-        direction, confidence = forecaster._parse_forecast(text)
+        parsed = forecaster._parse_forecast(text)
+        direction = parsed.get("direction")
+        confidence = parsed.get("confidence")
         print(f"--- Test Case {i+1} ---")
         print(f"Output Direction: {direction}")
         print(f"Output Confidence: {confidence}%\n")

@@ -176,52 +176,55 @@ class TestDailyTracker:
     async def test_daily_summary_counts(self, tmp_path):
         db_path = tmp_path / "test.db"
         storage = Storage(str(db_path))
-        tracker = DailyTracker(storage=storage)
-        date_value = datetime.now(UTC).strftime("%Y-%m-%d")
+        try:
+            tracker = DailyTracker(storage=storage)
+            date_value = datetime.now(UTC).strftime("%Y-%m-%d")
 
-        await storage.save_trade_journal(
-            direction="BUY",
-            entry_price=1.1,
-            stop_loss=1.09,
-            take_profit=1.12,
-            strategy="paper",
-            confidence=0.7,
-            indicators={"uncertainty_score": 0.2},
-            reasoning="paper trade opened",
-            status="open",
-        )
-        await storage.save_trade_journal(
-            direction="SELL",
-            entry_price=1.09,
-            stop_loss=1.095,
-            take_profit=1.08,
-            strategy="paper",
-            confidence=0.6,
-            indicators={"uncertainty_score": 0.82, "uncertainty_reasoning": "Lagarde speech"},
-            reasoning="paper trade opened",
-            status="open",
-        )
-        await storage.save_trade_journal(
-            direction="BUY",
-            entry_price=1.12,
-            stop_loss=1.11,
-            take_profit=1.13,
-            strategy="paper",
-            confidence=0.4,
-            indicators={"uncertainty_score": 0.7},
-            reasoning="paper rejection: EMERGENCY: market regime shift",
-            status="rejected",
-        )
+            await storage.save_trade_journal(
+                direction="BUY",
+                entry_price=1.1,
+                stop_loss=1.09,
+                take_profit=1.12,
+                strategy="paper",
+                confidence=0.7,
+                indicators={"uncertainty_score": 0.2},
+                reasoning="paper trade opened",
+                status="open",
+            )
+            await storage.save_trade_journal(
+                direction="SELL",
+                entry_price=1.09,
+                stop_loss=1.095,
+                take_profit=1.08,
+                strategy="paper",
+                confidence=0.6,
+                indicators={"uncertainty_score": 0.82, "uncertainty_reasoning": "Lagarde speech"},
+                reasoning="paper trade opened",
+                status="open",
+            )
+            await storage.save_trade_journal(
+                direction="BUY",
+                entry_price=1.12,
+                stop_loss=1.11,
+                take_profit=1.13,
+                strategy="paper",
+                confidence=0.4,
+                indicators={"uncertainty_score": 0.7},
+                reasoning="paper rejection: EMERGENCY: market regime shift",
+                status="rejected",
+            )
 
-        summary = await tracker.get_summary(date_value)
+            summary = await tracker.get_summary(date_value)
 
-        assert summary["signals_generated"] == 3
-        assert summary["signals_executed"] == 2
-        assert summary["signals_rejected"] == 1
-        assert summary["rejection_reasons"]["emergency_mode"] == 1
-        assert summary["avg_confidence"] == 0.57
-        assert summary["max_uncertainty"] == 0.82
-        assert "Lagarde" in summary["max_uncertainty_reason"]
+            assert summary["signals_generated"] == 3
+            assert summary["signals_executed"] == 2
+            assert summary["signals_rejected"] == 1
+            assert summary["rejection_reasons"]["emergency_mode"] == 1
+            assert summary["avg_confidence"] == 0.57
+            assert summary["max_uncertainty"] == 0.82
+            assert "Lagarde" in summary["max_uncertainty_reason"]
+        finally:
+            await storage.close()
 
 
 # ── EventBus Tests ───────────────────────────────────────────

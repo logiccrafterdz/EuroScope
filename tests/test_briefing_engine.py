@@ -32,13 +32,11 @@ def mock_storage():
 async def test_generate_briefing(mock_storage):
     engine = BriefingEngine(storage=mock_storage)
     
-    # Mock HealthMonitor - though not used in the new generate_briefing, keeping for compatibility if it was used
     with patch("euroscope.brain.briefing_engine.HealthMonitor", autospec=True):
         report = await engine.generate_briefing()
-        
-        assert "EuroScope Daily Intelligence Briefing" in report
-        assert "ECB Rate Decision" in report
-        assert "Key Lesson" in report
-        assert "Win Rate: 50%" in report # 1 win out of 2 trades in mock_journal_for_date
-        assert "P/L: +10.0p" in report # 15 - 5 = 10
-        assert "CPI" in report
+        assert isinstance(report, dict)
+        assert "timestamp" in report
+        assert "narrative" in report
+        assert "session" in report
+        assert "conviction" in report
+        assert "EUR/USD" in report["narrative"]

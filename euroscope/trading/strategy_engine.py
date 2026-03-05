@@ -81,6 +81,13 @@ class StrategyEngine:
         """
         regime_info = self._detect_regime(indicators)
         patterns = patterns or []
+        if regime_info.regime != "breakout" and self._has_breakout_trigger(indicators, levels):
+            regime_info = RegimeInfo(
+                regime="breakout",
+                strength=max(regime_info.strength, 0.6),
+                direction=regime_info.direction,
+                details=regime_info.details,
+            )
 
         if regime_info.regime == "trending":
             sig = self._trend_following(indicators, levels, patterns)
@@ -137,6 +144,22 @@ class StrategyEngine:
             return True
         return False
 
+    @staticmethod
+    def _has_breakout_trigger(indicators: dict, levels: dict) -> bool:
+        current_price = levels.get("current_price")
+        support = levels.get("support", [])
+        resistance = levels.get("resistance", [])
+        if not current_price:
+            return False
+        hist = indicators.get("macd", {}).get("histogram_latest")
+        above_resistance = bool(resistance) and current_price > resistance[0]
+        below_support = bool(support) and current_price < support[0]
+        if above_resistance and (hist is None or hist > 0):
+            return True
+        if below_support and (hist is None or hist < 0):
+            return True
+        return False
+
     def _detect_regime(self, indicators: dict) -> RegimeInfo:
         """
         Determine market regime using RegimeAdaptiveEngine as the single source of truth.
@@ -163,6 +186,15 @@ class StrategyEngine:
             mapped_inds["BB"]["bandwidth"] = width
             
         regime_name = self._regime_engine.detect_regime(mapped_inds)
+        rsi = indicators.get("rsi", 50)
+        bb_bandwidth = mapped_inds.get("BB", {}).get("bandwidth", 0)
+        bb_upper = bb.get("upper", 0)
+        bb_lower = bb.get("lower", 0)
+        bb_price = bb.get("current_price", 0)
+        rsi_extreme = rsi >= 75 or rsi <= 25
+        outside_band = (bb_upper and bb_price and bb_price > bb_upper) or (bb_lower and bb_price and bb_price < bb_lower)
+        if regime_name == "ranging" and rsi_extreme and (outside_band or (bb_bandwidth and bb_bandwidth <= 0.08)):
+            regime_name = "breakout"
         
         # Determine direction
         overall_bias = indicators.get("overall_bias", "neutral")

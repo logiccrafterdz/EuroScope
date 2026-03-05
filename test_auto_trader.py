@@ -56,7 +56,7 @@ async def test_trader_loop():
         # Verify it was opened
         res = await signal_executor.safe_execute(ctx, "list_trades")
         if res.data:
-            trade_id = res.data[0]["trade_id"]
+            trade_id = res.data[0].get("trade_id") or res.data[0].get("id")
             print(f"Mock trade created: {trade_id}")
             print(f"Trade details: {res.data[0]}")
         else:

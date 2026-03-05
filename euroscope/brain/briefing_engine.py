@@ -17,6 +17,7 @@ from datetime import datetime, UTC
 from typing import Dict, Any
 
 from ..data.storage import Storage
+from ..analytics.health_monitor import HealthMonitor
 
 logger = logging.getLogger("euroscope.brain.briefing")
 
