@@ -278,7 +278,9 @@ class Forecaster:
             return parsed
         except json.JSONDecodeError as e:
             logger.error(f"Failed to parse LLM JSON forecast: {e}\nRaw Text: {text}")
-            # Fallback
+            fallback = self._parse_textual_forecast(text)
+            if fallback:
+                return fallback
             return {
                 "direction": "NEUTRAL",
                 "confidence": 0.0,
@@ -288,6 +290,47 @@ class Forecaster:
                 "fundamental_alignment": "",
                 "key_levels": ""
             }
+
+    def _parse_textual_forecast(self, text: str) -> dict | None:
+        raw = (text or "").strip()
+        if not raw:
+            return None
+
+        normalized = re.sub(r"[*`_]", "", raw)
+        upper = normalized.upper()
+        direction = "NEUTRAL"
+        bias_match = re.search(r"AI\s*BIAS\s*[:\-]?\s*(BULLISH|BEARISH|NEUTRAL|BUY|SELL)", upper)
+        if bias_match:
+            parsed_bias = bias_match.group(1)
+            if parsed_bias in ("BUY", "BULLISH"):
+                direction = "BULLISH"
+            elif parsed_bias in ("SELL", "BEARISH"):
+                direction = "BEARISH"
+            else:
+                direction = "NEUTRAL"
+        elif "BULLISH" in upper or " BUY " in f" {upper} ":
+            direction = "BULLISH"
+        elif "BEARISH" in upper or " SELL " in f" {upper} ":
+            direction = "BEARISH"
+
+        confidence = 50.0
+        conf_match = re.search(r"(?:AI\s*)?(?:CONVICTION|CONFIDENCE)\s*[:\-]?\s*(\d{1,3}(?:\.\d+)?)\s*%?", upper)
+        if conf_match:
+            try:
+                confidence = max(0.0, min(100.0, float(conf_match.group(1))))
+            except (ValueError, TypeError):
+                confidence = 50.0
+
+        compact = re.sub(r"\s+", " ", raw)
+        return {
+            "direction": direction,
+            "confidence": confidence,
+            "core_signal": compact[:280] if compact else "LLM returned non-JSON narrative response.",
+            "scenario_a": "",
+            "scenario_b": "",
+            "fundamental_alignment": "",
+            "key_levels": ""
+        }
 
     def _build_telegram_output(self, parsed: dict) -> str:
         """Constructs a clean Markdown string from the structured JSON."""
