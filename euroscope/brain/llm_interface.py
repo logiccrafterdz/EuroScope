@@ -23,8 +23,8 @@ from .vector_memory import VectorMemory
 logger = logging.getLogger("euroscope.brain.agent")
 
 
-class Agent:
-    """LLM-powered EUR/USD expert agent."""
+class LLMInterface:
+    """LLM connection and reasoning engine for the Agent Core."""
 
     def __init__(self, config: LLMConfig, router: Optional[LLMRouter] = None,
                  vector_memory: Optional[VectorMemory] = None, orchestrator=None,
@@ -1410,9 +1410,27 @@ class Agent:
         )
         return await self.chat(prompt)
 
-    def clear_history(self, chat_id: int = None):
+    async def reason_about(self, world_model, question: str) -> str:
+        """
+        Internal deliberation method for the Agent Core.
+        Used when the agent needs LLM reasoning without taking action.
+        """
+        system = (
+            "You are EuroScope's internal reasoning engine. "
+            "Analyze the given world model state and answer the specific question requested by the Agent Core. "
+            "Be concise, analytical, and data-driven."
+        )
+        
+        user_message = (
+            f"--- Question ---\n{question}\n\n"
+            f"--- Current World Model ---\n{world_model.get_summary()}"
+        )
+        
+        return await self.stateless_chat(user_message=user_message, system_override=system)
+
+    def clear_history(self, chat_id: int = 0):
         """Clear conversation history for a user or all users."""
-        if chat_id is not None:
+        if chat_id != 0:
             self._histories.pop(chat_id, None)
         else:
             self._histories.clear()

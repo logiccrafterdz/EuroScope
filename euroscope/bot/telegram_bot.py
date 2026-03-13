@@ -14,7 +14,7 @@ from telegram.ext import Application, CommandHandler, ContextTypes
 from telegram import BotCommand
 from telegram.error import Conflict
 from ..config import Config
-from ..brain.agent import Agent
+from ..brain.llm_interface import LLMInterface
 from ..brain.memory import Memory
 from ..brain.orchestrator import Orchestrator
 from ..brain.llm_router import LLMRouter
@@ -80,7 +80,7 @@ class EuroScopeBot:
         )
         
         # 3. Intelligence Layers (Order: Agent -> Forecaster)
-        self.agent = Agent(
+        self.agent = LLMInterface(
             config.llm, 
             router=self.router, 
             vector_memory=self.vector_memory, 

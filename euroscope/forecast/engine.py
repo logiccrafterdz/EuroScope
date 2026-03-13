@@ -10,7 +10,7 @@ import re
 import json
 from typing import Optional
 
-from ..brain.agent import Agent
+from ..brain.llm_interface import LLMInterface
 from ..brain.memory import Memory
 from ..brain.orchestrator import Orchestrator, SkillContext
 
@@ -20,7 +20,7 @@ logger = logging.getLogger("euroscope.forecast")
 class Forecaster:
     """Generates AI-powered EUR/USD forecasts with self-learning."""
 
-    def __init__(self, agent: Agent, memory: Memory, orchestrator: Orchestrator, pattern_tracker=None):
+    def __init__(self, agent: LLMInterface, memory: Memory, orchestrator: Orchestrator, pattern_tracker=None):
         self.agent = agent
         self.memory = memory
         self.orchestrator = orchestrator
