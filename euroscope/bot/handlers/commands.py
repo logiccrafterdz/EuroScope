@@ -48,7 +48,7 @@ class CommandHandlers:
         if not await self.bot._check_auth(update):
             return
             
-        help_text = f"{rich_header('EuroScope Help Terminal', 'main')}\n\n├ `/price` — Live Market Pulse\n├ `/analysis` — Deep Tech Analytics\n├ `/forecast` — Neural Directional Insight\n├ `/signals` — High-Conviction IDEAs\n├ `/news` — Macro Intelligence\n├ `/calendar` — Economic Events\n├ `/report` — Daily PDF Dossier\n├ `/settings` — Preference Console\n└ `/menu` — Main Terminal\n\n{thematic_divider()}\n💡 _Just type any market question to chat with the Expert AI!_"
+        help_text = f"{rich_header('EuroScope Help Terminal', 'main')}\n\n├ `/price` — Live Market Pulse\n├ `/analysis` — Deep Tech Analytics\n├ `/forecast` — Neural Directional Insight\n├ `/signals` — High-Conviction IDEAs\n├ `/news` — Macro Intelligence\n├ `/calendar` — Economic Events\n├ `/report` — Daily PDF Dossier\n├ `/settings` — Preference Console\n├ `/menu` — Main Terminal\n│\n├ 🤖 *Agent Commands*\n├ `/agent_status` — Agent Core State\n├ `/conviction` — Active Trading Theses\n└ `/session_plan` — Today's Game Plan\n\n{thematic_divider()}\n💡 _Just type any market question to chat with the Expert AI!_"
         await self.bot._reply(update, help_text, parse_mode="Markdown")
 
     async def cmd_health(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -81,3 +81,140 @@ class CommandHandlers:
             f"🆔 *Your Chat ID*: `{chat_id}`\n\nUse this ID in your `.env` file under `EUROSCOPE_PROACTIVE_CHAT_IDS` to receive proactive alerts.",
             parse_mode="Markdown"
         )
+
+    # ── Agent Core Commands ───────────────────────────────────
+
+    async def cmd_agent_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /agent_status — show Agent Core state and world model summary."""
+        if not await self.bot._check_auth(update):
+            return
+
+        agent_core = getattr(self.bot, "agent_core", None)
+        if not agent_core:
+            await self.bot._reply(update, "⚠️ Agent Core is not active yet.", parse_mode="Markdown")
+            return
+
+        try:
+            state = agent_core.state.value if hasattr(agent_core.state, 'value') else str(agent_core.state)
+            tick_count = getattr(agent_core, 'tick_count', 0)
+            
+            # World Model summary
+            wm = getattr(agent_core, 'world_model', None)
+            wm_summary = wm.get_summary() if wm else "No world model data"
+            
+            # Conviction count
+            ct = getattr(agent_core, 'conviction_tracker', None)
+            active_convictions = len(ct.get_active()) if ct and hasattr(ct, 'get_active') else 0
+            
+            text = (
+                f"🤖 *Agent Core Status*\n\n"
+                f"├ State: `{state}`\n"
+                f"├ Tick Count: `{tick_count}`\n"
+                f"├ Active Convictions: `{active_convictions}`\n"
+                f"└ World Model: ✅ Loaded\n\n"
+                f"📊 *World Model Snapshot:*\n"
+                f"```\n{wm_summary[:800]}\n```"
+            )
+            await self.bot._reply(update, text, parse_mode="Markdown")
+        except Exception as e:
+            logger.error(f"Agent status command failed: {e}", exc_info=True)
+            await self.bot._reply(update, f"⚠️ Error fetching agent status: {e}")
+
+    async def cmd_conviction(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /conviction — show active trading convictions."""
+        if not await self.bot._check_auth(update):
+            return
+
+        agent_core = getattr(self.bot, "agent_core", None)
+        ct = getattr(agent_core, 'conviction_tracker', None) if agent_core else None
+        
+        if not ct:
+            await self.bot._reply(update, "⚠️ Conviction Tracker is not active.", parse_mode="Markdown")
+            return
+
+        try:
+            active = ct.get_active() if hasattr(ct, 'get_active') else []
+            
+            if not active:
+                await self.bot._reply(
+                    update, 
+                    "📋 *No Active Convictions*\n\nThe agent has no active trading theses at the moment. "
+                    "New convictions will form when the agent identifies strong multi-source evidence.",
+                    parse_mode="Markdown"
+                )
+                return
+
+            parts = ["🎯 *Active Trading Convictions*\n"]
+            for i, conv in enumerate(active, 1):
+                direction = getattr(conv, 'direction', 'unknown')
+                thesis = getattr(conv, 'thesis', 'N/A')
+                confidence = getattr(conv, 'confidence', 0)
+                emoji = "🟢" if "bull" in direction.lower() else "🔴" if "bear" in direction.lower() else "⚪"
+                
+                parts.append(
+                    f"{emoji} *Conviction #{i}*\n"
+                    f"├ Direction: `{direction}`\n"
+                    f"├ Confidence: `{confidence:.0f}%`\n"
+                    f"└ Thesis: _{thesis[:150]}_\n"
+                )
+
+            text = "\n".join(parts)
+            await self.bot._reply(update, text, parse_mode="Markdown")
+        except Exception as e:
+            logger.error(f"Conviction command failed: {e}", exc_info=True)
+            await self.bot._reply(update, f"⚠️ Error: {e}")
+
+    async def cmd_session_plan(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /session_plan — show today's trading game plan."""
+        if not await self.bot._check_auth(update):
+            return
+
+        agent_core = getattr(self.bot, "agent_core", None)
+        planner = getattr(agent_core, 'session_planner', None) if agent_core else None
+        
+        if not planner:
+            await self.bot._reply(update, "⚠️ Session Planner is not active.", parse_mode="Markdown")
+            return
+
+        try:
+            # Try to get the latest plan
+            plan = getattr(planner, 'current_plan', None)
+            
+            if not plan:
+                await self.bot._reply(
+                    update,
+                    "📋 *No Session Plan Available*\n\n"
+                    "No game plan has been generated yet for the current session. "
+                    "Plans are automatically created before London and New York sessions open.",
+                    parse_mode="Markdown"
+                )
+                return
+
+            session_name = getattr(plan, 'session_name', 'Unknown')
+            briefing = getattr(plan, 'briefing_text', 'No briefing available')
+            scenarios = getattr(plan, 'scenarios', [])
+            
+            parts = [
+                f"📋 *{session_name} Session Game Plan*\n",
+                f"_{briefing}_\n",
+            ]
+            
+            if scenarios:
+                parts.append("*Scenarios:*")
+                for j, sc in enumerate(scenarios, 1):
+                    name = sc.get('name', f'Scenario {j}')
+                    condition = sc.get('condition', 'N/A')
+                    direction = sc.get('direction', '?')
+                    entry = sc.get('entry_zone', '?')
+                    parts.append(
+                        f"\n*{j}. {name}*\n"
+                        f"├ If: _{condition}_\n"
+                        f"├ Direction: `{direction}`\n"
+                        f"└ Entry Zone: `{entry}`"
+                    )
+
+            text = "\n".join(parts)
+            await self.bot._reply(update, text, parse_mode="Markdown")
+        except Exception as e:
+            logger.error(f"Session plan command failed: {e}", exc_info=True)
+            await self.bot._reply(update, f"⚠️ Error: {e}")

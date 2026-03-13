@@ -381,7 +381,14 @@ class EuroScopeBot:
     def build_app(self) -> Application:
         """Build and configure the Telegram bot application."""
         app = Application.builder().token(self.config.telegram.token).post_init(self.post_init).post_shutdown(self.post_shutdown).build()
-        commands = {'start': self.commands.cmd_start, 'help': self.commands.cmd_help, 'id': self.commands.cmd_id, 'health': self.commands.cmd_health, 'data_health': self.commands.cmd_data_health}
+        commands = {
+            'start': self.commands.cmd_start, 'help': self.commands.cmd_help, 
+            'id': self.commands.cmd_id, 'health': self.commands.cmd_health, 
+            'data_health': self.commands.cmd_data_health,
+            'agent_status': self.commands.cmd_agent_status,
+            'conviction': self.commands.cmd_conviction,
+            'session_plan': self.commands.cmd_session_plan,
+        }
         for cmd, handler in commands.items():
             app.add_handler(CommandHandler(cmd, handler))
         app.add_error_handler(self._error_handler)
