@@ -371,3 +371,61 @@ class Orchestrator:
             "formatted": ctx.metadata.get("formatted", "Analysis complete."),
         }
 
+    # ── Agent Core API ────────────────────────────────────────
+
+    async def run_scan(self, context: SkillContext = None) -> SkillContext:
+        """
+        Lightweight market scan — price + session detection only.
+        Used by Agent Core for fast tick updates (<2s).
+        """
+        if context is None:
+            context = self.global_context
+
+        # Only price + session — no heavy analysis
+        scan_pipeline = [
+            ("market_data", "get_price"),
+            ("session_context", "detect"),
+        ]
+        return await self._execute_pipeline(scan_pipeline, context)
+
+    async def get_quick_state(self, context: SkillContext = None) -> dict:
+        """
+        Returns a quick snapshot of the current market state
+        without running the full analysis pipeline.
+        Used by Agent Core for status checks and conditional logic.
+        """
+        if context is None:
+            context = self.global_context
+
+        # Get price
+        price = 0.0
+        price_res = await self.run_skill("market_data", "get_price", context=context)
+        if price_res.success and isinstance(price_res.data, dict):
+            price = price_res.data.get("price", 0.0)
+
+        # Get session
+        session_res = await self.run_skill("session_context", "detect", context=context)
+        session = context.metadata.get("active_session", "unknown")
+
+        # Get cached regime from global context
+        regime = context.metadata.get("regime", "unknown")
+        volatility = context.metadata.get("volatility", "unknown")
+
+        # Open trades
+        open_trades = []
+        try:
+            trades_res = await self.run_skill("signal_executor", "list_trades", context=context)
+            if trades_res.success and trades_res.data:
+                open_trades = [t for t in trades_res.data if str(t.get("status", "")).upper() == "OPEN"]
+        except Exception:
+            pass
+
+        return {
+            "price": price,
+            "session": session,
+            "regime": regime,
+            "volatility": volatility,
+            "open_trades": len(open_trades),
+            "has_open_trades": len(open_trades) > 0,
+        }
+

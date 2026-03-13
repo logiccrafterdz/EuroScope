@@ -145,7 +145,32 @@ class CronScheduler:
         self._schedule_trade_monitor()
         self._schedule_weekly_report()
         
+        # --- Agent Core Heartbeat ---
+        self._schedule_agent_heartbeat()
+        
         logger.info(f"Cron: {len(self._tasks)} tasks scheduled: {list(self._tasks.keys())}")
+
+    def _schedule_agent_heartbeat(self):
+        """Schedule agent core heartbeat — drives the autonomous OODA loop."""
+        async def heartbeat_task():
+            try:
+                agent_core = getattr(self.bot, "agent_core", None)
+                if not agent_core:
+                    return  # Agent Core not yet wired
+                await agent_core.tick()
+            except Exception as e:
+                logger.error(f"Agent heartbeat failed: {e}", exc_info=True)
+
+        # Tick every 30 seconds — fast enough for responsiveness, light enough for API budget
+        self.schedule(
+            "agent_heartbeat",
+            TaskFrequency.MINUTELY,
+            heartbeat_task,
+            interval_seconds=30,
+            delay=60,  # First tick 60s after startup
+        )
+        logger.info("Cron: scheduled 'agent_heartbeat' (30s)")
+
 
     def _schedule_periodic_pulse(self):
         async def pulse_task():
