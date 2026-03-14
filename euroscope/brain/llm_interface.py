@@ -28,12 +28,11 @@ class LLMInterface:
 
     def __init__(self, config: LLMConfig, router: Optional[LLMRouter] = None,
                  vector_memory: Optional[VectorMemory] = None, orchestrator=None,
-                 forecaster=None, cost_tracker=None):
+                 cost_tracker=None):
         self.config = config
         self.router = router
         self.vector_memory = vector_memory
         self.orchestrator = orchestrator
-        self.forecaster = forecaster
         self.skill_function_enum = SkillFunction  # Resolves Scope/NameError
         # Per-user conversation histories: {chat_id: {"messages": [...], "last_active": float}}
         self._histories: dict[int, dict] = {}
@@ -886,7 +885,7 @@ class LLMInterface:
             "- get_signals: Active trading signals\n"
             "- get_liquidity: Liquidity pools, order blocks, session sweeps\n"
             "- get_market_shifts: Regime shifts and volatility deviations\n"
-            "- get_forecast: AI directional forecast\n\n"
+            "- get_chart: Generate technical chart\n"
             "## THINKING PROCESS:\n"
             "- You only analyze EUR/USD.\n"
             "- Be surgical: only call tools you actually need for the specific request.\n"
@@ -981,7 +980,7 @@ class LLMInterface:
         if tool_name == "get_news_sentiment":
             if isinstance(data, dict):
                 return f"Sentiment: {data.get('sentiment')} | Score: {data.get('score')}"
-        if tool_name in ["get_fundamental_analysis", "get_patterns", "get_risk_assessment", "get_signals", "get_forecast"]:
+        if tool_name in ["get_fundamental_analysis", "get_patterns", "get_risk_assessment", "get_signals"]:
             pass # Fall through to default safe JSON dump
 
         try:
@@ -1273,13 +1272,6 @@ class LLMInterface:
             if not chart_path:
                 return {"success": False, "error": "Chart generation failed"}
             return {"success": True, "data": {"chart_path": chart_path}}
-
-        if tool_name == "get_forecast":
-            if not self.forecaster:
-                return {"success": False, "error": "Forecast engine not available"}
-            tf = arguments.get("timeframe") or "24 hours"
-            result = await self.forecaster.generate_forecast(tf)
-            return {"success": True, "data": result}
 
         return {"success": False, "error": f"Unknown tool: {tool_name}"}
 

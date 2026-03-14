@@ -11,7 +11,6 @@ class SkillFunction(Enum):
     GET_RISK_ASSESSMENT = "get_risk_assessment"
     GET_SIGNALS = "get_signals"
     GET_CHART = "get_chart"
-    GET_FORECAST = "get_forecast"
     GET_LEVELS = "get_levels"
     GET_CALENDAR = "get_calendar"
     GET_MACRO = "get_macro"
@@ -123,17 +122,6 @@ FUNCTION_SCHEMAS: Dict[str, Dict[str, Any]] = {
             "properties": {
                 "timeframe": {"type": "string"},
                 "count": {"type": "integer"}
-            },
-            "required": []
-        },
-    },
-    SkillFunction.GET_FORECAST.value: {
-        "name": "get_forecast",
-        "description": "Get AI directional forecast for EUR/USD",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "timeframe": {"type": "string"}
             },
             "required": []
         },
