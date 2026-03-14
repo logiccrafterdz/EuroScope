@@ -118,6 +118,7 @@ class CronScheduler:
         self._task: Optional[asyncio.Task] = None
         self._history: list[dict] = []
         self._active_tasks = set()
+        self._trade_lock = asyncio.Lock()
         self._proactive_warned = False
         cache_minutes = getattr(self.config, "proactive_alert_cache_minutes", 60)
         try:
@@ -526,7 +527,8 @@ class CronScheduler:
                     ctx = await guardrail.enhance_signal_safety(ctx)
                     
                     # 3. Execute the paper trade
-                    exec_res = await orchestrator.run_skill("signal_executor", "open_trade", context=ctx)
+                    async with self._trade_lock:
+                        exec_res = await orchestrator.run_skill("signal_executor", "open_trade", context=ctx)
                     if exec_res.success:
                         trade = exec_res.data
                         
@@ -614,10 +616,11 @@ class CronScheduler:
                             new_sl = entry + 0.0005
                             if sl < new_sl:
                                 logger.info(f"Trailing Stop Triggered ON {trade_id}: Moving SL {sl:.5f} -> {new_sl:.5f}")
-                                await orchestrator.run_skill(
-                                    "signal_executor", "update_trade", context=ctx,
-                                    trade_id=trade_id, stop_loss=new_sl
-                                )
+                                async with self._trade_lock:
+                                    await orchestrator.run_skill(
+                                        "signal_executor", "update_trade", context=ctx,
+                                        trade_id=trade_id, stop_loss=new_sl
+                                    )
                                 sl = new_sl # Update local variable for TP/SL check below
                                 
                     elif direction == "SELL":
@@ -627,10 +630,11 @@ class CronScheduler:
                             new_sl = entry - 0.0005
                             if sl > new_sl:
                                 logger.info(f"Trailing Stop Triggered ON {trade_id}: Moving SL {sl:.5f} -> {new_sl:.5f}")
-                                await orchestrator.run_skill(
-                                    "signal_executor", "update_trade", context=ctx,
-                                    trade_id=trade_id, stop_loss=new_sl
-                                )
+                                async with self._trade_lock:
+                                    await orchestrator.run_skill(
+                                        "signal_executor", "update_trade", context=ctx,
+                                        trade_id=trade_id, stop_loss=new_sl
+                                    )
                                 sl = new_sl
 
                     # --- TP/SL Hit Logic ---
@@ -647,13 +651,14 @@ class CronScheduler:
                     if hit_tp or hit_sl:
                         logger.info(f"Trade Monitor: {trade_id} hit {'TP' if hit_tp else 'SL'} at {current_price:.5f}")
                         
-                        close_res = await orchestrator.run_skill(
-                            "signal_executor", 
-                            "close_trade", 
-                            context=ctx,
-                            trade_id=trade_id, 
-                            exit_price=current_price
-                        )
+                        async with self._trade_lock:
+                            close_res = await orchestrator.run_skill(
+                                "signal_executor", 
+                                "close_trade", 
+                                context=ctx,
+                                trade_id=trade_id, 
+                                exit_price=current_price
+                            )
                         
                         if close_res.success:
                             closed_trade = close_res.data
