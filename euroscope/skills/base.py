@@ -154,11 +154,9 @@ class BaseSkill(ABC):
         if self._skill_md is not None:
             return self._skill_md
 
-        # SKILL.md lives in the same directory as the skill module
         try:
-            skill_file = Path(os.path.abspath(
-                self.__class__.__module__.replace(".", os.sep)
-            )).parent / "SKILL.md"
+            import inspect
+            skill_file = Path(inspect.getfile(self.__class__)).parent / "SKILL.md"
 
             if skill_file.exists():
                 self._skill_md = skill_file.read_text(encoding="utf-8")
