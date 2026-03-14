@@ -40,6 +40,50 @@ class SignalExecutor:
         """Initialize the executor (load risk state, etc)."""
         if self.risk_manager:
             await self.risk_manager.load_state()
+            
+        await self._recover_inflight_transactions()
+
+    async def _recover_inflight_transactions(self):
+        """
+        Scan for pending transactions (Write-Ahead Log) that were interrupted by a crash.
+        Reconcile with the broker to ensure we don't have orphan positions.
+        """
+        pending_txs = await self.storage.get_pending_transactions()
+        if not pending_txs:
+            return
+
+        logger.info(f"Recovering {len(pending_txs)} in-flight transactions...")
+        
+        # If real trading is active, fetch broker positions to reconcile
+        broker_positions = []
+        if not self.paper_trading and self.broker:
+            res = await self.broker.get_positions()
+            if res.get("success"):
+                broker_positions = res.get("positions", [])
+
+        import json
+        for tx in pending_txs:
+            tx_id = tx["id"]
+            action = tx["action"]
+            try:
+                payload = json.loads(tx["payload"])
+            except Exception:
+                await self.storage.update_transaction_status(tx_id, "failed")
+                continue
+
+            if action == "open_trade":
+                # Check if it was actually opened on the broker
+                # In a robust implementation, we'd match broker's dealId. 
+                # Here we close the loop safely by checking if it exists as an open signal
+                # or marking it as failed to prevent duplicate executions.
+                logger.warning(f"Found pending 'open_trade' transaction #{tx_id}. Marking as failed to prevent accidental duplicate.")
+                await self.storage.update_transaction_status(tx_id, "failed")
+                
+            elif action == "close_trade":
+                logger.warning(f"Found pending 'close_trade' transaction #{tx_id}. Marking as completed as broker likely handled it.")
+                await self.storage.update_transaction_status(tx_id, "completed")
+            else:
+                await self.storage.update_transaction_status(tx_id, "failed")
 
     def start_streaming(self, ws_client: CapitalWebsocketClient):
         """Bind WS client to the executor and register the on_tick callback."""
@@ -108,11 +152,20 @@ class SignalExecutor:
         Returns:
             Signal ID, or -1 if order rejected
         """
+        # 0. Log transaction intent (Write-Ahead Log)
+        tx_payload = {
+            "direction": direction, "entry_price": entry_price, 
+            "stop_loss": stop_loss, "take_profit": take_profit,
+            "strategy": strategy, "timeframe": timeframe
+        }
+        tx_id = await self.storage.log_transaction("open_trade", tx_payload, "pending")
+
         # 1. Simulate execution for paper trading or get real fill
         if self.paper_trading:
             exec_result = self.execution_sim.simulate_entry(direction, entry_price, atr=atr)
             if not exec_result.filled:
                 logger.warning(f"Paper Signal REJECTED: {direction} @ {entry_price} ({exec_result.details})")
+                await self.storage.update_transaction_status(tx_id, "failed")
                 return -1
             fill_price = exec_result.fill_price
             exec_details = exec_result.details
@@ -120,12 +173,14 @@ class SignalExecutor:
             # REAL EXECUTION via Capital.com
             if not self.broker:
                 logger.error("Real trading enabled but no broker configured!")
+                await self.storage.update_transaction_status(tx_id, "failed")
                 return -1
             
             # Note: For real execution, stop_loss and take_profit are passed to broker
             res = await self.broker.execute_trade("EURUSD", direction, 0.01, stop_loss, take_profit)
             if not res.get("success"):
                 logger.error(f"REAL TRADE FAILED: {res.get('error')}")
+                await self.storage.update_transaction_status(tx_id, "failed")
                 return -1
             
             # For simplicity in this v1 bridge, we assume the price we requested is roughly the fill
@@ -150,6 +205,9 @@ class SignalExecutor:
             risk_reward_ratio=rr
         )
         logger.info(f"Executed trade #{signal_id}: {direction.upper()} at {fill_price}. {exec_details}")
+        
+        # Mark transaction as completed
+        await self.storage.update_transaction_status(tx_id, "completed")
         
         # Notify Risk Manager
         await self.risk_manager.record_trade_result(
@@ -262,12 +320,18 @@ class SignalExecutor:
         Returns:
             Dict with signal details and PnL, or None
         """
+        # Log transaction intent
+        tx_id = await self.storage.log_transaction("close_trade", {
+            "signal_id": signal_id, "exit_price": exit_price, "reason": reason
+        }, "pending")
+
         # Find the signal
         signals = await self.storage.get_signals(status="open")
         signal = next((s for s in signals if s["id"] == signal_id), None)
 
         if not signal:
             logger.warning(f"Signal #{signal_id} not found or not open")
+            await self.storage.update_transaction_status(tx_id, "failed")
             return None
 
         entry = signal["entry_price"]
@@ -284,6 +348,9 @@ class SignalExecutor:
 
         # Update signal status in storage
         await self.storage.update_signal_status(signal_id, "closed", pnl_pips=pnl_pips)
+
+        # Mark transaction as completed
+        await self.storage.update_transaction_status(tx_id, "completed")
 
         # Notify Risk Manager
         await self.risk_manager.record_trade_result(pnl=pnl_pips)

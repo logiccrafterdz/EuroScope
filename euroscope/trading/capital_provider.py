@@ -348,6 +348,34 @@ class CapitalProvider:
             logger.error(f"Failed to fetch account info: {e}")
             return {"success": False, "error": str(e)}
 
+    async def get_positions(self, _retry_count: int = 0) -> Dict[str, Any]:
+        """Fetch currently open positions from the broker."""
+        if not self.session_token:
+            if not await self.login(): return {"success": False, "error": "Login failed"}
+            
+        url = f"{self.DEMO_URL}/positions"
+        headers = {
+            "X-CAP-API-KEY": self.api_key,
+            "CST": self.session_token,
+            "X-SECURITY-TOKEN": self.security_token
+        }
+        
+        try:
+            session = await self._get_session()
+            async with session.get(url, headers=headers) as response:
+                if response.status == 401 and _retry_count < 1:
+                    logger.warning("get_positions: 401 received, re-authenticating...")
+                    if await self.login():
+                        return await self.get_positions(_retry_count=_retry_count + 1)
+                    return {"success": False, "error": "Re-authentication failed"}
+                
+                response.raise_for_status()
+                data = await response.json()
+                return {"success": True, "positions": data.get("positions", [])}
+        except Exception as e:
+            logger.error(f"Failed to fetch positions: {e}")
+            return {"success": False, "error": str(e)}
+
     async def close(self):
         if self._session:
             await self._session.close()

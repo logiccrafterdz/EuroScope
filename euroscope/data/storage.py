@@ -63,6 +63,14 @@ class Storage:
                     resolved_at TEXT
                 );
 
+                CREATE TABLE IF NOT EXISTS transaction_logs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    timestamp TEXT NOT NULL,
+                    action TEXT NOT NULL,
+                    payload TEXT NOT NULL,
+                    status TEXT DEFAULT 'pending'
+                );
+
                 CREATE TABLE IF NOT EXISTS alerts (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     created_at TEXT NOT NULL,
@@ -424,6 +432,35 @@ class Storage:
                 "SELECT * FROM market_notes ORDER BY timestamp DESC LIMIT ?",
                 (limit,)
             )
+
+    # --- Transaction Logs ---
+
+    async def log_transaction(self, action: str, payload: dict, status: str = "pending") -> int:
+        """Create a Write-Ahead Log for in-flight trades."""
+        async with self._get_db() as db:
+            async with db.execute(
+                """INSERT INTO transaction_logs (timestamp, action, payload, status)
+                   VALUES (?, ?, ?, ?)""",
+                (datetime.now(timezone.utc).isoformat(), action, json.dumps(payload), status)
+            ) as cursor:
+                await db.commit()
+                return cursor.lastrowid
+        return -1
+
+    async def update_transaction_status(self, tx_id: int, status: str):
+        """Update the status of an in-flight transaction (e.g., to 'completed' or 'failed')."""
+        async with self._get_db() as db:
+            await db.execute(
+                "UPDATE transaction_logs SET status=? WHERE id=?",
+                (status, tx_id)
+            )
+            await db.commit()
+
+    async def get_pending_transactions(self) -> list[dict]:
+        """Fetch all transactions that have not naturally concluded."""
+        return await self._query_rows(
+            "SELECT * FROM transaction_logs WHERE status='pending' ORDER BY timestamp ASC"
+        )
 
     # --- Trading Signals ---
 
