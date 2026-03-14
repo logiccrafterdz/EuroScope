@@ -67,18 +67,18 @@ class SignalExecutor:
                 # For long, we exit by selling at the BID
                 if bid <= sl:
                     reason = "stop_loss"
-                    exit_price = sl
+                    exit_price = bid
                 elif bid >= tp:
                     reason = "take_profit"
-                    exit_price = tp
+                    exit_price = bid
             elif direction == "SELL":
                 # For short, we exit by buying at the ASK
                 if ask >= sl:
                     reason = "stop_loss"
-                    exit_price = sl
+                    exit_price = ask
                 elif ask <= tp:
                     reason = "take_profit"
-                    exit_price = tp
+                    exit_price = ask
 
             if reason:
                 logger.warning(f"⚡ WS TICK TRIGGER: Signal #{sig_id} {reason.upper()} hit at {bid}/{ask}")
@@ -208,17 +208,17 @@ class SignalExecutor:
             if direction == "BUY":
                 if current_price <= sl:
                     reason = "stop_loss"
-                    exit_price = sl
+                    exit_price = current_price
                 elif current_price >= tp:
                     reason = "take_profit"
-                    exit_price = tp
+                    exit_price = current_price
             elif direction == "SELL":
                 if current_price >= sl:
                     reason = "stop_loss"
-                    exit_price = sl
+                    exit_price = current_price
                 elif current_price <= tp:
                     reason = "take_profit"
-                    exit_price = tp
+                    exit_price = current_price
 
             if reason:
                 # Apply execution simulation to exit
