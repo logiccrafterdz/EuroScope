@@ -147,6 +147,17 @@ class SignalExecutor:
             timeframe=timeframe,
             source=strategy,
             reasoning=reasoning,
+            risk_reward_ratio=rr
+        )
+        logger.info(f"Executed trade #{signal_id}: {direction.upper()} at {fill_price}. {exec_details}")
+        
+        # Notify Risk Manager
+        await self.risk_manager.record_trade_result(
+            pnl=0.0
+        )
+        return signal_id
+
+    async def create_pending_order(self, direction: str, trigger_price: float,
                              stop_loss: float, take_profit: float,
                              strategy: str = "llm_precalc", timeframe: str = "H1",
                              confidence: float = 75.0, reasoning: str = "Pending Order") -> int:
@@ -269,6 +280,14 @@ class SignalExecutor:
             pnl_pips = (entry - exit_price) * 10000
 
         pnl_pips = round(pnl_pips, 1)
+        is_win = pnl_pips > 0
+
+        # Update signal status in storage
+        await self.storage.update_signal_status(signal_id, "closed", pnl_pips=pnl_pips)
+
+        # Notify Risk Manager
+        await self.risk_manager.record_trade_result(pnl=pnl_pips)
+
         return {
             "id": signal_id,
             "direction": direction,

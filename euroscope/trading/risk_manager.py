@@ -385,12 +385,7 @@ class RiskManager:
         if self._consecutive_losses >= 2:
             score += 1
 
-        if direction.upper() == "BUY":
-            sl = entry_price - stop_distance
-        else:
-            sl = entry_price + stop_distance
-
-        return round(sl, 5)
+        return min(max(score, 1), 10)
 
     def calculate_level_stop(self, direction: str, entry_price: float,
                              support_levels: list[float],
@@ -595,25 +590,4 @@ class RiskManager:
             self._consecutive_losses = 0
         if not self.storage:
             return
-        """Format risk assessment for Telegram display."""
-        icon = "🟢" if trade.approved else "🔴"
-        dir_icon = "📈" if trade.direction == "BUY" else "📉"
 
-        lines = [
-            f"🛡️ *Risk Assessment*\n",
-            f"{dir_icon} *{trade.direction}* at `{trade.entry_price}`",
-            f"🔴 Stop Loss: `{trade.stop_loss}` ({trade.stop_pips:.0f} pips)",
-            f"🟢 Take Profit: `{trade.take_profit}` ({trade.tp_pips:.0f} pips)",
-            f"📊 R:R = 1:{trade.risk_reward}",
-            f"📐 Position: {trade.position_size} lots",
-            f"💰 Risk: ${trade.risk_amount}",
-            f"⚡ Risk Score: {trade.risk_score}/10",
-            f"\n{icon} **{'APPROVED' if trade.approved else 'BLOCKED'}**",
-        ]
-
-        if trade.warnings:
-            lines.append("\n⚠️ *Warnings:*")
-            for w in trade.warnings:
-                lines.append(f"  {w}")
-
-        return "\n".join(lines)

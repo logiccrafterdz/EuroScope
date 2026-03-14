@@ -436,8 +436,8 @@ class Storage:
             async with db.execute(
                 """INSERT INTO trading_signals
                    (created_at, direction, entry_price, stop_loss, take_profit,
-                    confidence, timeframe, source, reasoning, risk_reward_ratio)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    confidence, timeframe, source, reasoning, risk_reward_ratio, status)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open')""",
                 (datetime.now(timezone.utc).isoformat(), direction, entry_price, stop_loss,
                  take_profit, confidence, timeframe, source, reasoning, risk_reward_ratio)
             ) as cursor:

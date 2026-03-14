@@ -158,31 +158,33 @@ class TestAssessTrade:
 
 class TestTradeTracking:
 
-    def test_consecutive_losses(self):
+    @pytest.mark.asyncio
+    async def test_consecutive_losses(self):
         rm = RiskManager()
-        rm.record_trade_result(-20)
-        rm.record_trade_result(-15)
+        await rm.record_trade_result(-20)
+        await rm.record_trade_result(-15)
         assert rm._consecutive_losses == 2
 
-    def test_win_resets_streak(self):
+    @pytest.mark.asyncio
+    async def test_win_resets_streak(self):
         rm = RiskManager()
-        rm.record_trade_result(-20)
-        rm.record_trade_result(-15)
-        rm.record_trade_result(30)  # Win resets
+        await rm.record_trade_result(-20)
+        await rm.record_trade_result(-15)
+        await rm.record_trade_result(30)  # Win resets
         assert rm._consecutive_losses == 0
 
-    def test_daily_pnl_accumulates(self):
+    @pytest.mark.asyncio
+    async def test_daily_pnl_accumulates(self):
         rm = RiskManager()
-        rm.record_trade_result(30)
-        rm.record_trade_result(-20)
+        await rm.record_trade_result(30)
+        await rm.record_trade_result(-20)
         assert rm._daily_pnl == 10
 
-    def test_format_risk(self):
+    def test_risk_score_assigned(self):
         rm = RiskManager()
         trade = rm.assess_trade("BUY", 1.0900, atr=0.0050)
-        formatted = rm.format_risk(trade)
-        assert "Risk Assessment" in formatted
-        assert "BUY" in formatted
+        assert hasattr(trade, "risk_score")
+        assert trade.risk_score >= 1
 
 
 @pytest.mark.asyncio
