@@ -444,7 +444,8 @@ class RiskManager:
     # ─── Full Trade Risk Assessment ──────────────────────────
 
     def assess_trade(self, direction: str, entry_price: float,
-                     atr: float = None, support: list[float] = None,
+                     atr: float = None, avg_atr: float = None,
+                     support: list[float] = None,
                      resistance: list[float] = None,
                      rr_ratio: float = None,
                      regime: str = None) -> TradeRisk:
@@ -506,12 +507,7 @@ class RiskManager:
         rr = round(tp_pips / stop_pips, 2) if stop_pips > 0 else 0
 
         # ── Position sizing (volatility & regime adaptive) ──
-        atr_data = None
-        avg_atr_val = None
-        if atr:
-            atr_data = atr
-            # Use atr as both current and avg if we don't have separate avg
-            avg_atr_val = atr  # Caller can override
+        avg_atr_val = avg_atr if avg_atr else atr
         position_size = self.calculate_position_size(
             stop_pips, atr=atr, avg_atr=avg_atr_val, regime=regime
         )

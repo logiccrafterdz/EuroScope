@@ -46,6 +46,7 @@ class RiskManagementSkill(BaseSkill):
         direction = params.get("direction") or context.signals.get("direction") or "BUY"
         entry = params.get("entry_price") or context.signals.get("entry_price") or 0
         atr = params.get("atr")
+        avg_atr = params.get("avg_atr")
         support = params.get("support", context.analysis.get("levels", {}).get("support", []))
         resistance = params.get("resistance", context.analysis.get("levels", {}).get("resistance", []))
 
@@ -57,10 +58,12 @@ class RiskManagementSkill(BaseSkill):
             ind = context.analysis.get("indicators", {})
             atr_data = ind.get("indicators", {}).get("ATR", {})
             atr = atr_data.get("value")
+            if not avg_atr:
+                avg_atr = atr_data.get("sma") or atr_data.get("moving_average") or atr_data.get("avg")
 
         try:
             result = self.manager.assess_trade(
-                direction, entry, atr=atr, support=support, resistance=resistance,
+                direction, entry, atr=atr, avg_atr=avg_atr, support=support, resistance=resistance,
             )
             session_regime = context.metadata.get("session_regime", "unknown")
             liquidity_zones = context.metadata.get("liquidity_zones", [])
