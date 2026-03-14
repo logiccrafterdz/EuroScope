@@ -14,6 +14,7 @@ from telegram.ext import Application, CommandHandler, ContextTypes
 from telegram import BotCommand
 from telegram.error import Conflict
 from ..config import Config
+from ..container import ServiceContainer
 from ..brain.llm_interface import LLMInterface
 from ..brain.memory import Memory
 from ..brain.orchestrator import Orchestrator
@@ -51,95 +52,54 @@ class EuroScopeBot:
     """Telegram bot for EUR/USD analysis — V3 Skills-Based."""
     TOPICS = {'radar': {'name': '📍 Liquidity Radar', 'icon': '🎯'}, 'reports': {'name': '📊 Analysis Reports', 'icon': '📋'}, 'news': {'name': '📰 News & Macro', 'icon': '📅'}, 'settings': {'name': '⚙️ Bot Settings', 'icon': '🛠️'}}
 
-    def __init__(self, config: Config):
-        self.config = config
+    def __init__(self, container: ServiceContainer):
+        self.container = container
+        self.config = container.config
         
         # 1. Base Infrastructure (Shared Storage)
-        self.storage = Storage()
-        self.bus = EventBus()
-        self.registry = SkillsRegistry()
-        self.alerts = SmartAlerts()
-        setup_default_alerts(self.alerts)
-        self.rate_limiter = RateLimiter(
-            max_requests=config.rate_limit_requests, 
-            window_minutes=config.rate_limit_window_minutes
-        )
+        self.storage = container.storage
+        self.bus = container.bus
+        self.registry = container.registry
+        self.alerts = container.alerts
+        self.rate_limiter = container.rate_limiter
         
         # 2. Core Brain Components
-        self.memory = Memory(self.storage)
-        self.vector_memory = VectorMemory(storage=self.storage)
-        self.orchestrator = Orchestrator(storage=self.storage, registry=self.registry)
+        self.memory = container.memory
+        self.vector_memory = container.vector_memory
+        self.orchestrator = container.orchestrator
+        self.router = container.router
         
-        self.router = LLMRouter.from_config(
-            primary_key=config.llm.api_key, 
-            primary_base=config.llm.api_base, 
-            primary_model=config.llm.model, 
-            fallback_key=config.llm.fallback_api_key, 
-            fallback_base=config.llm.fallback_api_base, 
-            fallback_model=config.llm.fallback_model
-        )
-        
-        # 3. Intelligence Layers (Order: Agent -> Forecaster)
-        self.agent = LLMInterface(
-            config.llm, 
-            router=self.router, 
-            vector_memory=self.vector_memory, 
-            orchestrator=self.orchestrator
-        )
-        self.forecaster = Forecaster(
-            self.agent, 
-            self.memory, 
-            self.orchestrator, 
-            pattern_tracker=None # Will be set-injected
-        )
-        self.agent.forecaster = self.forecaster
+        # 3. Intelligence Layers
+        self.agent = container.agent
+        self.forecaster = container.forecaster
         
         # 4. Domain & Data Services
-        self.price_provider = MultiSourceProvider(
-            alphavantage_key=config.data.alphavantage_key,
-            tiingo_key=config.data.tiingo_key,
-            oanda_key=config.data.oanda_api_key,
-            oanda_account=config.data.oanda_account_id,
-            oanda_practice=config.data.oanda_practice,
-            capital_key=config.data.capital_api_key,
-            capital_identifier=config.data.capital_identifier,
-            capital_password=config.data.capital_password
-        )
-        self.broker = CapitalProvider(
-            api_key=config.data.capital_api_key,
-            identifier=config.data.capital_identifier,
-            password=config.data.capital_password
-        ) if config.data.capital_api_key else None
-        self.ws_client = CapitalWebsocketClient(self.broker) if self.broker else None
-        
-        self.news_engine = NewsEngine(config.data.brave_api_key, storage=self.storage)
-        self.calendar = EconomicCalendar()
-        self.macro_provider = FundamentalDataProvider(config.data.fred_api_key)
-        self.risk_manager = RiskManager(storage=self.storage)
+        self.price_provider = container.price_provider
+        self.broker = container.broker
+        self.ws_client = container.ws_client
+        self.news_engine = container.news_engine
+        self.calendar = container.calendar
+        self.macro_provider = container.macro_provider
+        self.risk_manager = container.risk_manager
         
         # 5. Tracking & Analytics
-        self.pattern_tracker = PatternTracker(storage=self.storage)
-        self.adaptive_tuner = AdaptiveTuner(storage=self.storage, config=self.config)
-        self.evolution_tracker = EvolutionTracker(storage=self.storage)
-        self.daily_tracker = DailyTracker(storage=self.storage)
-        self.briefing_engine = BriefingEngine(self.config, storage=self.storage, orchestrator=self.orchestrator)
-        self.briefing_engine.agent = self.agent
-        
-        # Inject pattern tracker into forecaster now that it exists
-        self.forecaster.pattern_tracker = self.pattern_tracker
+        self.pattern_tracker = container.pattern_tracker
+        self.adaptive_tuner = container.adaptive_tuner
+        self.evolution_tracker = container.evolution_tracker
+        self.daily_tracker = container.daily_tracker
+        self.briefing_engine = container.briefing_engine
         
         # 6. User Management & Notifications
-        self.user_settings = UserSettings(self.storage)
-        self.notifications = NotificationManager(self.storage)
-        self.notifications.set_orchestrator(self.orchestrator)
+        self.user_settings = container.user_settings
+        self.notifications = container.notifications
+        self.workspace = container.workspace
         
         # 7. UI, Interface & Scheduling
         self.api = APIServer(self)
         self.commands = CommandHandlers(self)
         self.tasks = BotTasks(self)
-        self.workspace = WorkspaceManager()
         self.heartbeat = HeartbeatService(interval=300, event_bus=self.bus)
-        self.cron = CronScheduler(config=config, bot=self, storage=self.storage)
+        self.cron = CronScheduler(config=self.config, bot=self, storage=self.storage)
         
         # 8. Subscription Handlers
         self.alerts.register_handler(AlertChannel.TELEGRAM, self._on_alert_triggered)

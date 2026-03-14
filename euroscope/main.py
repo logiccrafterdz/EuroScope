@@ -9,6 +9,7 @@ import sys
 
 from .config import Config
 from .bot.telegram_bot import EuroScopeBot
+from .container import ServiceContainer
 from .utils.logger import setup_structured_logging
 
 
@@ -51,7 +52,8 @@ def main():
     # to avoid port conflicts on single-port platforms like Northflank/Heroku.
 
     # Start bot
-    bot = EuroScopeBot(config)
+    container = ServiceContainer(config)
+    bot = EuroScopeBot(container)
     try:
         bot.run()
     except KeyboardInterrupt:
