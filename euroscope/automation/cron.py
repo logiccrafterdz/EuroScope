@@ -492,12 +492,8 @@ class CronScheduler:
                 # 1. Run the full analytical pipeline
                 ctx = await orchestrator.run_full_analysis_pipeline(timeframe="H1")
                 
-                # 2. Re-evaluate strategy with fresh context
-                strat_res = await orchestrator.run_skill("trading_strategy", "detect_signal", context=ctx)
-                if not strat_res.success:
-                    return
-                    
-                signal_data = strat_res.data
+                # 2. Extract signal directly from the pipeline context
+                signal_data = ctx.signals if isinstance(ctx.signals, dict) else {}
                 direction = signal_data.get("direction", "WAIT")
                 confidence = signal_data.get("confidence", 0)
                 
