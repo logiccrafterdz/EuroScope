@@ -204,7 +204,6 @@ class SessionPlanner:
         response = await self.llm_interface.stateless_chat(
             user_message=user_prompt,
             system_override=system_prompt,
-            response_format="json_object",  # Ensure JSON if supported
         )
 
         # Parse JSON
