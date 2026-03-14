@@ -33,8 +33,9 @@ class AdaptiveTuner:
     - Respects guardrail bounds on all parameters
     """
 
-    def __init__(self, storage: Storage = None):
+    def __init__(self, storage: Storage = None, config=None):
         self.storage = storage
+        self.config = config
 
     async def analyze(self, strategy: str = None) -> dict:
         """
@@ -162,7 +163,8 @@ class AdaptiveTuner:
         import json
         import os
         
-        tuning_file = "data/tuning.json"
+        data_dir = getattr(self.config, "data_dir", "data") if getattr(self, "config", None) else "data"
+        tuning_file = os.path.join(data_dir, "tuning.json")
         
         # Default starting params
         current_params = {

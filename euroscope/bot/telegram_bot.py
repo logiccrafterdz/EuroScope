@@ -119,7 +119,7 @@ class EuroScopeBot:
         
         # 5. Tracking & Analytics
         self.pattern_tracker = PatternTracker(storage=self.storage)
-        self.adaptive_tuner = AdaptiveTuner(storage=self.storage)
+        self.adaptive_tuner = AdaptiveTuner(storage=self.storage, config=self.config)
         self.evolution_tracker = EvolutionTracker(storage=self.storage)
         self.daily_tracker = DailyTracker(storage=self.storage)
         self.briefing_engine = BriefingEngine(self.config, storage=self.storage, orchestrator=self.orchestrator)

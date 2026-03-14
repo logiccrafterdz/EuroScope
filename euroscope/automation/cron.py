@@ -438,7 +438,7 @@ class CronScheduler:
                 tuner = getattr(self.bot, "adaptive_tuner", None)
                 if not tuner:
                     from ..learning.adaptive_tuner import AdaptiveTuner
-                    tuner = AdaptiveTuner(storage=storage)
+                    tuner = AdaptiveTuner(storage=storage, config=self.config)
                 await tuner.auto_tune()
                 report = await tuner.format_report()
 
