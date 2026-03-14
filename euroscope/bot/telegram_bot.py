@@ -242,7 +242,7 @@ class EuroScopeBot:
 
     async def _get_thread(self, chat_id: int, key: str) -> Optional[int]:
         """Helper to get thread ID for a topic."""
-        return self.storage.get_user_thread(chat_id, key)
+        return await self.storage.get_user_thread(chat_id, key)
 
     def _is_compact_mode(self, chat_id: int) -> bool:
         prefs = self.user_settings.get_prefs(chat_id)
@@ -280,7 +280,7 @@ class EuroScopeBot:
 
     async def _ensure_private_topics(self, chat_id: int, bot: 'Bot'):
         """Ensure all specialized topics exist in user's private chat."""
-        existing = self.storage.get_all_user_threads(chat_id)
+        existing = await self.storage.get_all_user_threads(chat_id)
         if len(existing) == len(self.TOPICS):
             return existing
         threads = existing.copy()
@@ -342,7 +342,7 @@ class EuroScopeBot:
         chat_id = update.effective_chat.id
         thread_id = None
         if topic_key:
-            thread_id = self.storage.get_user_thread(chat_id, topic_key)
+            thread_id = await self.storage.get_user_thread(chat_id, topic_key)
         try:
             if update.message:
                 return await update.message.reply_text(text, message_thread_id=thread_id, **kwargs)
@@ -364,7 +364,7 @@ class EuroScopeBot:
         chat_id = update.effective_chat.id
         thread_id = None
         if topic_key:
-            thread_id = self.storage.get_user_thread(chat_id, topic_key)
+            thread_id = await self.storage.get_user_thread(chat_id, topic_key)
         if update.message:
             return await update.message.reply_photo(photo=photo, caption=caption, message_thread_id=thread_id, **kwargs)
         return await update.get_bot().send_photo(chat_id=chat_id, photo=photo, caption=caption, message_thread_id=thread_id, **kwargs)
