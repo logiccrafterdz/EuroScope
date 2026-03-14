@@ -147,21 +147,6 @@ class SignalExecutor:
             timeframe=timeframe,
             source=strategy,
             reasoning=reasoning,
-            risk_reward_ratio=rr,
-        )
-
-        # Set status to 'open' (default is 'pending')
-        await self.storage.update_signal_status(signal_id, "open")
-
-        logger.info(
-            f"Opened signal #{signal_id}: {direction.upper()} @ {fill_price} "
-            f"(requested {entry_price}, {exec_result.details}) "
-            f"SL={stop_loss} TP={take_profit} ({strategy})"
-        )
-
-        return signal_id
-
-    async def create_pending_order(self, direction: str, trigger_price: float,
                              stop_loss: float, take_profit: float,
                              strategy: str = "llm_precalc", timeframe: str = "H1",
                              confidence: float = 75.0, reasoning: str = "Pending Order") -> int:
@@ -284,20 +269,6 @@ class SignalExecutor:
             pnl_pips = (entry - exit_price) * 10000
 
         pnl_pips = round(pnl_pips, 1)
-        is_win = pnl_pips > 0
-
-        # Update in DB — store reason in reasoning via pnl_pips
-        await self.storage.update_signal_status(signal_id, "closed", pnl_pips=pnl_pips)
-
-        # Update RiskManager stats
-        if self.risk_manager:
-            self.risk_manager.record_trade_result(pnl_pips)
-
-        logger.info(
-            f"Closed signal #{signal_id}: {direction} "
-            f"{'✅' if is_win else '❌'} {pnl_pips:+.1f} pips ({reason})"
-        )
-
         return {
             "id": signal_id,
             "direction": direction,
