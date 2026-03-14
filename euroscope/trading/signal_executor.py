@@ -185,10 +185,10 @@ class SignalExecutor:
         pending_signals = await self.storage.get_signals(status="pending")
         for p in pending_signals:
             trigger = p["entry_price"]
-            dir = p["direction"]
+            sig_dir = p["direction"]
             # Simplified trigger logic (assumes Limit orders given strategy)
-            if (dir == "BUY" and current_price <= trigger) or \
-               (dir == "SELL" and current_price >= trigger):
+            if (sig_dir == "BUY" and current_price <= trigger) or \
+               (sig_dir == "SELL" and current_price >= trigger):
                 await self.storage.update_signal_status(p["id"], "open")
                 logger.info(f"⚡ INSTANT EXECUTION: Pending order #{p['id']} activated at {current_price} (Zero LLM Latency)")
                 
