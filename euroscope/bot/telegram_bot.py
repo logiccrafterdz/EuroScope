@@ -15,32 +15,7 @@ from telegram import BotCommand
 from telegram.error import Conflict
 from ..config import Config
 from ..container import ServiceContainer
-from ..brain.llm_interface import LLMInterface
-from ..brain.memory import Memory
-from ..brain.orchestrator import Orchestrator
-from ..brain.llm_router import LLMRouter
-from ..brain.vector_memory import VectorMemory
-from ..learning.pattern_tracker import PatternTracker
-from ..learning.adaptive_tuner import AdaptiveTuner
-from ..data.multi_provider import MultiSourceProvider, MultiSourceProvider as PriceProvider
-from ..data.news import NewsEngine
-from ..data.calendar import EconomicCalendar
-from ..data.fundamental import FundamentalDataProvider
-from ..data.storage import Storage
-from ..forecast.engine import Forecaster
-from ..trading.risk_manager import RiskManager
-from ..trading.capital_provider import CapitalProvider
-from ..trading.capital_ws import CapitalWebsocketClient
-from ..trading.strategy_engine import StrategyEngine
-from ..trading.signal_executor import SignalExecutor
-from ..utils.formatting import truncate, safe_markdown, rich_header, thematic_divider
-from .rate_limiter import RateLimiter
-from .user_settings import UserSettings
-from .notification_manager import NotificationManager
-from ..brain.briefing_engine import BriefingEngine
-from ..analytics.evolution_tracker import EvolutionTracker
-from ..skills.registry import SkillsRegistry
-from ..workspace import WorkspaceManager
+from ..utils.formatting import truncate
 from ..automation import HeartbeatService, EventBus, SmartAlerts, AlertChannel, setup_default_alerts, CronScheduler, TaskFrequency, SignalExecutorSubscriber, AlertSuppressionSubscriber, TelegramEmergencySubscriber
 from ..automation.daily_tracker import DailyTracker
 from .api_server import APIServer

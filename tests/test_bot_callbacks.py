@@ -58,18 +58,18 @@ def _make_bot():
     config.safety_asian_min_confidence = 0.75
     config.safety_volatility_stop_min = 25
 
-    with patch("euroscope.bot.telegram_bot.MultiSourceProvider"), \
-         patch("euroscope.bot.telegram_bot.NewsEngine"), \
-         patch("euroscope.bot.telegram_bot.EconomicCalendar"), \
-         patch("euroscope.bot.telegram_bot.FundamentalDataProvider"), \
-         patch("euroscope.bot.telegram_bot.LLMInterface"), \
-         patch("euroscope.bot.telegram_bot.Memory"), \
-         patch("euroscope.bot.telegram_bot.Forecaster"), \
-         patch("euroscope.bot.telegram_bot.Orchestrator"), \
-         patch("euroscope.bot.telegram_bot.RiskManager"), \
-         patch("euroscope.bot.telegram_bot.CapitalProvider"), \
-         patch("euroscope.bot.telegram_bot.CapitalWebsocketClient"), \
-         patch("euroscope.bot.telegram_bot.Storage"):
+    with patch("euroscope.data.multi_provider.MultiSourceProvider"), \
+         patch("euroscope.data.news.NewsEngine"), \
+         patch("euroscope.data.calendar.EconomicCalendar"), \
+         patch("euroscope.data.fundamental.FundamentalDataProvider"), \
+         patch("euroscope.brain.llm_interface.LLMInterface"), \
+         patch("euroscope.brain.memory.Memory"), \
+         patch("euroscope.forecast.engine.Forecaster"), \
+         patch("euroscope.brain.orchestrator.Orchestrator"), \
+         patch("euroscope.trading.risk_manager.RiskManager"), \
+         patch("euroscope.trading.capital_provider.CapitalProvider"), \
+         patch("euroscope.trading.capital_ws.CapitalWebsocketClient"), \
+         patch("euroscope.data.storage.Storage"):
         from euroscope.bot.rate_limiter import RateLimiter
         container = MagicMock()
         container.config = config

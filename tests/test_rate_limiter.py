@@ -78,18 +78,18 @@ async def test_rate_limit_blocks_non_admin():
     update.effective_chat.id = 123
     update.effective_message.reply_text = AsyncMock()
 
-    with patch("euroscope.bot.telegram_bot.PriceProvider"), \
-         patch("euroscope.bot.telegram_bot.NewsEngine"), \
-         patch("euroscope.bot.telegram_bot.EconomicCalendar"), \
-         patch("euroscope.bot.telegram_bot.LLMInterface"), \
-         patch("euroscope.bot.telegram_bot.Memory"), \
-         patch("euroscope.bot.telegram_bot.Forecaster"), \
-         patch("euroscope.bot.telegram_bot.Orchestrator"), \
-         patch("euroscope.bot.telegram_bot.RiskManager"), \
-         patch("euroscope.bot.telegram_bot.StrategyEngine"), \
-         patch("euroscope.bot.telegram_bot.SignalExecutor"), \
-         patch("euroscope.bot.telegram_bot.SignalExecutor"), \
-         patch("euroscope.bot.telegram_bot.Storage"):
+    with patch("euroscope.data.multi_provider.MultiSourceProvider"), \
+         patch("euroscope.data.news.NewsEngine"), \
+         patch("euroscope.data.calendar.EconomicCalendar"), \
+         patch("euroscope.brain.llm_interface.LLMInterface"), \
+         patch("euroscope.brain.memory.Memory"), \
+         patch("euroscope.forecast.engine.Forecaster"), \
+         patch("euroscope.brain.orchestrator.Orchestrator"), \
+         patch("euroscope.trading.risk_manager.RiskManager"), \
+         patch("euroscope.trading.strategy_engine.StrategyEngine"), \
+         patch("euroscope.trading.signal_executor.SignalExecutor"), \
+         patch("euroscope.trading.signal_executor.SignalExecutor"), \
+         patch("euroscope.data.storage.Storage"):
         container = MagicMock()
         container.config = config
         container.rate_limiter = RateLimiter(max_requests=config.rate_limit_requests, window_minutes=config.rate_limit_window_minutes)
@@ -126,18 +126,18 @@ async def test_admin_bypass():
     update.effective_chat.id = 123
     update.effective_message.reply_text = AsyncMock()
 
-    with patch("euroscope.bot.telegram_bot.PriceProvider"), \
-         patch("euroscope.bot.telegram_bot.NewsEngine"), \
-         patch("euroscope.bot.telegram_bot.EconomicCalendar"), \
-         patch("euroscope.bot.telegram_bot.LLMInterface"), \
-         patch("euroscope.bot.telegram_bot.Memory"), \
-         patch("euroscope.bot.telegram_bot.Forecaster"), \
-         patch("euroscope.bot.telegram_bot.Orchestrator"), \
-         patch("euroscope.bot.telegram_bot.RiskManager"), \
-         patch("euroscope.bot.telegram_bot.StrategyEngine"), \
-         patch("euroscope.bot.telegram_bot.SignalExecutor"), \
-         patch("euroscope.bot.telegram_bot.SignalExecutor"), \
-         patch("euroscope.bot.telegram_bot.Storage"):
+    with patch("euroscope.data.multi_provider.MultiSourceProvider"), \
+         patch("euroscope.data.news.NewsEngine"), \
+         patch("euroscope.data.calendar.EconomicCalendar"), \
+         patch("euroscope.brain.llm_interface.LLMInterface"), \
+         patch("euroscope.brain.memory.Memory"), \
+         patch("euroscope.forecast.engine.Forecaster"), \
+         patch("euroscope.brain.orchestrator.Orchestrator"), \
+         patch("euroscope.trading.risk_manager.RiskManager"), \
+         patch("euroscope.trading.strategy_engine.StrategyEngine"), \
+         patch("euroscope.trading.signal_executor.SignalExecutor"), \
+         patch("euroscope.trading.signal_executor.SignalExecutor"), \
+         patch("euroscope.data.storage.Storage"):
         container = MagicMock()
         container.config = config
         container.rate_limiter = RateLimiter(max_requests=config.rate_limit_requests, window_minutes=config.rate_limit_window_minutes)
