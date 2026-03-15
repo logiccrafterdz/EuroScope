@@ -115,7 +115,7 @@ class TestAlerts:
         aid = await s.add_alert("above", 1.0900, 12345)
         assert aid > 0
 
-        alerts = await s.get_active_alerts()
+        alerts: list[dict] = await s.get_active_alerts()
         assert len(alerts) == 1
         assert alerts[0]["condition"] == "above"
         await s.close()
@@ -213,7 +213,7 @@ class TestTradingSignals:
         await s.update_signal_status(sid, "closed", pnl_pips=30.0)
 
         pending = await s.get_signals(status="pending")
-        closed = await s.get_signals(status="closed")
+        closed: list[dict] = await s.get_signals(status="closed")
         assert len(pending) == 0
         assert len(closed) == 1
         assert closed[0]["pnl_pips"] == 30.0
