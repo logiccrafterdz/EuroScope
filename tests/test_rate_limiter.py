@@ -81,15 +81,19 @@ async def test_rate_limit_blocks_non_admin():
     with patch("euroscope.bot.telegram_bot.PriceProvider"), \
          patch("euroscope.bot.telegram_bot.NewsEngine"), \
          patch("euroscope.bot.telegram_bot.EconomicCalendar"), \
-         patch("euroscope.bot.telegram_bot.Agent"), \
+         patch("euroscope.bot.telegram_bot.LLMInterface"), \
          patch("euroscope.bot.telegram_bot.Memory"), \
          patch("euroscope.bot.telegram_bot.Forecaster"), \
          patch("euroscope.bot.telegram_bot.Orchestrator"), \
          patch("euroscope.bot.telegram_bot.RiskManager"), \
          patch("euroscope.bot.telegram_bot.StrategyEngine"), \
          patch("euroscope.bot.telegram_bot.SignalExecutor"), \
+         patch("euroscope.bot.telegram_bot.SignalExecutor"), \
          patch("euroscope.bot.telegram_bot.Storage"):
-        bot = EuroScopeBot(config)
+        container = MagicMock()
+        container.config = config
+        container.rate_limiter = RateLimiter(max_requests=config.rate_limit_requests, window_minutes=config.rate_limit_window_minutes)
+        bot = EuroScopeBot(container)
 
     assert await bot._check_rate_limit(update) is True
     assert await bot._check_rate_limit(update) is True
@@ -125,15 +129,19 @@ async def test_admin_bypass():
     with patch("euroscope.bot.telegram_bot.PriceProvider"), \
          patch("euroscope.bot.telegram_bot.NewsEngine"), \
          patch("euroscope.bot.telegram_bot.EconomicCalendar"), \
-         patch("euroscope.bot.telegram_bot.Agent"), \
+         patch("euroscope.bot.telegram_bot.LLMInterface"), \
          patch("euroscope.bot.telegram_bot.Memory"), \
          patch("euroscope.bot.telegram_bot.Forecaster"), \
          patch("euroscope.bot.telegram_bot.Orchestrator"), \
          patch("euroscope.bot.telegram_bot.RiskManager"), \
          patch("euroscope.bot.telegram_bot.StrategyEngine"), \
          patch("euroscope.bot.telegram_bot.SignalExecutor"), \
+         patch("euroscope.bot.telegram_bot.SignalExecutor"), \
          patch("euroscope.bot.telegram_bot.Storage"):
-        bot = EuroScopeBot(config)
+        container = MagicMock()
+        container.config = config
+        container.rate_limiter = RateLimiter(max_requests=config.rate_limit_requests, window_minutes=config.rate_limit_window_minutes)
+        bot = EuroScopeBot(container)
 
     for _ in range(3):
         assert await bot._check_rate_limit(update) is True

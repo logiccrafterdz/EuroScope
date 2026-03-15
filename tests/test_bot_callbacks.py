@@ -62,7 +62,7 @@ def _make_bot():
          patch("euroscope.bot.telegram_bot.NewsEngine"), \
          patch("euroscope.bot.telegram_bot.EconomicCalendar"), \
          patch("euroscope.bot.telegram_bot.FundamentalDataProvider"), \
-         patch("euroscope.bot.telegram_bot.Agent"), \
+         patch("euroscope.bot.telegram_bot.LLMInterface"), \
          patch("euroscope.bot.telegram_bot.Memory"), \
          patch("euroscope.bot.telegram_bot.Forecaster"), \
          patch("euroscope.bot.telegram_bot.Orchestrator"), \
@@ -70,7 +70,11 @@ def _make_bot():
          patch("euroscope.bot.telegram_bot.CapitalProvider"), \
          patch("euroscope.bot.telegram_bot.CapitalWebsocketClient"), \
          patch("euroscope.bot.telegram_bot.Storage"):
-        bot = EuroScopeBot(config)
+        from euroscope.bot.rate_limiter import RateLimiter
+        container = MagicMock()
+        container.config = config
+        container.rate_limiter = RateLimiter(max_requests=config.rate_limit_requests, window_minutes=config.rate_limit_window_minutes)
+        bot = EuroScopeBot(container)
     return bot
 
 
