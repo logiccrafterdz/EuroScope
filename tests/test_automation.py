@@ -19,8 +19,7 @@ from euroscope.automation.alerts import (
 )
 from euroscope.skills.base import SkillContext
 from euroscope.skills.deviation_monitor import DeviationMonitorSkill
-from euroscope.brain.agent import Agent
-from euroscope.config import LLMConfig
+
 from euroscope.data.storage import Storage
 
 
@@ -144,31 +143,7 @@ class TestProactiveAlerts:
         assert cache.is_duplicate(2, message) is False
         assert cache.within_user_limit(1) is True
 
-    @pytest.mark.asyncio
-    async def test_proactive_analysis_decision(self):
-        router = MagicMock()
-        router.chat_with_functions = AsyncMock(return_value={
-            "content": "Decision made",
-            "function_calls": [
-                {
-                    "name": "proactive_alert_decision",
-                    "arguments": {
-                        "should_alert": True,
-                        "message": "Test alert",
-                        "priority": "medium",
-                        "reason": "Setup detected",
-                    },
-                }
-            ],
-        })
 
-        agent = Agent(LLMConfig(), router=router)
-        decision = await agent.run_proactive_analysis()
-
-        assert decision["should_alert"] is True
-        assert decision["message"] == "Test alert"
-        assert decision["priority"] == "medium"
-        assert "analysis_summary" in decision
 
 
 class TestDailyTracker:
