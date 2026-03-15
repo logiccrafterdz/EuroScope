@@ -249,7 +249,7 @@ class EuroScopeBot:
                 try:
                     topic = await bot.create_forum_topic(chat_id=chat_id, name=info['name'], icon_custom_emoji_id=None)
                     thread_id = topic.message_thread_id
-                    self.storage.save_user_thread(chat_id, key, thread_id)
+                    await self.storage.save_user_thread(chat_id, key, thread_id)
                     threads[key] = thread_id
                     logger.info(f'Created topic {key} (ID: {thread_id}) for chat {chat_id}')
                 except Exception as e:
