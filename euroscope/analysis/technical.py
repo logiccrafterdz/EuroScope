@@ -122,7 +122,12 @@ class TechnicalAnalyzer:
         ema20 = float(ema(close, 20).iloc[-1])
         ema50 = float(ema(close, 50).iloc[-1])
         ema200_val = float(ema(close, 200).iloc[-1]) if len(close) >= 200 else None
-        atr_val = float(atr(high, low, close).iloc[-1])
+        
+        atr_series = atr(high, low, close)
+        atr_val = float(atr_series.iloc[-1])
+        # Compute 50-period SMA of ATR for volatility tracking
+        atr_sma50_val = float(sma(atr_series, 50).iloc[-1]) if len(atr_series) >= 50 else float(atr_series.mean())
+        
         adx_val = float(adx(high, low, close).iloc[-1]) if len(close) >= 28 else None
 
         stoch = stochastic(high, low, close)
@@ -152,7 +157,11 @@ class TechnicalAnalyzer:
                     "ema200": round(ema200_val, 5) if ema200_val is not None else None,
                     "trend": self._ema_trend(current_price, ema20, ema50, ema200_val),
                 },
-                "ATR": {"value": round(atr_val, 5) if atr_val is not None else None, "pips": round(atr_val * 10000, 1) if atr_val is not None else 0.0},
+                "ATR": {
+                    "value": round(atr_val, 5) if atr_val is not None else None, 
+                    "sma": round(atr_sma50_val, 5) if atr_sma50_val is not None else None,
+                    "pips": round(atr_val * 10000, 1) if atr_val is not None else 0.0
+                },
                 "ADX": {
                     "value": round(adx_val, 1) if (adx_val is not None and not np.isnan(adx_val)) else None,
                     "strength": self._adx_strength(adx_val) if (adx_val is not None and not np.isnan(adx_val)) else "Weak / no trend",
