@@ -3,9 +3,9 @@ Tests for euroscope.data.storage module (async).
 """
 
 import os
-import pytest
+import pytest  # type: ignore
 
-from euroscope.data.storage import Storage
+from euroscope.data.storage import Storage  # type: ignore
 
 
 class TestDatabaseInit:
