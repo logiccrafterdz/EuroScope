@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="assets/robot_logo.png" alt="EuroScope Logo" width="200">
+  <img src="assets/robot_logo.png" alt="EuroScope Logo" width="450">
 </div>
 
 # EuroScope
