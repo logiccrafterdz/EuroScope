@@ -82,6 +82,44 @@ class CommandHandlers:
             parse_mode="Markdown"
         )
 
+    async def cmd_alerts(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /alerts command — show active price alerts."""
+        if not await self.bot._check_auth(update):
+            return
+            
+        chat_id = update.effective_chat.id
+        settings_ui = getattr(self.bot, "user_settings", None)
+        if not settings_ui:
+            await self.bot._reply(update, "⚠️ Settings UI not initialized.", parse_mode="Markdown")
+            return
+            
+        text, keyboard = await settings_ui.build_alerts_keyboard(chat_id)
+        
+        # Remove the 'Back to Settings' button since they accessed this directly
+        if keyboard and keyboard.inline_keyboard and len(keyboard.inline_keyboard) > 0:
+            last_row = keyboard.inline_keyboard[-1]
+            if last_row and "Back to Settings" in last_row[0].text:
+                keyboard.inline_keyboard.pop()
+                
+        await self.bot._reply(update, text, reply_markup=keyboard, parse_mode="Markdown")
+
+    async def cmd_delete_alert(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /delete_alert command — delete a specific alert by ID."""
+        if not await self.bot._check_auth(update):
+            return
+            
+        if not context.args or not context.args[0].isdigit():
+            await self.bot._reply(update, "⚠️ Usage: `/delete_alert <id>`\nUse `/alerts` to see your active alert IDs.", parse_mode="Markdown")
+            return
+            
+        alert_id = int(context.args[0])
+        try:
+            await self.bot.container.storage.delete_alert(alert_id)
+            await self.bot._reply(update, f"🗑️ Alert `{alert_id}` has been deleted.", parse_mode="Markdown")
+        except Exception as e:
+            logger.error(f"Error deleting alert: {e}")
+            await self.bot._reply(update, "⚠️ Failed to delete alert. It may not exist.", parse_mode="Markdown")
+
     # ── Agent Core Commands ───────────────────────────────────
 
     async def cmd_agent_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE):

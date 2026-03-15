@@ -323,6 +323,8 @@ class EuroScopeBot:
             'agent_status': self.commands.cmd_agent_status,
             'conviction': self.commands.cmd_conviction,
             'session_plan': self.commands.cmd_session_plan,
+            'alerts': self.commands.cmd_alerts,
+            'delete_alert': self.commands.cmd_delete_alert,
         }
         for cmd, handler in commands.items():
             app.add_handler(CommandHandler(cmd, handler))
