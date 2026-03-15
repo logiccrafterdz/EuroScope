@@ -935,10 +935,3 @@ class Storage:
             ) as cursor:
                 rows = await cursor.fetchall()
                 return {row[0]: row[1] for row in rows}
-            
-    async def close(self):
-        """Close the database connection."""
-        if self._db:
-            await self._db.close()
-            self._db = None
-            logger.info("Storage: Database connection closed.")
