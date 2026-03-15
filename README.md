@@ -1,4 +1,8 @@
-# <img src="assets/robot_logo.png" width="40" height="40" align="center"> EuroScope
+<div align="center">
+  <img src="assets/robot_logo.png" alt="EuroScope Logo" width="200">
+</div>
+
+# EuroScope
 
 **Autonomous AI Agent specialized exclusively in the EUR/USD forex pair.**
 
