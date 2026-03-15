@@ -245,14 +245,15 @@ class Storage:
 
     async def _get_pool(self) -> asyncio.Queue:
         if self._pool is None:
-            self._pool = asyncio.Queue(maxsize=self._pool_size)
+            pool = asyncio.Queue(maxsize=self._pool_size)
             for _ in range(self._pool_size):
                 conn = await aiosqlite.connect(str(self.db_path), timeout=30.0)
                 conn.row_factory = aiosqlite.Row
                 await conn.execute("PRAGMA journal_mode=WAL")
                 await conn.execute("PRAGMA synchronous=NORMAL")
                 await conn.execute("PRAGMA busy_timeout=30000")
-                await self._pool.put(conn)
+                await pool.put(conn)
+            self._pool = pool
         pool = self._pool
         if pool is None:
             raise RuntimeError("Database pool not initialized")
@@ -706,7 +707,7 @@ class Storage:
             t["causal_chain"] = self._parse_json_payload(t.get("causal_chain"))
         return trades
 
-    async def get_trade_journal_for_date(self, date: str, status: str = None) -> list[dict]:
+    async def get_trade_journal_for_date(self, date: str, status: Optional[str] = None) -> list[dict]:
         try:
             day = datetime.fromisoformat(date)
         except ValueError:
