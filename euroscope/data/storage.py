@@ -17,7 +17,7 @@ from typing import Any, Optional
 import asyncio
 from contextlib import asynccontextmanager
 
-import aiosqlite
+import aiosqlite  # type: ignore
 
 logger = logging.getLogger("euroscope.data.storage")
 
@@ -30,15 +30,18 @@ class Storage:
     """
 
     def __init__(self, db_path: str = "data/euroscope.db"):
-        self.db_path = Path(db_path) if db_path != ":memory:" else db_path
-        if isinstance(self.db_path, Path):
-            self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        if db_path != ":memory:":
+            p = Path(db_path)
+            p.parent.mkdir(parents=True, exist_ok=True)
+            self.db_path: Path | str = p
+        else:
+            self.db_path: Path | str = db_path
 
         # Synchronous init for table creation (runs once at startup)
         self._sync_init()
 
         # Async connection (lazy, opened on first use)
-        self._pool = None
+        self._pool: Optional[asyncio.Queue] = None
         self._pool_size = 5
 
     def _sync_init(self):
@@ -250,7 +253,10 @@ class Storage:
                 await conn.execute("PRAGMA synchronous=NORMAL")
                 await conn.execute("PRAGMA busy_timeout=30000")
                 await self._pool.put(conn)
-        return self._pool
+        pool = self._pool
+        if pool is None:
+            raise RuntimeError("Database pool not initialized")
+        return pool
 
     @asynccontextmanager
     async def _get_db(self):
@@ -264,9 +270,10 @@ class Storage:
 
     async def close(self):
         """Close all async database connections in the pool."""
-        if self._pool is not None:
-            while not self._pool.empty():
-                conn = await self._pool.get()
+        pool = self._pool
+        if pool is not None:
+            while not pool.empty():
+                conn = await pool.get()
                 await conn.close()
             self._pool = None
 
@@ -275,7 +282,10 @@ class Storage:
         async with self._get_db() as db:
             async with db.execute(sql, params) as cursor:
                 rows = await cursor.fetchall()
-                return [dict(r) for r in rows]
+                if rows:
+                    return [dict(r) for r in rows]
+                return []
+        return []
 
     async def _query_one(self, sql: str, params: tuple = ()) -> Optional[dict]:
         """Execute a SELECT query and return one result as dict or None."""
@@ -287,7 +297,7 @@ class Storage:
     # --- Predictions ---
 
     async def save_prediction(self, timeframe: str, direction: str, confidence: float,
-                        reasoning: str = "", target_price: float = None) -> int:
+                        reasoning: str = "", target_price: Optional[float] = None) -> int:
         async with self._get_db() as db:
             async with db.execute(
                 """INSERT INTO predictions (timestamp, timeframe, direction, confidence, reasoning, target_price)
@@ -295,7 +305,8 @@ class Storage:
                 (datetime.now(timezone.utc).isoformat(), timeframe, direction, confidence, reasoning, target_price)
             ) as cursor:
                 await db.commit()
-                return cursor.lastrowid
+                return cursor.lastrowid or 0
+        return 0
 
     async def resolve_prediction(self, pred_id: int, outcome: str, accuracy: float):
         async with self._get_db() as db:
@@ -320,7 +331,7 @@ class Storage:
         return {
             "total": len(rows),
             "correct": correct,
-            "accuracy": round(correct / len(rows) * 100, 1),
+            "accuracy": float(f"{correct / len(rows) * 100:.1f}"),
             "by_direction": self._accuracy_by_direction(rows),
         }
 
@@ -335,7 +346,7 @@ class Storage:
             if score and score >= 0.5:
                 stats[direction]["correct"] += 1
         return {
-            d: {**s, "accuracy": round(s["correct"] / s["total"] * 100, 1) if s["total"] else 0}
+            d: {**s, "accuracy": float(f'{s["correct"] / s["total"] * 100:.1f}') if s["total"] else 0}
             for d, s in stats.items()
         }
 
@@ -353,7 +364,8 @@ class Storage:
                 (datetime.now(timezone.utc).isoformat(), condition, target_value, chat_id)
             ) as cursor:
                 await db.commit()
-                return cursor.lastrowid
+                return cursor.lastrowid or 0
+        return 0
 
     async def get_active_alerts(self) -> list[dict]:
         return await self._query_rows("SELECT * FROM alerts WHERE triggered = 0")
@@ -412,7 +424,7 @@ class Storage:
 
     # --- Market Notes ---
 
-    async def add_note(self, category: str, content: str, metadata: dict = None):
+    async def add_note(self, category: str, content: str, metadata: Optional[dict] = None):
         async with self._get_db() as db:
             await db.execute(
                 "INSERT INTO market_notes (timestamp, category, content, metadata) VALUES (?, ?, ?, ?)",
@@ -421,7 +433,7 @@ class Storage:
             )
             await db.commit()
 
-    async def get_recent_notes(self, category: str = None, limit: int = 20) -> list[dict]:
+    async def get_recent_notes(self, category: Optional[str] = None, limit: int = 20) -> list[dict]:
         if category:
             return await self._query_rows(
                 "SELECT * FROM market_notes WHERE category=? ORDER BY timestamp DESC LIMIT ?",
@@ -479,7 +491,8 @@ class Storage:
                  take_profit, confidence, timeframe, source, reasoning, risk_reward_ratio)
             ) as cursor:
                 await db.commit()
-                return cursor.lastrowid
+                return cursor.lastrowid or 0
+        return 0
 
     async def update_signal_status(self, signal_id: int, status: str, pnl_pips: float = 0.0):
         """Update a signal's status (active, closed, cancelled)."""
@@ -491,7 +504,7 @@ class Storage:
             )
             await db.commit()
 
-    async def get_signals(self, status: str = None, limit: int = 20) -> list[dict]:
+    async def get_signals(self, status: Optional[str] = None, limit: int = 20) -> list[dict]:
         """Get trading signals, optionally filtered by status."""
         if status:
             return await self._query_rows(
@@ -522,7 +535,8 @@ class Storage:
                  datetime.now(timezone.utc).isoformat())
             ) as cursor:
                 await db.commit()
-                return cursor.lastrowid
+                return cursor.lastrowid or 0
+        return 0
 
     async def get_recent_news(self, limit: int = 20, min_impact: float = 0.0) -> list[dict]:
         """Get recent news events, optionally filtered by minimum impact."""
@@ -558,7 +572,8 @@ class Storage:
                  avg_trade_duration_hours, datetime.now(timezone.utc).isoformat())
             ) as cursor:
                 await db.commit()
-                return cursor.lastrowid
+                return cursor.lastrowid or 0
+        return 0
 
     async def get_latest_metrics(self, period: str = "daily") -> Optional[dict]:
         """Get the most recent performance metrics for a period."""
@@ -616,7 +631,8 @@ class Storage:
                  defaults["backtest_slippage_enabled"], now, now)
             ) as cursor:
                 await db.commit()
-                return cursor.lastrowid
+                return cursor.lastrowid or 0
+        return 0
 
     async def get_user_preferences(self, chat_id: int) -> Optional[dict]:
         """Get preferences for a specific user."""
@@ -630,7 +646,7 @@ class Storage:
                            stop_loss: float = 0.0, take_profit: float = 0.0,
                            strategy: str = "", timeframe: str = "H1",
                            regime: str = "", confidence: float = 0.0,
-                           indicators: dict = None, patterns: list = None,
+                           indicators: Optional[dict] = None, patterns: Optional[list] = None,
                            reasoning: str = "", causal_chain: Any = None,
                            status: str = "open") -> int:
         """Save a new trade journal entry."""
@@ -655,7 +671,8 @@ class Storage:
                  status)
             ) as cursor:
                 await db.commit()
-                return cursor.lastrowid
+                return cursor.lastrowid or 0
+        return 0
 
     async def close_trade_journal(self, trade_id: int, exit_price: float,
                              pnl_pips: float, is_win: bool):
@@ -670,11 +687,11 @@ class Storage:
             )
             await db.commit()
 
-    async def get_trade_journal(self, strategy: str = None, status: str = None,
+    async def get_trade_journal(self, strategy: Optional[str] = None, status: Optional[str] = None,
                           limit: int = 50) -> list[dict]:
         """Get trade journal entries, optionally filtered."""
         query = "SELECT * FROM trade_journal WHERE 1=1"
-        params = []
+        params: list[Any] = []
         if strategy:
             query += " AND strategy=?"
             params.append(strategy)
@@ -719,7 +736,7 @@ class Storage:
         trade["causal_chain"] = self._parse_json_payload(trade.get("causal_chain"))
         return trade
 
-    async def get_trade_journal_stats(self, strategy: str = None) -> dict:
+    async def get_trade_journal_stats(self, strategy: Optional[str] = None) -> dict:
         """Get aggregate stats from trade journal."""
         query = "SELECT * FROM trade_journal WHERE status='closed'"
         params = []
@@ -740,9 +757,9 @@ class Storage:
             "total": len(trades),
             "wins": len(wins),
             "losses": len(trades) - len(wins),
-            "win_rate": round(len(wins) / len(trades) * 100, 1),
-            "total_pnl": round(total_pnl, 1),
-            "avg_pnl": round(total_pnl / len(trades), 1),
+            "win_rate": float(f"{len(wins) / len(trades) * 100:.1f}"),
+            "total_pnl": float(f"{total_pnl:.1f}"),
+            "avg_pnl": float(f"{total_pnl / len(trades):.1f}"),
             "by_strategy": self._journal_by_strategy(trades),
         }
 
@@ -760,8 +777,8 @@ class Storage:
             by_strat[s]["pnl"] += t["pnl_pips"]
 
         for s, data in by_strat.items():
-            data["win_rate"] = round(data["wins"] / data["total"] * 100, 1) if data["total"] else 0
-            data["pnl"] = round(data["pnl"], 1)
+            data["win_rate"] = float(f'{data["wins"] / data["total"] * 100:.1f}') if data["total"] else 0
+            data["pnl"] = float(f'{data["pnl"]:.1f}')
 
         return by_strat
 
@@ -792,10 +809,11 @@ class Storage:
                     price_at_detection, causal_chain)
                    VALUES (?, ?, ?, ?, ?, ?)""",
                 (pattern_name, timeframe, now, predicted_direction,
-                 price_at_detection, causal_payload)
+                  price_at_detection, causal_payload)
             ) as cursor:
                 await db.commit()
-                return cursor.lastrowid
+                return cursor.lastrowid or 0
+        return 0
 
     async def resolve_pattern(self, pattern_id: int, actual_outcome: str,
                         price_at_resolution: float, is_success: bool):
@@ -832,7 +850,7 @@ class Storage:
                 "timeframe": r["timeframe"],
                 "total": total,
                 "successes": successes,
-                "success_rate": round(successes / total * 100, 1) if total else 0,
+                "success_rate": float(f"{successes / total * 100:.1f}") if total else 0,
             }
         return result
 
@@ -890,7 +908,8 @@ class Storage:
                 (trade_id, accuracy, json.dumps(factors), json.dumps(recommendations), now)
             ) as cursor:
                 await db.commit()
-                return cursor.lastrowid
+                return cursor.lastrowid or 0
+        return 0
 
     async def get_recent_learning_insights(self, limit: int = 20) -> list[dict]:
         """Get the most recent learning insights."""
@@ -934,4 +953,7 @@ class Storage:
                 (chat_id,)
             ) as cursor:
                 rows = await cursor.fetchall()
-                return {row[0]: row[1] for row in rows}
+                if rows:
+                    return {row[0]: row[1] for row in rows}
+                return {}
+        return {}
