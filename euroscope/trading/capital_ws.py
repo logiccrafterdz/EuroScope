@@ -1,8 +1,8 @@
 import asyncio
 import json
 import logging
-import websockets
-from typing import List, Callable, Optional, Dict, Any
+import websockets # type: ignore
+from typing import List, Callable, Optional, Dict, Any, cast
 
 logger = logging.getLogger(__name__)
 
@@ -146,7 +146,8 @@ class CapitalWebsocketClient:
             }
         }
         try:
-            await ws.send(json.dumps(payload))
+            # Cast for the linter as it might lose narrowing in try blocks
+            await cast(Any, ws).send(json.dumps(payload))
             logger.info(f"Subscribed to WS ticks for: {epics}")
         except Exception as e:
             logger.error(f"Failed to send WS subscription data: {e}")
@@ -169,7 +170,7 @@ class CapitalWebsocketClient:
                         reconnect_delay = min(max_delay, reconnect_delay * 1.5)
                         continue
 
-                message = await ws.recv()
+                message = await cast(Any, ws).recv()
                 self._last_msg_time = asyncio.get_running_loop().time()
                 self._reconnect_count = 0 # Reset on successful message receive
                 reconnect_delay = 5.0  
