@@ -116,6 +116,7 @@ class EuroScopeBot:
             risk_manager=self.risk_manager, 
             event_bus=self.bus, 
             heartbeat=self.heartbeat, 
+            cron=self.cron,
             market_data_skill=market_data_skill, 
             global_context=self.orchestrator.global_context
         )

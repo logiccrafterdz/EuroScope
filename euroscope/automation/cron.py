@@ -11,11 +11,11 @@ import logging
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, UTC
-from typing import Callable, Optional
+from typing import Any, Callable, Optional, cast, Iterable
 from enum import Enum
 
-from ..brain.vector_memory import VectorMemory
-from ..brain.proactive_engine import ProactiveEngine, AlertPriority
+from euroscope.brain.vector_memory import VectorMemory  # type: ignore
+from euroscope.brain.proactive_engine import ProactiveEngine, AlertPriority  # type: ignore
 
 logger = logging.getLogger("euroscope.automation.cron")
 
@@ -41,6 +41,8 @@ class ScheduledTask:
     enabled: bool = True
     max_runs: int = 0  # 0 = unlimited
     is_running: bool = False
+    consecutive_failures: int = 0
+    last_error: Optional[str] = None
 
     def is_due(self) -> bool:
         return self.enabled and time.time() >= self.next_run
@@ -72,7 +74,10 @@ class ProactiveAlertCache:
 
     def is_duplicate(self, chat_id: int, message: str) -> bool:
         self._prune()
-        message_hash = hash(message.lower().strip()[:50])
+        msg_str = message.lower().strip()
+        if len(msg_str) > 50:
+            msg_str = "".join([msg_str[i] for i in range(50)])
+        message_hash = hash(msg_str)
         for cached_chat, cached_hash, _ in self.alerts:
             if cached_chat == chat_id and cached_hash == message_hash:
                 return True
@@ -80,7 +85,10 @@ class ProactiveAlertCache:
 
     def record_alert(self, chat_id: int, message: str) -> None:
         self._prune()
-        message_hash = hash(message.lower().strip()[:50])
+        msg_str = message.lower().strip()
+        if len(msg_str) > 50:
+            msg_str = "".join([msg_str[i] for i in range(50)])
+        message_hash = hash(msg_str)
         self.alerts.add((chat_id, message_hash, datetime.now(UTC)))
         self.user_alerts.setdefault(chat_id, []).append(datetime.now(UTC))
 
@@ -108,7 +116,7 @@ class CronScheduler:
         await cron.start()
     """
 
-    def __init__(self, tick_interval: int = 10, config: Optional[object] = None, bot: Optional[object] = None, storage: Optional[object] = None):
+    def __init__(self, tick_interval: int = 10, config: Any = None, bot: Any = None, storage: Any = None):
         self.tick_interval = tick_interval
         self.config = config
         self.bot = bot
@@ -116,7 +124,7 @@ class CronScheduler:
         self._tasks: dict[str, ScheduledTask] = {}
         self._running = False
         self._task: Optional[asyncio.Task] = None
-        self._history: list[dict] = []
+        self._history: list[dict[str, Any]] = []
         self._active_tasks = set()
         self._trade_lock = asyncio.Lock()
         self._proactive_warned = False
@@ -152,6 +160,9 @@ class CronScheduler:
         # --- Agent Core Heartbeat ---
         self._schedule_agent_heartbeat()
         
+        # Schedule cron health monitoring
+        self._schedule_health_monitor()
+        
         logger.info(f"Cron: {len(self._tasks)} tasks scheduled: {list(self._tasks.keys())}")
 
     def _schedule_agent_heartbeat(self):
@@ -181,9 +192,11 @@ class CronScheduler:
             if not self.storage:
                 return
             try:
-                backup_path = await self.storage.backup_database()
-                if backup_path and backup_path != "in_memory":
-                    logger.info(f"Scheduled backup completed successfully: {backup_path}")
+                storage: Any = self.storage
+                if storage is not None:
+                    backup_path = await storage.backup_database()
+                    if backup_path and backup_path != "in_memory":
+                        logger.info(f"Scheduled backup completed successfully: {backup_path}")
             except Exception as e:
                 logger.error(f"Scheduled database backup failed: {e}", exc_info=True)
 
@@ -194,6 +207,44 @@ class CronScheduler:
             delay=300, # delay for 5 minutes after startup to not hurt boot times
         )
         logger.info("Cron: scheduled 'database_backup' (daily)")
+
+    def _schedule_health_monitor(self):
+        """Schedule a task to monitor the health of other cron tasks."""
+        async def monitor_task():
+            critical_failures = []
+            for task in self._tasks.values():
+                if task.consecutive_failures >= 3:
+                    critical_failures.append(task)
+            
+            if critical_failures:
+                msg_lines = [
+                    "🚨 <b>CRITICAL: Cron Task Failures Detected</b>",
+                    f"At least {len(critical_failures)} tasks are failing consistently.\n"
+                ]
+                for task in critical_failures:
+                    msg_lines.append(f"❌ <b>{task.name}</b>: {task.consecutive_failures} failures")
+                    msg_lines.append(f"   <i>Error: {task.last_error}</i>\n")
+                
+                msg_lines.append("<i>Please check the /health dashboard or system logs.</i>")
+                message = "\n".join(msg_lines)
+                
+                admin_chat_ids = getattr(self.config, "admin_chat_ids", [])
+                proactive_ids = getattr(self.config, "proactive_alert_chat_ids", [])
+                target_ids = list(set(admin_chat_ids + proactive_ids))
+                
+                for chat_id in target_ids:
+                    await self._send_proactive_alert_message(chat_id, message)
+                
+                logger.critical(f"Cron Health: {len(critical_failures)} tasks failing! Alerts sent.")
+
+        # Check every hour
+        self.schedule(
+            "cron_health_monitor",
+            TaskFrequency.HOURLY,
+            monitor_task,
+            delay=600, # delay for 10 minutes after startup
+        )
+        logger.info("Cron: scheduled 'cron_health_monitor' (hourly)")
 
     def _schedule_periodic_pulse(self):
         async def pulse_task():
@@ -259,11 +310,13 @@ class CronScheduler:
         async def cleanup_task():
             try:
                 memory = VectorMemory()
-                deleted = await memory.cleanup_old_documents(
-                    ttl_days=self.config.vector_memory_ttl_days
-                )
-                if deleted > 0:
-                    logger.info(f"Vector Memory: {deleted} old documents purged")
+                config = self.config
+                if config and hasattr(config, "vector_memory_ttl_days"):
+                    deleted = await memory.cleanup_old_documents(
+                        ttl_days=config.vector_memory_ttl_days
+                    )
+                    if deleted > 0:
+                        logger.info(f"Vector Memory: {deleted} old documents purged")
             except Exception as e:
                 logger.error(f"Vector Memory cleanup task failed: {e}")
 
@@ -322,7 +375,7 @@ class CronScheduler:
                     return
 
                 # Phase 3A: Context-Aware Suppression
-                from ..brain.proactive_engine import MarketEvent, AlertPriority as EnginePriority
+                from euroscope.brain.proactive_engine import MarketEvent, AlertPriority as EnginePriority  # type: ignore
                 
                 # Convert string priority from LLM to EnginePriority enum
                 p_str = decision.get("priority", "low").upper()
@@ -407,8 +460,8 @@ class CronScheduler:
             if self._is_quiet_time():
                 return
             try:
-                from ..learning.pattern_tracker import PatternTracker
-                from ..learning.forecast_tracker import ForecastTracker
+                from euroscope.learning.pattern_tracker import PatternTracker  # type: ignore
+                from euroscope.learning.forecast_tracker import ForecastTracker  # type: ignore
 
                 storage = self.storage or getattr(self.bot, "storage", None)
                 if not storage:
@@ -436,13 +489,19 @@ class CronScheduler:
                 if resolved:
                     logger.info(f"Learning: resolved {len(resolved)} forecasts")
                     # Store the lessons in Vector Memory
-                    vm = getattr(self.bot, "vector_memory", None)
-                    if vm:
-                        for fc in resolved:
-                            if hasattr(fc, "_lesson_text") and fc._lesson_text:
-                                vm.store_analysis(
-                                    text=fc._lesson_text,
-                                    metadata={"skill": fc.skill, "outcome": fc.outcome, "type": "learning_lesson"}
+                    vm: Any = getattr(self.bot, "vector_memory", None)
+                    if vm and resolved:
+                        # Ensure resolved is iterable for the linter
+                        res_list = cast(list, resolved)
+                        for fc in res_list:
+                            if hasattr(fc, "_lesson_text") and getattr(fc, "_lesson_text", None):
+                                await cast(Any, vm).store_analysis(
+                                    text=str(getattr(fc, "_lesson_text")),
+                                    metadata={
+                                        "skill": str(getattr(fc, "skill", "unknown")),
+                                        "outcome": str(getattr(fc, "outcome", "unknown")),
+                                        "type": "learning_lesson"
+                                    }
                                 )
 
             except Exception as e:
@@ -450,7 +509,7 @@ class CronScheduler:
 
         async def daily_tuning():
             try:
-                from ..learning.adaptive_tuner import AdaptiveTuner
+                from euroscope.learning.adaptive_tuner import AdaptiveTuner  # type: ignore
 
                 storage = self.storage or getattr(self.bot, "storage", None)
                 if not storage:
@@ -459,7 +518,7 @@ class CronScheduler:
 
                 tuner = getattr(self.bot, "adaptive_tuner", None)
                 if not tuner:
-                    from ..learning.adaptive_tuner import AdaptiveTuner
+                    from euroscope.learning.adaptive_tuner import AdaptiveTuner  # type: ignore
                     tuner = AdaptiveTuner(storage=storage, config=self.config)
                 await tuner.auto_tune()
                 report = await tuner.format_report()
@@ -506,13 +565,13 @@ class CronScheduler:
                 logger.debug("Auto Trader skipped: quiet time")
                 return
                 
-            orchestrator = getattr(self.bot, "orchestrator", None)
-            if not orchestrator:
+            orch: Any = getattr(self.bot, "orchestrator", None)
+            if orch is None:
                 return
                 
             try:
                 # 1. Run the full analytical pipeline
-                ctx = await orchestrator.run_full_analysis_pipeline(timeframe="H1")
+                ctx = await orch.run_full_analysis_pipeline(timeframe="H1")
                 
                 # 2. Extract signal directly from the pipeline context
                 signal_data = ctx.signals if isinstance(ctx.signals, dict) else {}
@@ -520,11 +579,11 @@ class CronScheduler:
                 confidence = signal_data.get("confidence", 0)
                 
                 # Only execute high-confidence signals autonomously
-                if direction in ("BUY", "SELL") and confidence >= 60:
+                if direction in ("BUY", "SELL") and float(confidence) >= 60:
                     logger.info(f"Auto Trader found high-confidence {direction} signal ({confidence}%)!")
                     
                     # 2.5 Run safety guardrails before execution
-                    from ..trading.safety_guardrails import SafetyGuardrail
+                    from euroscope.trading.safety_guardrails import SafetyGuardrail  # type: ignore
                     guardrail = SafetyGuardrail(config=self.config, storage=self.storage)
                     blocked, reason = await guardrail.should_block_signal(ctx)
                     
@@ -546,7 +605,7 @@ class CronScheduler:
                     
                     # 3. Execute the paper trade
                     async with self._trade_lock:
-                        exec_res = await orchestrator.run_skill("signal_executor", "open_trade", context=ctx)
+                        exec_res = await orch.run_skill("signal_executor", "open_trade", context=ctx)
                     if exec_res.success:
                         trade = exec_res.data
                         
@@ -595,20 +654,20 @@ class CronScheduler:
             if self._is_quiet_time():
                 return
                 
-            orchestrator = getattr(self.bot, "orchestrator", None)
-            provider = getattr(self.bot, "price_provider", None)
-            if not orchestrator or not provider:
+            orch: Any = getattr(self.bot, "orchestrator", None)
+            prov: Any = getattr(self.bot, "price_provider", None)
+            if orch is None or prov is None:
                 return
                 
             try:
                 # 1. Get current price
-                price_data = await provider.get_price()
+                price_data = await cast(Any, prov).get_price()
                 current_price = price_data.get("price")
                 if not current_price:
                     return
                     
                 # 2. Get open trades
-                trades_res = await orchestrator.run_skill("signal_executor", "list_trades")
+                trades_res = await cast(Any, orch).run_skill("signal_executor", "list_trades")
                 if not trades_res.success or not trades_res.data:
                     return
                     
@@ -623,7 +682,7 @@ class CronScheduler:
                     trade_id = trade.get("trade_id")
                     
                     # Context required for signal_executor standard signature
-                    from ..skills.base import SkillContext
+                    from euroscope.skills.base import SkillContext  # type: ignore
                     ctx = SkillContext()
                     
                     # --- Trailing Stop Logic ---
@@ -635,7 +694,7 @@ class CronScheduler:
                             if sl < new_sl:
                                 logger.info(f"Trailing Stop Triggered ON {trade_id}: Moving SL {sl:.5f} -> {new_sl:.5f}")
                                 async with self._trade_lock:
-                                    await orchestrator.run_skill(
+                                    await cast(Any, orch).run_skill(
                                         "signal_executor", "update_trade", context=ctx,
                                         trade_id=trade_id, stop_loss=new_sl
                                     )
@@ -649,7 +708,7 @@ class CronScheduler:
                             if sl > new_sl:
                                 logger.info(f"Trailing Stop Triggered ON {trade_id}: Moving SL {sl:.5f} -> {new_sl:.5f}")
                                 async with self._trade_lock:
-                                    await orchestrator.run_skill(
+                                    await cast(Any, orch).run_skill(
                                         "signal_executor", "update_trade", context=ctx,
                                         trade_id=trade_id, stop_loss=new_sl
                                     )
@@ -670,7 +729,7 @@ class CronScheduler:
                         logger.info(f"Trade Monitor: {trade_id} hit {'TP' if hit_tp else 'SL'} at {current_price:.5f}")
                         
                         async with self._trade_lock:
-                            close_res = await orchestrator.run_skill(
+                            close_res = await cast(Any, orch).run_skill(
                                 "signal_executor", 
                                 "close_trade", 
                                 context=ctx,
@@ -715,11 +774,12 @@ class CronScheduler:
                     logger.error("Weekly report failed: No storage available")
                     return
                     
-                from ..analytics.report_generator import PDFReportGenerator
+                from euroscope.analytics.report_generator import PDFReportGenerator  # type: ignore
                 generator = PDFReportGenerator(storage=storage)
                 filepath = await generator.generate_weekly_report()
                 
-                if not filepath or not __import__('os').path.exists(filepath):
+                import os
+                if not filepath or not os.path.exists(filepath):
                     logger.warning("Weekly report generation yielded no file.")
                     return
                     
@@ -778,12 +838,13 @@ class CronScheduler:
                 if not allowed:
                     return False
 
+        priority_key = str(decision.get("priority", "low")).lower()
         emoji = {
             "critical": "🚨",
             "high": "🔥",
             "medium": "⚠️",
             "low": "ℹ️"
-        }.get(decision.get("priority"), "ℹ️")
+        }.get(priority_key, "ℹ️")
         message = (
             f"{emoji} <b>Proactive Alert ({decision.get('priority', 'low').upper()})</b>\n\n"
             f"{decision.get('message')}\n\n"
@@ -854,11 +915,14 @@ class CronScheduler:
     async def stop(self):
         """Stop the scheduler loop."""
         self._running = False
-        if self._task:
-            self._task.cancel()
+        task = self._task
+        if task is not None:
+            task.cancel()
             try:
-                await self._task
+                await task
             except asyncio.CancelledError:
+                pass
+            except Exception:
                 pass
         logger.info("Cron scheduler stopped")
 
@@ -881,11 +945,15 @@ class CronScheduler:
                     res = task.callback()
                     if inspect.isawaitable(res):
                         await asyncio.wait_for(res, timeout=120)
-                elapsed = round((time.monotonic() - start) * 1000, 1)
+                elapsed = round((time.monotonic() - start) * 1000)
 
-                task.last_run = time.time()
+                task.last_run = time.process_time()
                 task.run_count += 1
                 task.schedule_next()
+                
+                # Reset failures on success
+                task.consecutive_failures = 0
+                task.last_error = None
 
                 self._history.append({
                     "task": task.name,
@@ -900,6 +968,8 @@ class CronScheduler:
             except asyncio.TimeoutError:
                 logger.warning(f"Cron task '{task.name}' timed out after 120s — skipping")
                 task.schedule_next()
+                task.consecutive_failures += 1
+                task.last_error = "Timeout after 120s"
                 self._history.append({
                     "task": task.name,
                     "status": "timeout",
@@ -908,10 +978,16 @@ class CronScheduler:
             except Exception as e:
                 logger.error(f"Cron task '{task.name}' failed: {e}")
                 task.schedule_next()
+                task.consecutive_failures += 1
+                task.last_error = str(e)
+                err_summary = str(e)
+                if len(err_summary) > 200:
+                    err_summary = "".join([err_summary[i] for i in range(200)])
+                
                 self._history.append({
                     "task": task.name,
                     "status": "error",
-                    "error": str(e)[:200],
+                    "error": err_summary,
                     "timestamp": datetime.now(UTC).isoformat(),
                 })
             finally:
@@ -927,8 +1003,8 @@ class CronScheduler:
             t.add_done_callback(self._active_tasks.discard)
 
         # Cap history to prevent unbounded growth
-        if len(self._history) > 50:
-            self._history = self._history[-50:]
+        while len(self._history) > 50:
+            self._history.pop(0)
 
     @property
     def tasks(self) -> dict[str, ScheduledTask]:
@@ -936,4 +1012,8 @@ class CronScheduler:
 
     @property
     def history(self) -> list[dict]:
-        return list(self._history[-50:])
+        last_50 = []
+        hist_len = len(self._history)
+        for i in range(max(0, hist_len - 50), hist_len):
+            last_50.append(self._history[i])
+        return last_50

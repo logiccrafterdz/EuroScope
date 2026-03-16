@@ -188,9 +188,35 @@ class HealthMonitor:
         status.last_check = datetime.now(UTC).isoformat()
         return status
 
+    async def check_cron(self, cron=None) -> ComponentStatus:
+        """Check the health of scheduled tasks."""
+        status = ComponentStatus(name="Cron Tasks")
+        if cron is None:
+            status.healthy = True
+            status.last_check = datetime.now(UTC).isoformat()
+            return status
+
+        try:
+            tasks = cron.tasks
+            failing = [t for t in tasks.values() if t.consecutive_failures >= 3]
+            
+            if failing:
+                status.healthy = False
+                status.error = f"{len(failing)} tasks failing: " + ", ".join([t.name for t in failing])
+            else:
+                status.healthy = True
+            
+            status.last_check = datetime.now(UTC).isoformat()
+        except Exception as e:
+            status.healthy = False
+            status.error = str(e)
+            self.record_error("cron", str(e))
+        
+        return status
+
     # ── Full Health Check ────────────────────────────────────
 
-    async def full_check(self, provider=None, agent=None) -> SystemHealth:
+    async def full_check(self, provider=None, agent=None, cron=None) -> SystemHealth:
         """
         Run all component health checks.
 
@@ -201,6 +227,7 @@ class HealthMonitor:
             await self.check_database(),
             self.check_price_api(provider),
             self.check_llm(agent),
+            await self.check_cron(cron),
         ]
 
         uptime = time.time() - self._start_time
@@ -208,7 +235,9 @@ class HealthMonitor:
 
         # Determine overall status
         unhealthy = [c for c in components if not c.healthy]
-        if len(unhealthy) >= 2:
+        if any(c.name == "Database" and not c.healthy for c in components):
+            overall = "critical"
+        elif len(unhealthy) >= 2:
             overall = "critical"
         elif len(unhealthy) == 1:
             overall = "degraded"
@@ -224,7 +253,7 @@ class HealthMonitor:
             recent_errors=self.get_recent_errors(5),
         )
 
-    async def full_check_async(self, provider=None, agent=None) -> SystemHealth:
+    async def full_check_async(self, provider=None, agent=None, cron=None) -> SystemHealth:
         """
         Run all component health checks asynchronously.
         """
@@ -232,13 +261,16 @@ class HealthMonitor:
             await self.check_database(),
             await self.check_price_api_async(provider),
             self.check_llm(agent),
+            await self.check_cron(cron),
         ]
 
         uptime = time.time() - self._start_time
         error_rate = self.get_error_rate(1.0)
 
         unhealthy = [c for c in components if not c.healthy]
-        if len(unhealthy) >= 2:
+        if any(c.name == "Database" and not c.healthy for c in components):
+            overall = "critical"
+        elif len(unhealthy) >= 2:
             overall = "critical"
         elif len(unhealthy) == 1:
             overall = "degraded"

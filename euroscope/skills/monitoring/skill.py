@@ -25,6 +25,7 @@ class MonitoringSkill(BaseSkill):
         self.monitor = HealthMonitor(storage=storage)
         self._provider = None
         self._agent = None
+        self._cron = None
 
     def set_storage(self, storage):
         """Inject the Storage instance."""
@@ -37,6 +38,10 @@ class MonitoringSkill(BaseSkill):
     def set_agent(self, agent):
         """Inject the Agent instance."""
         self._agent = agent
+
+    def set_cron(self, cron):
+        """Inject the CronScheduler instance."""
+        self._cron = cron
 
     async def execute(self, context: SkillContext, action: str, **params) -> SkillResult:
         if action == "check_health":
@@ -56,6 +61,7 @@ class MonitoringSkill(BaseSkill):
             report = await self.monitor.full_check_async(
                 provider=self._provider,
                 agent=self._agent,
+                cron=self._cron,
             )
             return SkillResult(success=True, data=report)
         except Exception as e:
@@ -72,6 +78,7 @@ class MonitoringSkill(BaseSkill):
             report = await self.monitor.full_check_async(
                 provider=self._provider,
                 agent=self._agent,
+                cron=self._cron,
             )
             return SkillResult(success=True, data={
                 "status": report.overall,
