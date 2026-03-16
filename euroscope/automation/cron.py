@@ -141,6 +141,9 @@ class CronScheduler:
         # Schedule self-learning loop
         self._schedule_learning_tasks()
         
+        # Schedule daily automated backups
+        self._schedule_database_backup()
+        
         # --- PHASE 4: Autonomous Paper Trader ---
         self._schedule_auto_trader()
         self._schedule_trade_monitor()
@@ -172,6 +175,25 @@ class CronScheduler:
         )
         logger.info("Cron: scheduled 'agent_heartbeat' (30s)")
 
+    def _schedule_database_backup(self):
+        """Schedule a daily backup of the local SQLite database."""
+        async def backup_task():
+            if not self.storage:
+                return
+            try:
+                backup_path = await self.storage.backup_database()
+                if backup_path and backup_path != "in_memory":
+                    logger.info(f"Scheduled backup completed successfully: {backup_path}")
+            except Exception as e:
+                logger.error(f"Scheduled database backup failed: {e}", exc_info=True)
+
+        self.schedule(
+            "database_backup",
+            TaskFrequency.DAILY,
+            backup_task,
+            delay=300, # delay for 5 minutes after startup to not hurt boot times
+        )
+        logger.info("Cron: scheduled 'database_backup' (daily)")
 
     def _schedule_periodic_pulse(self):
         async def pulse_task():

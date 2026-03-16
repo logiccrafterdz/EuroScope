@@ -976,3 +976,46 @@ class Storage:
                     return {row[0]: row[1] for row in rows}
                 return {}
         return {}
+        
+    # ── Database Maintenance ──────────────────────────────────
+    
+    async def backup_database(self) -> str:
+        """Create a safe snapshot of the database and prune old backups."""
+        import os
+        import glob
+        
+        db_path = Path(self.db_path)
+        if db_path.name == ":memory:":
+            logger.info("Skipping backup: Database is in-memory")
+            return "in_memory"
+            
+        backup_dir = db_path.parent / "backups"
+        backup_dir.mkdir(parents=True, exist_ok=True)
+        
+        date_str = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        backup_file = backup_dir / f"{db_path.stem}_{date_str}.db"
+        
+        logger.info(f"Starting database backup to {backup_file}...")
+        
+        # Use aiosqlite native backup method to safely read locked WAL files
+        try:
+            async with self._get_db() as db:
+                async with aiosqlite.connect(str(backup_file)) as backup_conn:
+                    await db.backup(backup_conn)
+            logger.info(f"Database backup successful: {backup_file}")
+            
+            # Prune old backups (keep last 7)
+            import typing
+            all_backups = typing.cast(list[str], sorted(glob.glob(str(backup_dir / f"{db_path.stem}_*.db"))))
+            if len(all_backups) > 7:
+                for old_file in all_backups[:-7]:
+                    try:
+                        os.remove(old_file)
+                        logger.info(f"Deleted old backup: {old_file}")
+                    except Exception as e:
+                        logger.warning(f"Failed to delete old backup {old_file}: {e}")
+                        
+            return str(backup_file)
+        except Exception as e:
+            logger.error(f"Database backup failed: {e}", exc_info=True)
+            return ""
