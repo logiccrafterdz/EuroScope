@@ -35,6 +35,9 @@ class SignalExecutor:
         self.broker = broker
         self.paper_trading = paper_trading
         self.ws_client: Optional[CapitalWebsocketClient] = None
+        
+        # Track highest/lowest price reached for active trailing stops: {signal_id: best_price}
+        self._trailing_high_water_marks = {}
 
     async def initialize(self):
         """Initialize the executor (load risk state, etc)."""
@@ -107,8 +110,38 @@ class SignalExecutor:
             reason = None
             exit_price = None
 
+            # Trailing Stop Configuration
+            trailing_activation_pips = 15.0  # Activate trailing when 15 pips in profit
+            trailing_step_pips = 5.0         # Move stop loss up every 5 pips
+            
             if direction == "BUY":
-                # For long, we exit by selling at the BID
+                # Check trailing stop
+                current_profit_pips = (bid - signal["entry_price"]) * 10000
+                if current_profit_pips >= trailing_activation_pips:
+                    # Initialize high water mark if needed
+                    high_water = self._trailing_high_water_marks.get(sig_id, signal["entry_price"])
+                    
+                    if bid > high_water:
+                        self._trailing_high_water_marks[sig_id] = bid
+                        
+                        # Calculate how many 5-pip steps we have climbed beyond activation
+                        profit_beyond_activation = (bid - signal["entry_price"]) * 10000 - trailing_activation_pips
+                        steps = int(profit_beyond_activation // trailing_step_pips)
+                        
+                        if steps >= 0:
+                            # New stop loss: Break-even + steps * step_size
+                            # Or simpler: Always trail the high_water by 'activation_pips' distance once active
+                            trail_distance = (trailing_activation_pips * 0.0001)
+                            new_sl = round(bid - trail_distance, 5)
+                            
+                            # Never move stop loss downwards
+                            if new_sl > sl:
+                                logger.info(f"🔄 Trailing Stop ADVANCED for BUY #{sig_id}: {sl} -> {new_sl} (Current bid: {bid})")
+                                await self.storage.update_signal_sl(sig_id, new_sl)
+                                await self.storage.update_trade_journal_sl(sig_id, new_sl)
+                                sl = new_sl # Update local variable for exit check
+                                
+                # Exit condition check
                 if bid <= sl:
                     reason = "stop_loss"
                     exit_price = bid
@@ -116,7 +149,27 @@ class SignalExecutor:
                     reason = "take_profit"
                     exit_price = bid
             elif direction == "SELL":
-                # For short, we exit by buying at the ASK
+                # Check trailing stop
+                current_profit_pips = (signal["entry_price"] - ask) * 10000
+                if current_profit_pips >= trailing_activation_pips:
+                    # Initialize high water mark if needed (lower is better for SELL)
+                    low_water = self._trailing_high_water_marks.get(sig_id, signal["entry_price"])
+                    
+                    if ask < low_water:
+                        self._trailing_high_water_marks[sig_id] = ask
+                        
+                        # Trail the low_water mark by 'activation_pips' distance
+                        trail_distance = (trailing_activation_pips * 0.0001)
+                        new_sl = round(ask + trail_distance, 5)
+                        
+                        # Never move stop loss upwards
+                        if new_sl < sl or sl == 0:
+                            logger.info(f"🔄 Trailing Stop ADVANCED for SELL #{sig_id}: {sl} -> {new_sl} (Current ask: {ask})")
+                            await self.storage.update_signal_sl(sig_id, new_sl)
+                            await self.storage.update_trade_journal_sl(sig_id, new_sl)
+                            sl = new_sl # Update local variable for exit check
+
+                # Exit condition check
                 if ask >= sl:
                     reason = "stop_loss"
                     exit_price = ask
@@ -133,6 +186,9 @@ class SignalExecutor:
                 result = await self.close_signal(sig_id, exec_result.fill_price, reason)
                 if result:
                     logger.info(f"Signal #{sig_id} closed instantly via Tick Stream. Slippage: {exec_result.slippage_pips} pips.")
+                    # Clean up memory
+                    if sig_id in self._trailing_high_water_marks:
+                        del self._trailing_high_water_marks[sig_id]
 
     async def open_signal(self, direction: str, entry_price: float,
                     stop_loss: float, take_profit: float,
@@ -274,7 +330,24 @@ class SignalExecutor:
             reason = None
             exit_price = None
 
+            # Trailing Stop Configuration
+            trailing_activation_pips = 15.0
+            
             if direction == "BUY":
+                # Check trailing stop
+                current_profit_pips = (current_price - signal["entry_price"]) * 10000
+                if current_profit_pips >= trailing_activation_pips:
+                    high_water = self._trailing_high_water_marks.get(sig_id, signal["entry_price"])
+                    if current_price > high_water:
+                        self._trailing_high_water_marks[sig_id] = current_price
+                        trail_distance = (trailing_activation_pips * 0.0001)
+                        new_sl = round(current_price - trail_distance, 5)
+                        if new_sl > sl:
+                            logger.info(f"🔄 Trailing Stop ADVANCED for BUY #{sig_id}: {sl} -> {new_sl} (Current check price: {current_price})")
+                            await self.storage.update_signal_sl(sig_id, new_sl)
+                            await self.storage.update_trade_journal_sl(sig_id, new_sl)
+                            sl = new_sl
+
                 if current_price <= sl:
                     reason = "stop_loss"
                     exit_price = current_price
@@ -282,6 +355,20 @@ class SignalExecutor:
                     reason = "take_profit"
                     exit_price = current_price
             elif direction == "SELL":
+                # Check trailing stop
+                current_profit_pips = (signal["entry_price"] - current_price) * 10000
+                if current_profit_pips >= trailing_activation_pips:
+                    low_water = self._trailing_high_water_marks.get(sig_id, signal["entry_price"])
+                    if current_price < low_water:
+                        self._trailing_high_water_marks[sig_id] = current_price
+                        trail_distance = (trailing_activation_pips * 0.0001)
+                        new_sl = round(current_price + trail_distance, 5)
+                        if new_sl < sl or sl == 0:
+                            logger.info(f"🔄 Trailing Stop ADVANCED for SELL #{sig_id}: {sl} -> {new_sl} (Current check price: {current_price})")
+                            await self.storage.update_signal_sl(sig_id, new_sl)
+                            await self.storage.update_trade_journal_sl(sig_id, new_sl)
+                            sl = new_sl
+
                 if current_price >= sl:
                     reason = "stop_loss"
                     exit_price = current_price
@@ -354,6 +441,10 @@ class SignalExecutor:
 
         # Notify Risk Manager
         await self.risk_manager.record_trade_result(pnl=pnl_pips)
+        
+        # Clean up high-water marks for trailing stops
+        if signal_id in self._trailing_high_water_marks:
+            del self._trailing_high_water_marks[signal_id]
 
         return {
             "id": signal_id,

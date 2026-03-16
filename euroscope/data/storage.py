@@ -688,6 +688,24 @@ class Storage:
             )
             await db.commit()
 
+    async def update_trade_journal_sl(self, trade_id: int, new_sl: float):
+        """Update the stop loss of an active trade journal entry."""
+        async with self._get_db() as db:
+            await db.execute(
+                "UPDATE trade_journal SET stop_loss=? WHERE id=?",
+                (new_sl, trade_id)
+            )
+            await db.commit()
+
+    async def update_signal_sl(self, signal_id: int, new_sl: float):
+        """Update the stop loss of an active trading signal."""
+        async with self._get_db() as db:
+            await db.execute(
+                "UPDATE trading_signals SET stop_loss=? WHERE id=?",
+                (new_sl, signal_id)
+            )
+            await db.commit()
+
     async def get_trade_journal(self, strategy: Optional[str] = None, status: Optional[str] = None,
                           limit: int = 50) -> list[dict]:
         """Get trade journal entries, optionally filtered."""

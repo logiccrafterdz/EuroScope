@@ -134,6 +134,45 @@ class TestCheckSignals:
         closed = await executor.check_signals(1.0920)  # Between SL and TP
         assert len(closed) == 0
 
+    @pytest.mark.asyncio
+    async def test_trailing_stop_activation_buy(self, executor):
+        # Current price targets = Entry = 1.0900
+        # SL = 1.0850 (50 pips risk)
+        # TP = 1.0950 (50 pips reward)
+        sig_id = await executor.open_signal("BUY", 1.0900, 1.0850, 1.0950)
+        
+        # Determine the exact entry price after simulated slippage
+        open_sigs = await executor.get_open_signals()
+        actual_entry = open_sigs[0]["entry_price"]
+        
+        # Move price up enough to exceed the 15 pip threshold 
+        # (15 pips + some buffer to be safe) => 25 pips
+        check_price_1 = round(actual_entry + 0.0025, 4)
+        await executor.check_signals(check_price_1)
+        
+        # Verify SL moved to lock in profit
+        open_sigs = await executor.get_open_signals()
+        assert len(open_sigs) == 1
+        new_sl = open_sigs[0]["stop_loss"]
+        # With trailing_activation_pips=15, new SL = check_price_1 - 0.0015
+        expected_sl_1 = round(check_price_1 - 0.0015, 5)
+        assert new_sl == expected_sl_1
+        
+        # Test trailing further: Move up another 5 pips
+        check_price_2 = round(check_price_1 + 0.0005, 4)
+        await executor.check_signals(check_price_2)
+        
+        open_sigs = await executor.get_open_signals()
+        newer_sl = open_sigs[0]["stop_loss"]
+        expected_sl_2 = round(check_price_2 - 0.0015, 5)
+        assert newer_sl == expected_sl_2
+        
+        # Test price drop: Should hit the trailing stop `expected_sl_2` instead of original
+        closed = await executor.check_signals(expected_sl_2)
+        assert len(closed) == 1
+        assert closed[0]["reason"] == "stop_loss"
+        assert closed[0]["pnl_pips"] > 0
+
 
 # ── Performance ──────────────────────────────────────────
 
