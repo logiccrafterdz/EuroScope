@@ -23,7 +23,9 @@ class CapitalWebsocketClient:
         self._callbacks: List[Callable[[str, float, float], None]] = [] # func(symbol, bid, ask)
         self._subscribed_epics: set[str] = set()
         
-        # Keep references to background tasks so they don't get garbage collected
+        # Reconnection and health tracking
+        self._reconnect_count = 0
+        self._last_msg_time: float = 0
         self._listen_task: Optional[asyncio.Task] = None
         self._ping_task: Optional[asyncio.Task] = None
         
@@ -48,21 +50,26 @@ class CapitalWebsocketClient:
 
     async def connect(self):
         """Establish connection and ensure listener tasks are running."""
-        if self._running and self.ws and getattr(self.ws.state, 'name', '') == 'OPEN':
+        # Use a local for ws to satisfy the linter
+        ws = self.ws
+        if self._running and ws and getattr(ws.state, 'name', '') == 'OPEN':
             return True
 
         if not await self._establish_connection():
             return False
 
         self._running = True
+        self._reconnect_count = 0
         loop = asyncio.get_running_loop()
         
         # Start background tasks ONLY if not already running
-        if not self._listen_task or self._listen_task.done():
+        lt = self._listen_task
+        if not lt or lt.done():
             self._listen_task = loop.create_task(self._listen())
             logger.debug("Started WS Listener task.")
             
-        if not self._ping_task or self._ping_task.done():
+        pt = self._ping_task
+        if not pt or pt.done():
             self._ping_task = loop.create_task(self._ping_loop())
             logger.debug("Started WS Ping task.")
 
@@ -70,10 +77,12 @@ class CapitalWebsocketClient:
 
     async def _establish_connection(self) -> bool:
         """Internal helper to handle the raw socket connection and auth."""
-        if not self.provider.session_token:
+        # Force a fresh login if we've failed multiple times previously
+        if not self.provider.session_token or self._reconnect_count > 1:
+            logger.info("Capital.com WS: Requesting fresh session tokens...")
             success = await self.provider.login()
             if not success:
-                logger.error("Capital.com WS auth failed: Broker not authenticated.")
+                logger.error("Capital.com WS auth failed: Broker login failed.")
                 return False
 
         logger.info(f"Connecting to Capital.com WebSocket: {self.WS_URL}...")
@@ -96,13 +105,14 @@ class CapitalWebsocketClient:
         while self._running:
             try:
                 await asyncio.sleep(300) # 5 minutes
-                if self.ws and getattr(self.ws.state, 'name', '') == 'OPEN':
+                ws = self.ws
+                if ws and getattr(ws.state, 'name', '') == 'OPEN':
                     payload = {
                         "destination": "ping",
                         "cst": self.provider.session_token,
                         "securityToken": self.provider.security_token
                     }
-                    await self.ws.send(json.dumps(payload))
+                    await ws.send(json.dumps(payload))
                     logger.debug("Sent WS Ping")
             except asyncio.CancelledError:
                 break
@@ -116,13 +126,15 @@ class CapitalWebsocketClient:
             return
             
         self._subscribed_epics.update(new_epics)
-        if self._running and self.ws and getattr(self.ws.state, 'name', '') == 'OPEN':
+        ws = self.ws
+        if self._running and ws and getattr(ws.state, 'name', '') == 'OPEN':
             await self._send_subscription(list(self._subscribed_epics))
         else:
             logger.info("Saved subscription; will execute when socket is open.")
 
     async def _send_subscription(self, epics: List[str]):
-        if not self.ws or getattr(self.ws.state, 'name', '') != 'OPEN':
+        ws = self.ws
+        if not ws or getattr(ws.state, 'name', '') != 'OPEN':
             return
             
         payload = {
@@ -134,7 +146,7 @@ class CapitalWebsocketClient:
             }
         }
         try:
-            await self.ws.send(json.dumps(payload))
+            await ws.send(json.dumps(payload))
             logger.info(f"Subscribed to WS ticks for: {epics}")
         except Exception as e:
             logger.error(f"Failed to send WS subscription data: {e}")
@@ -146,7 +158,8 @@ class CapitalWebsocketClient:
         
         while self._running:
             try:
-                if not self.ws or getattr(self.ws.state, 'name', '') != 'OPEN':
+                ws = self.ws
+                if not ws or getattr(ws.state, 'name', '') != 'OPEN':
                     logger.warning(f"WS socket not open in listener; attempting reconnect in {reconnect_delay}s...")
                     if await self._establish_connection():
                         reconnect_delay = 5.0  # Reset on success
@@ -156,8 +169,10 @@ class CapitalWebsocketClient:
                         reconnect_delay = min(max_delay, reconnect_delay * 1.5)
                         continue
 
-                message = await self.ws.recv()
-                reconnect_delay = 5.0  # Reset on successful message receive
+                message = await ws.recv()
+                self._last_msg_time = asyncio.get_running_loop().time()
+                self._reconnect_count = 0 # Reset on successful message receive
+                reconnect_delay = 5.0  
                 data = json.loads(message)
                 
                 # Handle tick updates
@@ -178,8 +193,9 @@ class CapitalWebsocketClient:
                         for cb in self._callbacks:
                             asyncio.create_task(self._safe_invoke(cb, epic, float(bid), float(ask)))
                                 
-            except websockets.exceptions.ConnectionClosed:
-                logger.warning(f"Capital.com WS Connection closed. Re-establishing in {reconnect_delay}s...")
+            except websockets.exceptions.ConnectionClosed as e:
+                self._reconnect_count += 1
+                logger.warning(f"Capital.com WS Connection closed ({e.code}). Re-establishing in {reconnect_delay}s...")
                 await asyncio.sleep(reconnect_delay)
                 reconnect_delay = min(max_delay, reconnect_delay * 1.5)
             except json.JSONDecodeError:
@@ -187,6 +203,7 @@ class CapitalWebsocketClient:
             except asyncio.CancelledError:
                 break
             except Exception as e:
+                self._reconnect_count += 1
                 logger.error(f"Capital.com WS Listen Error: {e}")
                 await asyncio.sleep(reconnect_delay)
                 reconnect_delay = min(max_delay, reconnect_delay * 1.5)
@@ -203,11 +220,14 @@ class CapitalWebsocketClient:
     async def close(self):
         """Cleanly close the WebSocket connection."""
         self._running = False
-        if self._ping_task:
-            self._ping_task.cancel()
-        if self._listen_task:
-            self._listen_task.cancel()
+        pt = self._ping_task
+        if pt:
+            pt.cancel()
+        lt = self._listen_task
+        if lt:
+            lt.cancel()
             
-        if self.ws:
-            await self.ws.close()
+        ws = self.ws
+        if ws:
+            await ws.close()
             logger.info("Capital.com WebSocket connection closed.")
