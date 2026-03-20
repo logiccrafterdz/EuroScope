@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import time
 import websockets # type: ignore
 from typing import List, Callable, Optional, Dict, Any, cast
 
@@ -37,7 +38,7 @@ class CapitalWebsocketClient:
         if epic not in self._tick_volume:
             return 0
         try:
-            now = asyncio.get_running_loop().time()
+            now = time.monotonic()
             # Prune old ticks
             self._tick_volume[epic] = [ts for ts in self._tick_volume[epic] if now - ts <= window_seconds]
             return len(self._tick_volume[epic])
@@ -77,18 +78,24 @@ class CapitalWebsocketClient:
 
     async def _establish_connection(self) -> bool:
         """Internal helper to handle the raw socket connection and auth."""
-        # Force a fresh login if we've failed multiple times previously
-        if not self.provider.session_token or self._reconnect_count > 1:
-            logger.info("Capital.com WS: Requesting fresh session tokens...")
-            success = await self.provider.login()
-            if not success:
-                logger.error("Capital.com WS auth failed: Broker login failed.")
-                return False
+        # Always refresh tokens on reconnect – a 1006 means old tokens
+        # are almost certainly invalid.
+        logger.info("Capital.com WS: Requesting fresh session tokens...")
+        success = await self.provider.login()
+        if not success:
+            logger.error("Capital.com WS auth failed: Broker login failed.")
+            return False
 
         logger.info(f"Connecting to Capital.com WebSocket: {self.WS_URL}...")
         try:
-            # ping_interval=None because Capital.com expects custom "ping" messages
-            self.ws = await websockets.connect(self.WS_URL, ping_interval=None)
+            # ping_interval=None because Capital.com expects custom "ping" messages.
+            # ping_timeout / close_timeout catch dead connections faster.
+            self.ws = await websockets.connect(
+                self.WS_URL,
+                ping_interval=None,
+                ping_timeout=20,
+                close_timeout=10,
+            )
             
             # Re-subscribe to any existing epics upon connection
             if self._subscribed_epics:
@@ -101,11 +108,37 @@ class CapitalWebsocketClient:
             return False
 
     async def _ping_loop(self):
-        """Capital.com requires a ping message every 5-10 minutes. We'll send one every 5 minutes."""
+        """Send a custom ping every 60s and detect stale connections.
+
+        Capital.com expects a custom JSON "ping" frame (not a standard
+        WebSocket ping).  Sending every 60 s prevents the server from
+        idle-timing-out the connection (which was the cause of code 1006).
+
+        Additionally, if no message has arrived in 90 s the connection is
+        considered stale and is force-closed so the listener loop can
+        reconnect with fresh tokens.
+        """
+        PING_INTERVAL = 60     # seconds between pings
+        STALE_THRESHOLD = 90   # force-close if no msg for this long
+
         while self._running:
             try:
-                await asyncio.sleep(300) # 5 minutes
+                await asyncio.sleep(PING_INTERVAL)
                 ws = self.ws
+
+                # --- staleness watchdog ---
+                if self._last_msg_time > 0:
+                    silent = time.monotonic() - self._last_msg_time
+                    if silent > STALE_THRESHOLD:
+                        logger.warning(
+                            f"Stale connection detected ({silent:.0f}s silent). "
+                            "Forcing reconnect."
+                        )
+                        if ws:
+                            await ws.close()
+                        continue  # listener will reconnect
+
+                # --- keep-alive ping ---
                 if ws and getattr(ws.state, 'name', '') == 'OPEN':
                     payload = {
                         "destination": "ping",
@@ -171,7 +204,7 @@ class CapitalWebsocketClient:
                         continue
 
                 message = await cast(Any, ws).recv()
-                self._last_msg_time = asyncio.get_running_loop().time()
+                self._last_msg_time = time.monotonic()
                 self._reconnect_count = 0 # Reset on successful message receive
                 reconnect_delay = 5.0  
                 data = json.loads(message)
@@ -185,7 +218,7 @@ class CapitalWebsocketClient:
                     
                     if epic and bid and ask:
                         # Record tick for volume tracking
-                        now = asyncio.get_running_loop().time()
+                        now = time.monotonic()
                         if epic not in self._tick_volume:
                             self._tick_volume[epic] = []
                         self._tick_volume[epic].append(now)
