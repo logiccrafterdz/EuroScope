@@ -9,7 +9,7 @@ import sys
 
 from .config import Config
 from .bot.telegram_bot import EuroScopeBot
-from .container import ServiceContainer
+from .container import ServiceContainer, set_container
 from .utils.logger import setup_structured_logging
 
 
@@ -53,6 +53,7 @@ def main():
 
     # Start bot
     container = ServiceContainer(config)
+    set_container(container)  # Phase 3: Global registry for background tasks
     bot = EuroScopeBot(container)
     try:
         bot.run()
