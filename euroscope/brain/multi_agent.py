@@ -51,9 +51,8 @@ class DeliberationCommittee:
             f"{context_str}\n"
             "Argue your case in 2-3 sentences."
         )
-        # Route to secondary model if possible to ensure model diversity
-        # Since llm_router implements resilience, we can pass model="openai" if supported, but simple default is fine.
-        return await self.llm.chat([{"role": "user", "content": prompt}], model="openai")
+        # Use default router (model diversity is handled by LLMRouter fallback chain)
+        return await self.llm.chat([{"role": "user", "content": prompt}])
 
     async def _ask_risk_manager(self, context_str: str) -> str:
         prompt = (
@@ -71,18 +70,24 @@ class DeliberationCommittee:
         if not self.llm:
             return {"final_direction": "NEUTRAL", "confidence": 0, "reasoning": "Committee offline - No LLM."}
             
-        logger.warning("🚨 Conflict detected! Convening the AI Deliberation Committee...")
+        logger.info("Conflict detected. Convening the AI Deliberation Committee...")
         
         context_str = self._build_context_prompt(context)
         
-        # Parallel execution of three distinct agents
+        # Parallel execution of three distinct agents with timeout protection
         try:
-            bull_resp, bear_resp, risk_resp = await asyncio.gather(
-                self._ask_bull_advocate(context_str),
-                self._ask_bear_advocate(context_str),
-                self._ask_risk_manager(context_str),
-                return_exceptions=True
+            bull_resp, bear_resp, risk_resp = await asyncio.wait_for(
+                asyncio.gather(
+                    self._ask_bull_advocate(context_str),
+                    self._ask_bear_advocate(context_str),
+                    self._ask_risk_manager(context_str),
+                    return_exceptions=True
+                ),
+                timeout=20.0  # Hard ceiling: 20 seconds for all 3 agents
             )
+        except asyncio.TimeoutError:
+            logger.error("Committee timed out after 20s. Defaulting to NEUTRAL.")
+            return {"final_direction": "NEUTRAL", "confidence": 0, "reasoning": "Committee timed out."}
         except Exception as e:
             logger.error(f"Committee crashed: {e}")
             return {"final_direction": "NEUTRAL", "confidence": 0, "reasoning": "Committee failed to reach consensus."}

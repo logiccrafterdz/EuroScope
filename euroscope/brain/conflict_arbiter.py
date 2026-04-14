@@ -98,8 +98,11 @@ class ConflictArbiter:
         confidence = votes[final_direction]
         
         # Check if we have strong conflicting forces
-        opposite = "SELL" if final_direction == "BUY" else "BUY"
-        conflict_ratio = votes.get(opposite, 0)
+        # Only meaningful when we have a directional winner
+        conflict_ratio = 0.0
+        if final_direction in ("BUY", "SELL"):
+            opposite = "SELL" if final_direction == "BUY" else "BUY"
+            conflict_ratio = votes.get(opposite, 0)
         
         # Phase 3 Multi-Agent Hook:
         # If there is high conflict (>0.25 opposition) or the winning vote is very weak (<0.45)
