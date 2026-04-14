@@ -13,8 +13,21 @@ from typing import List, Dict, Tuple
 
 logger = logging.getLogger("euroscope.data.sentiment_graph")
 
+# Singleton instance
+_narrative_graph_instance = None
+
 class NarrativeGraph:
+    def __new__(cls, *args, **kwargs):
+        global _narrative_graph_instance
+        if _narrative_graph_instance is None:
+            _narrative_graph_instance = super().__new__(cls)
+            _narrative_graph_instance._initialized = False
+        return _narrative_graph_instance
+
     def __init__(self, persist_dir: str = "data"):
+        if self._initialized:
+            return
+        self._initialized = True
         self.persist_dir = persist_dir
         self.graph_file = os.path.join(self.persist_dir, "sentiment_graph.graphml")
         self.graph = nx.DiGraph()
@@ -57,11 +70,12 @@ class NarrativeGraph:
             if not self.graph.has_node(src): self.graph.add_node(src, weight=1.0)
             if not self.graph.has_node(tgt): self.graph.add_node(tgt, weight=1.0)
 
-            # Add or update edge
+            # Add or update edge with temporal decay
             if self.graph.has_edge(src, tgt):
-                current_weight = self.graph[src][tgt].get("weight", 1.0)
-                # Exponential decay of old relations compared to new ones, or just additive
-                self.graph[src][tgt]["weight"] = current_weight + w
+                current_weight = float(self.graph[src][tgt].get("weight", 1.0))
+                # Decay old weight by 5% before adding new evidence
+                decayed = current_weight * 0.95
+                self.graph[src][tgt]["weight"] = decayed + w
                 self.graph[src][tgt]["label"] = edge_type
             else:
                 self.graph.add_edge(src, tgt, weight=w, label=edge_type)
