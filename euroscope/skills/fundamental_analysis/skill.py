@@ -4,14 +4,13 @@ Fundamental Analysis Skill — Wraps NewsEngine, EconomicCalendar.
 
 from ..base import BaseSkill, SkillCategory, SkillContext, SkillResult
 
-
 class FundamentalAnalysisSkill(BaseSkill):
     name = "fundamental_analysis"
     description = "News sentiment, economic calendar, and central bank data"
     emoji = "📰"
     category = SkillCategory.ANALYSIS
     version = "1.0.0"
-    capabilities = ["get_news", "get_calendar", "get_sentiment", "get_macro", "full"]
+    capabilities = ["get_news", "get_calendar", "get_sentiment", "get_macro", "get_narratives", "full"]
 
     def __init__(self, news_engine=None, calendar=None, macro_provider=None):
         super().__init__()
@@ -46,6 +45,8 @@ class FundamentalAnalysisSkill(BaseSkill):
             return await self._get_sentiment(context)
         elif action == "get_macro":
             return await self._get_macro(context)
+        elif action == "get_narratives":
+            return await self._get_narratives(context)
         elif action == "full":
             return await self._full(context)
         return SkillResult(success=False, error=f"Unknown action: {action}")
@@ -58,9 +59,47 @@ class FundamentalAnalysisSkill(BaseSkill):
             context.analysis["news"] = articles
             
             formatted = self._news.format_news(articles) if hasattr(self._news, 'format_news') else str(articles)
+            
+            # Phase 3: Trigger background narrative graph update
+            try:
+                import asyncio
+                loop = asyncio.get_running_loop()
+                loop.create_task(self._update_narrative_graph(articles))
+            except Exception as e:
+                import logging
+                logging.getLogger("euroscope.skill.fundamental").debug(f"Graph update task dispatch failed: {e}")
+
             return SkillResult(success=True, data=articles, metadata={"formatted": formatted})
         except Exception as e:
             return SkillResult(success=False, error=str(e))
+
+    async def _update_narrative_graph(self, articles: list):
+        if not articles: return
+        try:
+            from euroscope.container import get_container
+            container = get_container()
+            if not container or not container.llm: return
+            
+            # Use top max 3 titles for extraction to save tokens
+            combined = "\n".join([a.get('title', '') for a in articles[:3]])
+            prompt = (
+                "Extract up to 3 macro-economic causal relationships from these news titles.\n"
+                "Identify the root entity (source) and its effect on another entity (target).\n"
+                "Return STRICTLY as a JSON array with string variables 'source', 'target', 'relation' (verb), and 'weight' (float 0.5-1.0).\n\n"
+                f"News:\n{combined}\n"
+                "Respond ONLY with valid JSON array."
+            )
+            resp = await container.llm.chat([{"role": "user", "content": prompt}], temperature=0.1)
+            import re, json
+            match = re.search(r'\[.*\]', resp, re.DOTALL)
+            if match:
+                relations = json.loads(match.group(0))
+                from euroscope.data.sentiment_graph import NarrativeGraph
+                graph = NarrativeGraph()
+                graph.update_from_news(relations)
+        except Exception as e:
+            import logging
+            logging.getLogger("euroscope.skill.fundamental").debug(f"Narrative extraction failed: {e}")
 
     async def _get_calendar(self, context: SkillContext) -> SkillResult:
         if not self._calendar:
@@ -151,6 +190,16 @@ class FundamentalAnalysisSkill(BaseSkill):
             )
         except Exception as e:
             return SkillResult(success=False, error=f"Macro analysis failed: {str(e)}")
+
+    async def _get_narratives(self, context: SkillContext) -> SkillResult:
+        try:
+            from euroscope.data.sentiment_graph import NarrativeGraph
+            g = NarrativeGraph()
+            narratives = g.get_central_narratives(top_n=3)
+            context.analysis["narratives"] = narratives
+            return SkillResult(success=True, data={"narratives": narratives}, metadata={"formatted": narratives})
+        except Exception as e:
+            return SkillResult(success=False, error=str(e))
 
     async def _full(self, context: SkillContext) -> SkillResult:
         news = await self._get_news(context)

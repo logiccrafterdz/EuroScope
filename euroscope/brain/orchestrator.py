@@ -152,7 +152,7 @@ class Orchestrator:
 
         # Conflict Resolution Phase
         if self._has_conflicting_signals(context):
-            resolution = self.conflict_arbiter.resolve(context)
+            resolution = await self.conflict_arbiter.resolve(context)
             
             # Adjust confidence based on overall data quality
             final_conf = self._calculate_final_confidence(resolution["confidence"], context)
