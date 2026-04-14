@@ -14,7 +14,7 @@ EuroScope is an always-on trading intelligence agent that continuously monitors 
 
 ## Architecture Overview
 
-EuroScope operates as an **autonomous agent**, transcending the traditional chatbot paradigm.
+EuroScope operates as an **autonomous agent**, transcending the traditional chatbot paradigm. It runs continuously, reasoning over localized context structures.
 
 | Aspect | Traditional Chatbot | EuroScope Autonomous Agent |
 |:---|:---|:---|
@@ -64,33 +64,75 @@ The Agent Core runs a state machine that follows the **Observe -> Orient -> Deci
 
 ### 1. Multi-Agent Deliberation Committee (`brain/multi_agent.py`)
 Resolves high-ambiguity market conditions using an adversarial committee framework.
-- Consists of three specialized LLM agents: Bull Advocate, Bear Advocate, and Risk Manager.
+- Consists of specialized LLM agents: Bull Advocate, Bear Advocate, and Risk Manager.
 - A Chief Judge (Conflict Arbiter) synthesizes the arguments and establishes a consensus direction and confidence score.
-- Implements strict LLM fallback routing, parallel asynchronous execution, and time-bound deliberation to guarantee system stability during volatile events.
+- Implements strict LLM fallback routing via `brain/llm_router.py`, parallel asynchronous execution, and time-bound deliberation (20-second timeout) to guarantee system stability during volatile macro events.
+- Employs a cooldown mechanism to prevent token saturation.
 
 ### 2. Sentiment Network Graph (`data/sentiment_graph.py`)
-Utilizes a directed acyclic graph (via NetworkX) to track macroeconomic narrative linkages from real-time news.
-- Extracts causal relationships using LLMs (e.g., FED -> strengthens -> USD).
-- Persists data with automated temporal decay on edge weights to prioritize recent narratives while gracefully forgetting stale hypotheses.
+Utilizes a directed acyclic graph (implemented as a Singleton via NetworkX) to track macroeconomic narrative linkages from real-time news engines.
+- Extracts causal relationships using LLMs (e.g., NFP -> forces_hike -> FED).
+- Persists data with automated exponential temporal decay (0.95x modifier) on edge weights, naturally obsoleting stale structural hypotheses over time.
 
 ### 3. Market Regime Memory Bank (`brain/vector_memory.py`)
-Records the state of the market (ADX, RSI, MACD, Trend, Volatility, Macro Bias) alongside trading outcomes.
-- Before executing a trade, the system queries SQLite FTS5 vector memory to locate historically similar market regimes.
-- Dynamically adjusts signal confidence based on the historic win rate of analogous past environments.
+Records the state of the market (ADX, RSI, MACD, Trend, ATR Volatility, Macro Bias) alongside realized post-trade outcomes mapping to profit constraints.
+- Prior to discrete trade initialization, the system performs an internal nearest-neighbor query to the SQLite FTS5 vector memory framework to index historically similar market regimes.
+- Dynamically scales signal confidence thresholds proportional to the historic win rate of the matched regime matrices.
 
 ### 4. Counterfactual Engine (`learning/counterfactual.py`)
-An asynchronous background task that analyzes closed trades to simulate alternative 'what-if' scenarios.
-- Evaluates if wider stop losses would have prevented stop hunts or if tighter taking profits would have optimized yield.
-- Results are embedded directly into the vector memory insights collection to dynamically tune future risk parameters.
+An asynchronous background analysis pipeline that digests closed trading iterations to isolate mathematical counter-scenarios.
+- Computes trajectory variances: tests whether expanding standard deviation on stop losses mitigates slippage/stop hunts, or if trailing constraints prematurely truncate PnL duration.
+- Extracted theorems are embedded into the central insight registry, enabling dynamic, unsupervised parameter retuning per the `adaptive_tuner.py`.
 
-### 5. World Model (`brain/world_model.py`)
-A structured, always-current representation of the EUR/USD market state tracking Price, Technicals, Fundamentals, Sentiment, Regimes, Risk, Liquidity, and Session states. Implements strict delta detection to restrict agent reasoning to state transitions.
+### 5. Conviction System & World Model (`brain/conviction.py`, `brain/world_model.py`)
+A rigorously structured, sub-millisecond representation of the active EUR/USD market state mapping Price, Technicals, Fundamentals, Sentiment, Regimes, Risk matrices, Liquidity levels (PDH/PDL), and Session demarcations.
+- Implements strict delta threshold detection logic restricting agent reasoning cycles purely to explicit state transitions.
+- Logical convictions maintain decay gradients and absolute invalidation thresholds mapped to physical price boundaries.
 
-### 6. Conviction System (`brain/conviction.py`)
-Maintains logical trading theses with decay vectors. If reinforcing evidence ceases or hard invalidation levels are breached, convictions auto-terminate gracefully.
+### 6. Event Architecture & Scheduling (`automation/events.py`, `automation/heartbeat.py`)
+- Event Bus architecture for pub-sub inter-process communication bounding all execution parameters.
+- Asynchronous periodic task scheduler mapping data fetches independently, segregating discrete I/O boundaries from execution logic.
 
-### 7. Orchestrator & Containerization (`container.py`, `brain/orchestrator.py`)
-Implements a strict Dependency Injection (DI) framework with a global service registry to eliminate circular dependencies. Exposes pipelines for complete market analysis or lightweight tick scans.
+---
+
+## System Architecture Structure
+
+The project encompasses a heavily expanded micro-module architecture:
+
+```text
+euroscope/
++-- analysis/            # Analytical abstractions
++-- analytics/           # Deep-dive metrics and PDF generation logic
++-- automation/          # Scheduling and Heartbeat algorithms (cron, events, alerts)
++-- backtest/            # Backtesting runtimes
++-- bot/                 # Telegram interfacing and REST server deployment handlers
++-- brain/               # Agent LLM Framework (OODA, World Model, Memory, Agents)
++-- data/                # Ingestion layers (Brave News, Tiingo, OANDA, FRED, Graphs)
++-- forecast/            # Directional neural abstractions
++-- learning/            # Unsupervised optimization (Adaptive Tuner, Counterfactuals)
++-- testing/             # CI and behavioral integration test suites
++-- trading/             # Direct Market Access routines (Executors, Guardrails)
++-- skills/              # Unidirectional bounded context algorithms
+    +-- backtesting/
+    +-- correlation_monitor/
+    +-- deviation_monitor/
+    +-- fundamental_analysis/
+    +-- liquidity_awareness/
+    +-- market_data/
+    +-- monitoring/
+    +-- multi_timeframe_confluence/
+    +-- performance_analytics/
+    +-- prediction_tracker/
+    +-- risk_management/
+    +-- session_context/
+    +-- signal_executor/
+    +-- technical_analysis/
+    +-- trade_journal/
+    +-- trading_strategy/
+    +-- uncertainty_assessment/
++-- utils/               # Chart rendering and mathematical abstractions
++-- workspace/           # Identity configurations and operational logic matrices
+```
 
 ---
 
@@ -98,58 +140,43 @@ Implements a strict Dependency Injection (DI) framework with a global service re
 
 | Domain | Capabilities |
 |:---|:---|
-| **Agent Intelligence** | OODA Loop, Multi-Agent Deliberation, Regime Memory, Sentiment Graphs |
-| **Skills Engine** | Auto-discovered discrete capabilities, Dynamic Prompting |
-| **Trading & Execution** | Signal Executor, Risk Manager, Strategy Engine, Paper Trading |
-| **Quantitative Analytics**| Equity Curves, Walk-Forward Backtesting, Sharpe/Sortino calculations |
-| **Technical Analysis** | Adaptive RSI, MACD, Automated support/resistance, Pattern Detection |
-| **Macro Intelligence** | FRED/ECB integration, Causal Impact Attribution, Calendar Events |
-| **Adaptive Learning** | Counterfactual Analysis, Parameter Tuning, Knowledge Vectorization |
-| **Interoperability** | Telegram Command API, Smart Protocol Alerts, Containerized DI |
+| **Agent Intelligence** | OODA Loop, Multi-Agent Deliberation, Regime Memory, Sentiment Graphs, Briefing Generation |
+| **Discrete Skills Engine** | 17 independently executing capabilities, Dynamic Prompt Interfacing, Dependency Registration |
+| **Trading & Execution** | Signal Executor, Trailing Stops, Capital.com WS, Execution Simulators, Slippage Matrices |
+| **Quantitative Analytics** | Post-Trade Diagnostics, Convexity Profiling, Forecast Tracking |
+| **Technical Analysis** | MTF Confluence, Regime Recognition, Correlation tracking, Predictive Interpolation |
+| **Macro Intelligence** | St. Louis FRED parsing, Causal Impact Attribution, Asymmetric Event Parsing |
+| **Adaptive Learning** | Counterfactual Simulations, Metric-based Pattern Detection, Unsupervised Error Correction |
+| **Interoperability** | Telegram Asynchronous Interface, Smart Event Bus Alerting, Containerized Service Scopes |
 
 ---
 
 ## Command Interface Reference
 
 ### Standard Operations
-- `/menu` - Main interactive dashboard
-- `/price` - Real-time EUR/USD quotes
-- `/analysis` - Full technical analysis report
-- `/chart` - Rendered candlestick chart graphics
-- `/forecast` - AI-driven directional outlook
-- `/news` - Live sentiment and fundamental headlines
-- `/signals` - Active trading signals and entries
-- `/strategy` - Current algorithmic strategy recommendation
-- `/risk` - Risk allocation assessment for the next sequential trade
-- `/trades` - Paper trading ledger execution history
-- `/performance` - Deep-dive ROI and Sharpe statistics
-- `/report` - Pipeline compilation of all skills into a singular report
-- `/health` - System diagnostic and runtime metrics
-- `/settings` - Configuration management
+- `/menu` - Instantiates the master execution dashboard
+- `/price` - Bids explicit sub-10ms EUR/USD quotes
+- `/analysis` - Dumps the standard multi-timeframe algorithm report
+- `/chart` - Generates raw heuristic graphical overlays
+- `/forecast` - Prompts the neural net for forward projection variances
+- `/news` - Fetches sentiment polarity matrices
+- `/signals` - Polls the deterministic signal output framework
+- `/strategy` - Verifies current active algorithmic profiles
+- `/risk` - Dumps volumetric exposure ratios
+- `/trades` - Outputs structured transaction histories
+- `/performance` - Returns the aggregate strategy indices (Sharpe/Sortino)
+- `/report` - Merges full skills-based analyses
+- `/health` - Returns memory mapping buffers
+- `/settings` - Modifies persistent parameters
 
 ### Agent Introspection Commands
-- `/agent_status` - Dump of the Agent Core state, execution tick count, and active World Model components.
-- `/conviction` - Active trading theses sorted by confidence and direction.
-- `/session_plan` - Active algorithmic game plans organized into contingent If-Then scenarios.
+- `/agent_status` - Re-evaluates Agent Core memory state vectors
+- `/conviction` - Dumps current evidence-backed logic theses
+- `/session_plan` - Proscribes contingency constraints prior to NY/London market intersections
 
 ### Smart Analysis Executions
-- `/comprehensive_analysis [query]` - Instigates a full ReAct loop with multi-step logical deduction.
-- `/quick_analysis` - Restricted-depth analysis prioritized for latency.
-
----
-
-## Proactive Intelligence Protocol
-
-EuroScope autonomously monitors EUR/USD data streams and generates event-driven notifications.
-- Executes distributed ReAct analysis loops at configurable intervals.
-- Manages stateful alert suppression within 60-minute rolling windows.
-- Prioritizes distributions into Critical, High, Medium, and Low severity classifications.
-- Utilizes context-aware throttling (e.g., weekend suppression, major holiday silences).
-
-**Example Notifications:**
-- [CRITICAL] Price sweeping liquidity below 1.0800 - reversal dynamic likely. Short allocations restricted.
-- [HIGH] Bullish structural breakout above 1.0850. Volume validation present. Watch for mean-reversion pullback for optimal entry.
-- [LOW] Market exhibiting tight consolidation preceding the New York session open. Awaiting liquidity injection.
+- `/comprehensive_analysis [query]` - Invokes an infinite-depth ReAct topological query loop
+- `/quick_analysis` - Bounds analysis to Tier 1 latency considerations
 
 ---
 
@@ -160,29 +187,28 @@ EuroScope autonomously monitors EUR/USD data streams and generates event-driven 
 git clone https://github.com/logiccrafterdz/EuroScope.git
 cd EuroScope
 python -m venv .venv
-# Activate virtual environment (.venv\Scripts\activate on Windows or source .venv/bin/activate on Linux/Mac)
+# Source .venv/bin/activate OR .venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
 ### 2. Environment Variables
-Create a `.env` file referencing `.env.example`:
+Mandatory `.env` declarations:
 
 | Key | Purpose | Status |
 |:---|:---|:---|
-| `EUROSCOPE_LLM_API_KEY` | Primary LLM Provider API Key (OpenRouter/DeepSeek/OpenAI) | Required |
-| `EUROSCOPE_TELEGRAM_TOKEN` | Telegram Bot Framework Token | Required |
-| `EUROSCOPE_ADMIN_CHAT_IDS` | Comma-separated strict admin authorization IDs | Required |
-| `EUROSCOPE_LLM_FALLBACK_API_KEY`| Secondary LLM key for failover redundancy | Optional |
-| `EUROSCOPE_FRED_API_KEY` | St. Louis Fed macro data access | Recommended |
-| `EUROSCOPE_TIINGO_KEY` | Real-time WebSocket market data | Recommended |
-| `EUROSCOPE_BRAVE_API_KEY` | News and sentiment aggregation | Optional |
-| `EUROSCOPE_VECTOR_MEMORY_TTL_DAYS`| Memory retention window (default: 30) | Optional |
+| `EUROSCOPE_LLM_API_KEY` | Authorization token for LLM API schemas | Required |
+| `EUROSCOPE_TELEGRAM_TOKEN` | Telemetry mapping via Telegram servers | Required |
+| `EUROSCOPE_ADMIN_CHAT_IDS` | Absolute strict integers bounding authorization overrides | Required |
+| `EUROSCOPE_LLM_FALLBACK_API_KEY`| High availability API swap target | Optional |
+| `EUROSCOPE_FRED_API_KEY` | Key for quantitative macroeconomic interpolation | Recommended |
+| `EUROSCOPE_TIINGO_KEY` | Socket endpoint mapping for latency reduction | Recommended |
+| `EUROSCOPE_VECTOR_MEMORY_TTL_DAYS`| FTS5/Chroma vector saturation limits | Optional |
 
 ### 3. Execution Standard
 ```bash
 python -m euroscope.main
 ```
-The initialization sequence performs Dependency Injection bindings, loads SQLite/ChromaDB state files, initializes the Telegram listeners, and boots the Agent Core OODA loop.
+Initialization mounts DI scopes (`container.py`), resolves internal schema cyclic logic, mounts SQLite state files, establishes event bus sockets, and runs the baseline memory mapping algorithms.
 
 ---
 
@@ -190,30 +216,30 @@ The initialization sequence performs Dependency Injection bindings, loads SQLite
 
 | Domain | Applied Technologies |
 |:---|:---|
-| **Runtime & Language** | Python 3.12+ |
-| **Logic & AI** | DeepSeek, OpenAI APIs, FinBERT (INT8 Quantized), ONNX Runtime |
-| **State Persistence** | SQLite (with FTS5 for vector text), NetworkX (Graphs) |
-| **Data Pipelines** | Tiingo API, OANDA API, Capital.com (REST and WebSocket integrations) |
-| **Client Interface** | python-telegram-bot (Async V21+) |
-| **Cryptographic Security** | PyCryptodome (AES/RSA handling for institutional endpoints) |
+| **Runtime Architecture** | Python 3.12 (Strict Typing Guidelines) |
+| **Logic Orchestration** | FinBERT (INT8), Generalized LLM Parsing API models, ONNX inference |
+| **Persistence Layers** | SQLite + FTS5 indexing, NetworkX Acyclic Models, JSON Flat-files |
+| **Telemetry Access** | Tiingo API, OANDA API, Capital.com direct REST + WSS implementations |
+| **Client Protocols** | Async Python-Telegram-Bot (V21 API Layer) |
+| **Security Specifications** | PyCryptodome AES-256 / RSA cryptographic exchange |
 
 ---
 
-## Testing & Validation Framework
+## Validation & Testing Diagnostics
 
-The repository is covered by continuous integration tests guaranteeing robustness across discrete analytical skills.
+The repository implements strict integration tests running algorithmic sweeps against internal logic.
 ```bash
 python -m pytest tests/
 ```
 
-### End-to-End Behavioral Validation
-A deterministic scenario replay engine evaluates the agent against historical market anomalies:
+### Deterministic Behavioral Replays
+To guarantee non-deterministic AI parameters maintain consistency across structural breaks, system architectures must successfully endure replay diagnostics:
 ```bash
 python -m euroscope.testing.report_generator --output behavioral_report.md
 ```
-Validates resilience against constraints such as the Sideways Market Trap, Central Bank Rate Shocks, Institutional Liquidity Sweeps, and Conflicting Multi-Timeframe signals.
+Guarantees systemic operation during specific constraints such as the ECB quantitative structural shocks and extreme deviation scenarios.
 
 ---
 
-## License
-Proprietary software. All rights reserved.
+## Deployment Scope
+Private intelligence engine build. All licensing protocols restricted.
