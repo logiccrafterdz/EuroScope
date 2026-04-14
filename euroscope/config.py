@@ -2,37 +2,38 @@
 EuroScope Configuration
 
 All settings sourced from environment variables (with .env support).
+Now hardened with Pydantic for strict type validation.
 """
 
 import os
-from dataclasses import dataclass, field
+import logging
+from typing import Optional, List, Tuple
+from pydantic import BaseModel, Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from dotenv import load_dotenv
 
 load_dotenv()
+logger = logging.getLogger("euroscope.config")
 
 
-@dataclass
-class LLMConfig:
+class LLMConfig(BaseModel):
     api_key: str = ""
     api_base: str = "https://api.deepseek.com"
     model: str = "deepseek-chat"
     max_tokens: int = 4096
     temperature: float = 0.4
-    # Fallback provider
     fallback_api_key: str = ""
     fallback_api_base: str = "https://api.openai.com/v1"
     fallback_model: str = "gpt-4o-mini"
 
 
-@dataclass
-class TelegramConfig:
+class TelegramConfig(BaseModel):
     token: str = ""
-    allowed_users: list[int] = field(default_factory=list)
+    allowed_users: List[int] = Field(default_factory=list)
     web_app_url: str = ""
 
 
-@dataclass
-class DataConfig:
+class DataConfig(BaseModel):
     brave_api_key: str = ""
     alphavantage_key: str = ""
     tiingo_key: str = ""
@@ -43,27 +44,30 @@ class DataConfig:
     capital_api_key: str = ""
     capital_identifier: str = ""
     capital_password: str = ""
-    symbol: str = "EURUSD=X"  # Yahoo Finance symbol for EUR/USD
+    symbol: str = "EURUSD=X"
     update_interval_minutes: int = 15
 
 
-@dataclass
-class Config:
-    llm: LLMConfig = field(default_factory=LLMConfig)
-    telegram: TelegramConfig = field(default_factory=TelegramConfig)
-    data: DataConfig = field(default_factory=DataConfig)
+class Config(BaseSettings):
+    model_config = SettingsConfigDict(extra="ignore")
+
+    api_secret_key: str = Field(default="euroscope-zenith-v5")
+    llm: LLMConfig = Field(default_factory=LLMConfig)
+    telegram: TelegramConfig = Field(default_factory=TelegramConfig)
+    data: DataConfig = Field(default_factory=DataConfig)
+    
     log_level: str = "INFO"
     data_dir: str = "data"
     rate_limit_requests: int = 5
     rate_limit_window_minutes: int = 1
-    admin_chat_ids: list[str] = field(default_factory=list)
+    admin_chat_ids: List[str] = Field(default_factory=list)
     vector_memory_ttl_days: int = 30
     proactive_analysis_interval_minutes: int = 15
     proactive_alert_cache_minutes: int = 15
-    proactive_alert_chat_ids: list[int] = field(default_factory=list)
-    proactive_quiet_hours: tuple[int, int] | None = None
+    proactive_alert_chat_ids: List[int] = Field(default_factory=list)
+    proactive_quiet_hours: Optional[Tuple[int, int]] = None
     proactive_disable_weekends: bool = True
-    proactive_holiday_dates: list[str] = field(default_factory=list)
+    proactive_holiday_dates: List[str] = Field(default_factory=list)
     paper_trading_only: bool = True
     safety_news_block_minutes: int = 30
     safety_asian_min_confidence: float = 0.75
@@ -71,9 +75,7 @@ class Config:
 
     @classmethod
     def _validate_env_syntax(cls, filepath=".env"):
-        """Check for common syntax errors in .env file (L-4)."""
-        import logging
-        logger = logging.getLogger("euroscope.config")
+        """Check for common syntax errors in .env file."""
         if not os.path.exists(filepath):
             return
         try:
@@ -96,29 +98,31 @@ class Config:
         """Load configuration from environment variables."""
         cls._validate_env_syntax()
         
-        # Parse allowed users
+        # Parse allowed users cleanly
         allowed_raw = os.getenv("EUROSCOPE_TELEGRAM_ALLOWED_USERS", "")
-        allowed_users = []
-        if allowed_raw:
-            allowed_users = [int(uid.strip()) for uid in allowed_raw.split(",") if uid.strip()]
+        allowed_users = [int(uid.strip()) for uid in allowed_raw.split(",") if uid.strip() and uid.strip().lstrip('-').isdigit()]
+        
         admin_raw = os.getenv("EUROSCOPE_ADMIN_CHAT_IDS", "")
         admin_chat_ids = [cid.strip() for cid in admin_raw.split(",") if cid.strip()]
+        
         primary_key = os.getenv("EUROSCOPE_LLM_API_KEY", "")
         fallback_key = os.getenv("EUROSCOPE_LLM_FALLBACK_API_KEY", "")
+        
         proactive_chat_raw = os.getenv("EUROSCOPE_PROACTIVE_CHAT_IDS", "")
-        proactive_chat_ids = [
-            int(cid.strip()) for cid in proactive_chat_raw.split(",") if cid.strip()
-        ]
+        proactive_chat_ids = [int(cid.strip()) for cid in proactive_chat_raw.split(",") if cid.strip() and cid.strip().lstrip('-').isdigit()]
+        
         quiet_hours_raw = os.getenv("EUROSCOPE_PROACTIVE_QUIET_HOURS", "")
         quiet_hours = None
         if "-" in quiet_hours_raw:
             parts = [p.strip() for p in quiet_hours_raw.split("-", 1)]
             if len(parts) == 2 and parts[0].isdigit() and parts[1].isdigit():
                 quiet_hours = (int(parts[0]), int(parts[1]))
+                
         holidays_raw = os.getenv("EUROSCOPE_PROACTIVE_HOLIDAYS", "")
         holiday_dates = [d.strip() for d in holidays_raw.split(",") if d.strip()]
 
-        return cls(
+        config_data = dict(
+            api_secret_key=os.getenv("EUROSCOPE_API_SECRET", "euroscope-zenith-v5"),
             llm=LLMConfig(
                 api_key=primary_key,
                 api_base=os.getenv("EUROSCOPE_LLM_API_BASE", "https://api.deepseek.com"),
@@ -162,8 +166,9 @@ class Config:
             safety_asian_min_confidence=float(os.getenv("EUROSCOPE_SAFETY_ASIAN_MIN_CONFIDENCE", "0.75")),
             safety_volatility_stop_min=int(os.getenv("EUROSCOPE_SAFETY_VOLATILITY_STOP_MIN", "25")),
         )
+        return cls(**config_data)
 
-    def validate(self) -> list[str]:
+    def validate(self) -> List[str]:
         """Return list of configuration warnings."""
         warnings = []
         if not self.llm.api_key:
@@ -181,10 +186,7 @@ class Config:
         return warnings
 
     async def validate_connections(self) -> dict[str, bool]:
-        """
-        Quick connectivity check for configured APIs.
-        Returns {service_name: is_reachable}.
-        """
+        """Quick connectivity check for configured APIs."""
         import httpx
         import asyncio
         results = {}

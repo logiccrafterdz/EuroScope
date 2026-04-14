@@ -120,3 +120,55 @@ def async_retry(max_attempts: int = 3, delay: float = 1.0,
 
         return wrapper
     return decorator
+
+class CircuitBreakerOpenException(Exception):
+    """Raised when the circuit breaker is open to fail fast."""
+    pass
+
+class AsyncCircuitBreaker:
+    """
+    Asynchronous Circuit Breaker state machine.
+    Transitions to OPEN state and fails fast after consecutive failures,
+    then allows half-open probes after a timeout.
+    """
+    def __init__(self, exceptions=(Exception,), failure_threshold=3, recovery_timeout=60.0):
+        self.exceptions = exceptions
+        self.failure_threshold = failure_threshold
+        self.recovery_timeout = recovery_timeout
+        self.failure_count = 0
+        self.last_failure_time = 0.0
+        self.state = "CLOSED"  # CLOSED, OPEN, HALF_OPEN
+        
+    def _update_state(self):
+        if self.state == "OPEN":
+            if time.time() - self.last_failure_time > self.recovery_timeout:
+                self.state = "HALF_OPEN"
+                logger.info("Circuit breaker transitioning from OPEN ➔ HALF_OPEN. Probing...")
+                
+    async def call(self, func, *args, **kwargs):
+        self._update_state()
+        
+        if self.state == "OPEN":
+            raise CircuitBreakerOpenException(f"Circuit breaker is OPEN. Fast failing call to {func.__name__}")
+            
+        try:
+            result = await func(*args, **kwargs)
+            
+            if self.state == "HALF_OPEN":
+                logger.info(f"Circuit breaker probe succeeded! Transitioning HALF_OPEN ➔ CLOSED.")
+                self.state = "CLOSED"
+                self.failure_count = 0
+                
+            return result
+            
+        except self.exceptions as e:
+            self.failure_count += 1
+            self.last_failure_time = time.time()
+            
+            if self.state == "HALF_OPEN" or self.failure_count >= self.failure_threshold:
+                if self.state != "OPEN":
+                    logger.critical(f"Circuit breaker tripped OPEN after {self.failure_count} failures! Outage on {func.__name__}")
+                self.state = "OPEN"
+                
+            raise e
+

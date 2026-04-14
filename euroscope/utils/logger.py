@@ -14,26 +14,46 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 
-class JSONFormatter(logging.Formatter):
-    """Formats log records as JSON lines for structured file logging."""
+from pythonjsonlogger import jsonlogger
+import uuid
+import threading
 
-    def format(self, record: logging.LogRecord) -> str:
-        log_entry = {
-            "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-            "level": record.levelname,
-            "logger": record.name,
-            "message": record.getMessage(),
-            "module": record.module,
-            "function": record.funcName,
-            "line": record.lineno,
-        }
-        if record.exc_info and record.exc_info[0]:
-            log_entry["exception"] = self.formatException(record.exc_info)
-        # Include any extra fields
-        for key in ("duration_ms", "operation", "data"):
-            if hasattr(record, key):
-                log_entry[key] = getattr(record, key)
-        return json.dumps(log_entry, ensure_ascii=False)
+# Thread-local storage for correlation IDs
+_log_context = threading.local()
+
+def get_correlation_id() -> str:
+    if not hasattr(_log_context, "correlation_id"):
+        _log_context.correlation_id = str(uuid.uuid4())
+    return _log_context.correlation_id
+
+def set_correlation_id(cid: str):
+    _log_context.correlation_id = cid
+
+def clear_correlation_id():
+    if hasattr(_log_context, "correlation_id"):
+        del _log_context.correlation_id
+
+class CorrelationIdFilter(logging.Filter):
+    """Injects a correlation_id into all log records."""
+    def filter(self, record):
+        record.correlation_id = get_correlation_id()
+        return True
+
+class CustomJsonFormatter(jsonlogger.JsonFormatter):
+    """Extended JSON formatter with UTC injection and required fields."""
+    def add_fields(self, log_record, record, message_dict):
+        super().add_fields(log_record, record, message_dict)
+        if not log_record.get('timestamp'):
+            now = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.%fZ')
+            log_record['timestamp'] = now
+        if log_record.get('level'):
+            log_record['level'] = log_record['level'].upper()
+        else:
+            log_record['level'] = record.levelname
+        log_record['logger'] = record.name
+        log_record['module'] = record.module
+        log_record['function'] = record.funcName
+        log_record['line'] = record.lineno
 
 
 class ConsoleFormatter(logging.Formatter):
@@ -77,10 +97,11 @@ def setup_structured_logging(level: str = "INFO", log_dir: str = "data/logs"):
     import os
     console = logging.StreamHandler(sys.stdout)
     if os.getenv("EUROSCOPE_JSON_CONSOLE", "0") == "1":
-        console.setFormatter(JSONFormatter())
+        console.setFormatter(CustomJsonFormatter('%(timestamp)s %(level)s %(name)s %(message)s'))
     else:
         console.setFormatter(ConsoleFormatter())
     console.setLevel(getattr(logging, level.upper(), logging.INFO))
+    console.addFilter(CorrelationIdFilter())
     root.addHandler(console)
 
     # File handler — JSON structured
@@ -89,8 +110,9 @@ def setup_structured_logging(level: str = "INFO", log_dir: str = "data/logs"):
     log_file = log_path / f"euroscope_{datetime.now(timezone.utc).strftime('%Y%m%d')}.jsonl"
 
     file_handler = logging.FileHandler(str(log_file), encoding="utf-8")
-    file_handler.setFormatter(JSONFormatter())
+    file_handler.setFormatter(CustomJsonFormatter('%(timestamp)s %(level)s %(correlation_id)s %(name)s %(message)s'))
     file_handler.setLevel(logging.DEBUG)  # Always capture everything in file
+    file_handler.addFilter(CorrelationIdFilter())
     root.addHandler(file_handler)
 
     # Suppress noisy third-party loggers

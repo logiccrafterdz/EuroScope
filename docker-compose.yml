@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  euroscope:
+    build: .
+    container_name: euroscope-zenith
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - euroscope_data:/app/data
+    env_file:
+      - .env
+    environment:
+      - EUROSCOPE_DATA_DIR=/app/data
+      - EUROSCOPE_PORT=8080
+      - EUROSCOPE_JSON_CONSOLE=1  # Always use JSON structured logging in Docker
+
+volumes:
+  euroscope_data:
+    name: euroscope-persistent-data

@@ -39,6 +39,8 @@ class FundamentalDataProvider:
         self._cache: dict[str, tuple[dict, datetime]] = {}
         self._cache_ttl = timedelta(hours=24)  # Extended for fallback
         self.session = httpx.AsyncClient(timeout=10)
+        from euroscope.utils.resilience import AsyncCircuitBreaker
+        self.breaker = AsyncCircuitBreaker(exceptions=(httpx.HTTPError, asyncio.TimeoutError), failure_threshold=3, recovery_timeout=120)
         self.last_quality = "complete"
         self.warnings = []
 
@@ -64,13 +66,17 @@ class FundamentalDataProvider:
         max_retries = 3
         for attempt in range(max_retries):
             try:
-                resp = await self.session.get(FRED_BASE_URL, params={
-                    "series_id": series_id,
-                    "api_key": self.fred_api_key,
-                    "file_type": "json",
-                    "sort_order": "desc",
-                    "limit": limit,
-                })
+                resp = await self.breaker.call(
+                    self.session.get,
+                    FRED_BASE_URL,
+                    params={
+                        "series_id": series_id,
+                        "api_key": self.fred_api_key,
+                        "file_type": "json",
+                        "sort_order": "desc",
+                        "limit": limit,
+                    }
+                )
                 resp.raise_for_status()
                 data = resp.json()
 
@@ -87,6 +93,10 @@ class FundamentalDataProvider:
                 return observations
 
             except Exception as e:
+                from euroscope.utils.resilience import CircuitBreakerOpenException
+                if isinstance(e, CircuitBreakerOpenException):
+                    logger.warning(f"FRED circuit breaker OPEN for {series_id}")
+                    break
                 logger.warning(f"Fetch attempt {attempt+1} failed for {series_id}: {e}")
                 if attempt < max_retries - 1:
                     await asyncio.sleep(2 ** attempt)  # Exponential backoff

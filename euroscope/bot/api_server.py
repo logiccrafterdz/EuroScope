@@ -38,7 +38,9 @@ class APIServer:
         
         # Security & Limits
         import time
-        self.api_secret = getattr(self.config, "api_secret_key", "euroscope-zenith-v5")
+        self.api_secret = getattr(self.config, "api_secret_key", None)
+        if not self.api_secret or self.api_secret == "euroscope-zenith-v5":
+            logger.warning("Using default API secret. It is HIGHLY recommended to set EUROSCOPE_API_SECRET in your .env.")
         self.rate_limits = {}  # Format: {"ip:endpoint": [timestamp1, timestamp2]}
         
         # Initialize WebhookDispatcher for outbound events
@@ -53,7 +55,7 @@ class APIServer:
             # API Authentication for protected routes
             if request.path.startswith("/api/") and request.path not in ("/api/status", "/api/v1/status"):
                 token = request.headers.get("X-API-Key", "")
-                if token != self.api_secret and token != "euroscope-zenith-v5":
+                if self.api_secret and token != self.api_secret:
                     logger.warning(f"Unauthorized API access attempt to {request.path} from {request.remote}")
                     return web.json_response({"success": False, "error": "Unauthorized API Access"}, status=401)
                     
@@ -62,7 +64,20 @@ class APIServer:
             except Exception as e:
                 logger.error(f"API Error ({request.path}): {e}")
                 response = web.json_response({"success": False, "error": str(e)}, status=500)
-        response.headers["Access-Control-Allow-Origin"] = "*"
+        
+        # CORS Restriction
+        allowed_origins = os.getenv("EUROSCOPE_CORS_ORIGINS", "*")
+        origin = request.headers.get('Origin', '*')
+        
+        if allowed_origins != "*":
+            origins_list = [o.strip() for o in allowed_origins.split(",")]
+            if origin in origins_list:
+                response.headers["Access-Control-Allow-Origin"] = origin
+            else:
+                response.headers["Access-Control-Allow-Origin"] = "null"
+        else:
+            response.headers["Access-Control-Allow-Origin"] = origin if origin != '*' else '*'
+            
         response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
         response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-Requested-With, X-API-Key"
         return response

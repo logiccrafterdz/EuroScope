@@ -48,6 +48,13 @@ class LLMRouter:
         self._failure_count: int = 0
         self._warned_identical_keys: bool = False
 
+        from euroscope.utils.resilience import AsyncCircuitBreaker
+        self.breaker = AsyncCircuitBreaker(
+            exceptions=(httpx.HTTPError, asyncio.TimeoutError),
+            failure_threshold=5,
+            recovery_timeout=60.0
+        )
+
     @classmethod
     def from_config(cls, primary_key: str = "", primary_base: str = "",
                     primary_model: str = "", fallback_key: str = "",
@@ -109,7 +116,7 @@ class LLMRouter:
         for provider in self.providers:
             for attempt in range(self.max_retries + 1):
                 try:
-                    result = await call_fn(provider)
+                    result = await self.breaker.call(call_fn, provider)
                     self._last_provider = provider.name
                     return result
 
@@ -155,6 +162,10 @@ class LLMRouter:
                     break
 
                 except Exception as e:
+                    from euroscope.utils.resilience import CircuitBreakerOpenException
+                    if isinstance(e, CircuitBreakerOpenException):
+                        logger.critical(f"LLM Circuit breaker OPEN on {provider.name}. Skipping to next.")
+                        break
                     last_error = e
                     wait = 2 ** attempt
                     logger.warning(f"{provider.name}: Error ({e}), retry in {wait}s")
