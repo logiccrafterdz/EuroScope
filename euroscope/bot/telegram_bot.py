@@ -172,8 +172,8 @@ class EuroScopeBot:
                 logger.warning(f'Blocked {chat_id} for rate limit violation')
                 return False
             return True
-        except Exception:
-            logger.error('Rate limiter failed — allowing request for availability')
+        except Exception as e:
+            logger.error(f'Rate limiter failed ({e}) — allowing request for availability')
             return True
 
     async def _get_thread(self, chat_id: int, key: str) -> Optional[int]:
@@ -311,8 +311,8 @@ class EuroScopeBot:
         if isinstance(update, Update) and update.effective_message:
             try:
                 await update.effective_message.reply_text('⚠️ An internal error occurred. Please try again later.')
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f'Failed to send generic error message: {e}')
 
     def build_app(self) -> Application:
         """Build and configure the Telegram bot application."""
@@ -436,6 +436,6 @@ class EuroScopeBot:
         except Conflict as e:
             logger.error(f"Telegram polling conflict: {e}")
             return
-        except Exception:
-            logger.exception("Telegram polling crashed")
+        except Exception as e:
+            logger.exception(f"Telegram polling crashed: {e}")
             raise

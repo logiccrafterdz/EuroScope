@@ -198,8 +198,8 @@ class BriefingEngine:
                 )
                 if res.success and res.metadata and res.metadata.get("formatted"):
                     return res.metadata["formatted"]
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Briefing: news fetch failed: {e}")
             return "No recent news."
 
         async def fetch_macro():
@@ -210,8 +210,8 @@ class BriefingEngine:
                 )
                 if res.success and res.metadata and res.metadata.get("formatted"):
                     return res.metadata["formatted"]
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Briefing: macro fetch failed: {e}")
             return "No macro data."
 
         news_result, macro_result = await asyncio.gather(

@@ -131,7 +131,8 @@ class CronScheduler:
         cache_minutes = getattr(self.config, "proactive_alert_cache_minutes", 60)
         try:
             cache_minutes = int(cache_minutes)
-        except Exception:
+        except Exception as e:
+            logger.debug(f"Failed to parse proactive_alert_cache_minutes: {e}")
             cache_minutes = 60
         self._alert_cache = ProactiveAlertCache(
             cache_duration_minutes=cache_minutes,
@@ -635,7 +636,8 @@ class CronScheduler:
         interval_value = getattr(self.config, "proactive_analysis_interval_minutes", 15)
         try:
             interval = int(interval_value)
-        except Exception:
+        except Exception as e:
+            logger.debug(f"Failed to parse proactive_analysis_interval_minutes: {e}")
             interval = 15
             
         seconds = max(60, interval * 60)
@@ -922,8 +924,8 @@ class CronScheduler:
                 await task
             except asyncio.CancelledError:
                 pass
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Error while canceling cron task: {e}")
         logger.info("Cron scheduler stopped")
 
     async def _loop(self):

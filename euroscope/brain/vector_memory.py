@@ -244,7 +244,8 @@ class VectorMemory:
             try:
                 row = self._conn.execute(f"SELECT COUNT(*) FROM {name}").fetchone()
                 stats[name] = row[0]
-            except Exception:
+            except Exception as e:
+                logger.debug(f"Failed to get collection stats for {name}: {e}")
                 stats[name] = 0
         return stats
 

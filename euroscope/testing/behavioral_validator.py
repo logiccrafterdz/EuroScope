@@ -169,7 +169,8 @@ class BehavioralValidator:
                 )
                 if df is not None and not df.empty:
                     return self._normalize_df(df)
-            except Exception:
+            except Exception as e:
+                # logger.debug(f"Tiingo load failed, falling back to yfinance: {e}")
                 pass
 
         # Fallback to yfinance
@@ -185,7 +186,8 @@ class BehavioralValidator:
             df = self._normalize_df(df)
             if not df.empty:
                 return df
-        except Exception:
+        except Exception as e:
+            # logger.debug(f"yfinance load failed: {e}")
             pass
 
         if df.empty:

@@ -858,7 +858,8 @@ class LLMInterface:
 
             ws = WorkspaceManager()
             return ws.build_system_prompt()
-        except Exception:
+        except Exception as e:
+            logger.debug(f"Failed to build workspace system prompt: {e}")
             return SYSTEM_PROMPT
 
     def _get_react_system_prompt(self) -> str:
@@ -997,7 +998,8 @@ class LLMInterface:
             if len(raw) > 3000:
                 return raw[:3000] + "... [truncated due to length]"
             return raw
-        except Exception:
+        except Exception as e:
+            logger.debug(f"Failed to safely format tool response: {e}")
             return str(data)[:3000] + "... [truncated]"
 
     def _summarize_observations(self, observations: list[str]) -> str:

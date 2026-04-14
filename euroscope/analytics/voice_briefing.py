@@ -262,8 +262,8 @@ class VoiceBriefingEngine:
                 alerts = await self.storage.get_active_alerts()
                 if alerts and len(alerts) > 2:
                     warnings.append(f"{len(alerts)} active price alerts")
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Failed to fetch active alerts: {e}")
 
         if warnings:
             return BriefingSection(

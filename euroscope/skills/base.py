@@ -162,7 +162,8 @@ class BaseSkill(ABC):
                 self._skill_md = skill_file.read_text(encoding="utf-8")
             else:
                 self._skill_md = ""
-        except Exception:
+        except Exception as e:
+            logger.debug(f"[{self.name}] Failed to read SKILL.md: {e}")
             self._skill_md = ""
 
         return self._skill_md

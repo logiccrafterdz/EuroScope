@@ -284,7 +284,8 @@ class TechnicalAnalysisSkill(BaseSkill):
         if df is not None and hasattr(df, "iloc") and len(df) > 0:
             try:
                 last_close = float(df["Close"].iloc[-1])
-            except Exception:
+            except Exception as e:
+                logger.debug(f"Failed to get last close price: {e}")
                 last_close = None
         if last_close is not None:
             if self._breaks_strong_zone(last_close, liquidity_zones, pattern_type):

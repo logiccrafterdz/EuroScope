@@ -417,8 +417,8 @@ class Orchestrator:
             trades_res = await self.run_skill("signal_executor", "list_trades", context=context)
             if trades_res.success and trades_res.data:
                 open_trades = [t for t in trades_res.data if str(t.get("status", "")).upper() == "OPEN"]
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Failed to query open trades: {e}")
 
         return {
             "price": price,

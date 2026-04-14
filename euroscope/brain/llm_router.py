@@ -119,7 +119,8 @@ class LLMRouter:
                     error_preview = ""
                     try:
                         error_preview = e.response.text[:200]
-                    except Exception:
+                    except Exception as e:
+                        logger.debug(f"Failed to read error response: {e}")
                         error_preview = ""
 
                     # Don't retry on auth errors — move to next provider
@@ -276,7 +277,8 @@ class LLMRouter:
             args = function_call_response.get("arguments", "{}")
             try:
                 parsed_args = json.loads(args) if isinstance(args, str) else args
-            except Exception:
+            except Exception as e:
+                logger.debug(f"Failed to parse function args: {e}")
                 parsed_args = {}
             function_calls.append({
                 "name": function_call_response.get("name"),
@@ -289,7 +291,8 @@ class LLMRouter:
             args = func.get("arguments", "{}")
             try:
                 parsed_args = json.loads(args) if isinstance(args, str) else args
-            except Exception:
+            except Exception as e:
+                logger.debug(f"Failed to parse tool call args: {e}")
                 parsed_args = {}
             function_calls.append({
                 "id": tool_call.get("id"),

@@ -70,7 +70,8 @@ class SignalExecutor:
             action = tx["action"]
             try:
                 payload = json.loads(tx["payload"])
-            except Exception:
+            except Exception as e:
+                logger.error(f"Failed to parse transaction payload {tx_id}: {e}")
                 await self.storage.update_transaction_status(tx_id, "failed")
                 continue
 

@@ -199,7 +199,8 @@ class Config:
                 async with httpx.AsyncClient(timeout=5.0) as client:
                     await client.head(url)
                 return name, True
-            except Exception:
+            except Exception as e:
+                logger.debug(f"Configuration check for {name} failed: {e}")
                 return name, False
 
         tasks = [check_url(name, url) for name, url in checks]

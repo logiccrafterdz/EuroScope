@@ -326,8 +326,8 @@ class EuroScopeAgent:
                 if trades_res.success and trades_res.data:
                     open_trades = [t for t in trades_res.data if str(t.get("status", "")).upper() == "OPEN"]
                     self.world_model.update_risk_state(open_trades)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Failed to fetch open trades for risk state: {e}")
 
             self._last_deep_analysis = time.time()
             logger.info(f"Deep analysis complete: {self.world_model.get_compact_summary()}")

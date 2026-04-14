@@ -201,7 +201,8 @@ class CorrelationMonitorSkill(BaseSkill):
             rolling = series_a.rolling(window).corr(series_b)
             last_valid = rolling.dropna()
             return float(last_valid.iloc[-1]) if len(last_valid) > 0 else None
-        except Exception:
+        except Exception as e:
+            logger.debug(f"Rolling corr failed: {e}")
             return None
 
     def _format_correlations(self, data: dict) -> str:
