@@ -78,7 +78,7 @@ class FundamentalAnalysisSkill(BaseSkill):
         try:
             from euroscope.container import get_container
             container = get_container()
-            if not container or not container.llm: return
+            if not container or not container.router: return
             
             # Use top max 3 titles for extraction to save tokens
             combined = "\n".join([a.get('title', '') for a in articles[:3]])
@@ -89,7 +89,7 @@ class FundamentalAnalysisSkill(BaseSkill):
                 f"News:\n{combined}\n"
                 "Respond ONLY with valid JSON array."
             )
-            resp = await container.llm.chat([{"role": "user", "content": prompt}], temperature=0.1)
+            resp = await container.router.chat([{"role": "user", "content": prompt}], temperature=0.1)
             import re, json
             match = re.search(r'\[.*\]', resp, re.DOTALL)
             if match:
