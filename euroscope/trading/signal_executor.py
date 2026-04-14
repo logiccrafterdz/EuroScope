@@ -445,19 +445,20 @@ class SignalExecutor:
         # Phase 3: Trigger Counterfactual Engine
         try:
             from euroscope.learning.counterfactual import CounterfactualEngine
-            from euroscope.data.models import Trade
+            from euroscope.data.models import TradingSignal
             from datetime import datetime, UTC
-            trade_obj = Trade(
+            trade_obj = TradingSignal(
                 id=signal_id,
                 direction=direction,
                 entry_price=entry,
-                exit_price=exit_price,
                 stop_loss=signal.get("stop_loss", 0),
                 take_profit=signal.get("take_profit", 0),
+                confidence=signal.get("confidence", 0),
+                timeframe=signal.get("timeframe", "M15"),
                 status="CLOSED",
-                pnl=pnl_pips,
-                entry_time=datetime.fromisoformat(signal["opened_at"]) if signal.get("opened_at") else datetime.now(UTC),
-                exit_time=datetime.now(UTC),
+                pnl_pips=pnl_pips,
+                created_at=signal.get("opened_at") or datetime.now(UTC).isoformat(),
+                closed_at=datetime.now(UTC).isoformat(),
             )
             engine = CounterfactualEngine()
             engine.run_in_background(trade_obj)

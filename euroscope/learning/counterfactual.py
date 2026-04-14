@@ -11,7 +11,7 @@ import asyncio
 import logging
 from typing import Dict, Any
 
-from euroscope.data.models import Trade
+from euroscope.data.models import TradingSignal
 
 logger = logging.getLogger("euroscope.learning.counterfactual")
 
@@ -26,7 +26,7 @@ class CounterfactualEngine:
             {"name": "Tighter Take Profit (-5 pips)", "sl_mod": 0, "tp_mod": -0.0005},
         ]
         
-    async def analyze_trade(self, trade: Trade):
+    async def analyze_trade(self, trade: TradingSignal):
         """Analyze a closed trade asynchronously in the background."""
         logger.info(f"Counterfactual Engine starting analysis for Trade ID {trade.id}...")
         
@@ -39,9 +39,9 @@ class CounterfactualEngine:
             
             # Dummy analysis result
             advise = "Keep current risk parameters."
-            if trade.pnl and trade.pnl < 0:
+            if trade.pnl_pips and trade.pnl_pips < 0:
                 advise = "Wider SL (+10 pips) might have avoided the stop hunt, but needs more M1 data verification."
-            elif trade.pnl and trade.pnl > 0:
+            elif trade.pnl_pips and trade.pnl_pips > 0:
                 advise = "Trailing stop executed perfectly. Letting it run for 24H would have yielded less."
                 
             logger.info(f"Counterfactual Analysis (Trade {trade.id}): {advise}")
@@ -49,16 +49,16 @@ class CounterfactualEngine:
             # Store insight into vector memory!
             from euroscope.container import get_container
             container = get_container()
-            if container and container.memory:
-                container.memory.store_insight(
-                    f"Counterfactual review for {trade.direction} trade {trade.id} (PNL: {trade.pnl}): {advise}",
+            if container and hasattr(container, "vector_memory") and container.vector_memory:
+                container.vector_memory.store_insight(
+                    f"Counterfactual review for {trade.direction} trade {trade.id} (PNL: {trade.pnl_pips}): {advise}",
                     tags=["counterfactual", "risk_tuning"]
                 )
             
         except Exception as e:
             logger.error(f"Failed counterfactual analysis for Trade {trade.id}: {e}")
 
-    def run_in_background(self, trade: Trade):
+    def run_in_background(self, trade: TradingSignal):
         """Fire and forget the analysis logic."""
         if not trade or trade.status != "CLOSED":
             return

@@ -115,7 +115,7 @@ class ConflictArbiter:
             from euroscope.brain.multi_agent import DeliberationCommittee
             from euroscope.container import get_container
             container = get_container()
-            llm = self.llm_router or (container.llm if container else None)
+            llm = self.llm_router or (container.router if container else None)
             
             if llm:
                 committee = DeliberationCommittee(llm)
