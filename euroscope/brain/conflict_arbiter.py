@@ -5,6 +5,7 @@ Phase 3 Part 2: Upgraded with Multi-Agent Deliberation hook.
 """
 
 import logging
+import time
 from typing import Dict, Any, List
 from ..skills.base import SkillContext
 
@@ -17,6 +18,8 @@ class ConflictArbiter:
     """
     def __init__(self, llm_router=None):
         self.llm_router = llm_router
+        self._last_committee_time = 0.0  # epoch timestamp
+        self._committee_cooldown_sec = 3600  # 1 hour
         
     async def resolve(self, context: SkillContext) -> Dict[str, Any]:
         """
@@ -114,21 +117,26 @@ class ConflictArbiter:
             needs_deliberation = True
             
         if needs_deliberation:
-            # We attempt to use the Deliberation Committee
-            from euroscope.brain.multi_agent import DeliberationCommittee
-            from euroscope.container import get_container
-            container = get_container()
-            llm = self.llm_router or (container.router if container else None)
-            
-            if llm:
-                committee = DeliberationCommittee(llm)
-                committee_verdict = await committee.deliberate(context)
-                # Let the committee override to NEUTRAL if they find it too ambiguous
-                logger.info("Committee override applied.")
-                committee_verdict["conflicts_resolved"] = self._list_conflicts(committee_verdict["final_direction"], weighted_signals, context)
-                return committee_verdict
+            # Cooldown: max 1 committee call per hour
+            elapsed = time.time() - self._last_committee_time
+            if elapsed < self._committee_cooldown_sec:
+                logger.info(f"Committee on cooldown ({int(self._committee_cooldown_sec - elapsed)}s remaining). Using statistical vote.")
             else:
-                logger.warning("Could not instantiate Multi-Agent Committee: No LLM router.")
+                # We attempt to use the Deliberation Committee
+                from euroscope.brain.multi_agent import DeliberationCommittee
+                from euroscope.container import get_container
+                container = get_container()
+                llm = self.llm_router or (container.router if container else None)
+                
+                if llm:
+                    committee = DeliberationCommittee(llm)
+                    committee_verdict = await committee.deliberate(context)
+                    self._last_committee_time = time.time()
+                    logger.info("Committee override applied.")
+                    committee_verdict["conflicts_resolved"] = self._list_conflicts(committee_verdict["final_direction"], weighted_signals, context)
+                    return committee_verdict
+                else:
+                    logger.warning("Could not instantiate Multi-Agent Committee: No LLM router.")
 
         if confidence < 0.35:
             final_direction = "NEUTRAL"
