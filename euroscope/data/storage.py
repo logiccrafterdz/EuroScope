@@ -259,6 +259,15 @@ class Storage:
             raise RuntimeError("Database pool not initialized")
         return pool
 
+    async def close(self):
+        """Close all connections in the pool."""
+        if self._pool is not None:
+            while not self._pool.empty():
+                conn = await self._pool.get()
+                await conn.close()
+            self._pool = None
+            logger.info("Database connection pool closed.")
+
     @asynccontextmanager
     async def _get_db(self):
         """Acquire a database connection from the pool."""

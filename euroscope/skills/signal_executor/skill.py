@@ -126,6 +126,8 @@ class SignalExecutorSkill(BaseSkill):
             return await self._trade_history()
         elif action == "update_trade":
             return await self._update_trade(context, **params)
+        elif action == "process_tick":
+            return await self._process_tick(context, **params)
         return SkillResult(success=False, error=f"Unknown action: {action}")
 
     async def execute_trade(self, context: SkillContext, **params) -> SkillResult:
@@ -391,6 +393,31 @@ class SignalExecutorSkill(BaseSkill):
             return SkillResult(success=True, data={"id": signal_id, "stop_loss": new_sl, "take_profit": new_tp})
                 
         return SkillResult(success=False, error="Storage not available")
+
+    async def _process_tick(self, context: SkillContext, **params) -> SkillResult:
+        """Process a price tick, evaluating trailing stops and TP/SL for all open trades."""
+        symbol = params.get("symbol", "EUR/USD")
+        bid = params.get("bid")
+        ask = params.get("ask")
+        current_price = params.get("current_price")
+        
+        if bid is None and current_price is not None:
+            bid = current_price
+        if ask is None and current_price is not None:
+            ask = current_price
+            
+        if bid is None or ask is None:
+            return SkillResult(success=False, error="bid and ask (or current_price) required")
+
+        if not self._executor:
+            self._init_executor()
+            
+        if self._executor:
+            # We call the internal _on_tick directly to process paper trades
+            await self._executor._on_tick(symbol, float(bid), float(ask))
+            return SkillResult(success=True, data={"processed": True})
+            
+        return SkillResult(success=False, error="Executor not initialized")
 
     async def _list_trades(self) -> SkillResult:
         if not self._executor:

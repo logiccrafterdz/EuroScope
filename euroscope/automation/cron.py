@@ -668,93 +668,16 @@ class CronScheduler:
                 if not current_price:
                     return
                     
-                # 2. Get open trades
-                trades_res = await cast(Any, orch).run_skill("signal_executor", "list_trades")
-                if not trades_res.success or not trades_res.data:
-                    return
-                    
-                open_trades = [t for t in trades_res.data if str(t.get("status", "")).upper() == "OPEN"]
+                # 2. Delegate all tick processing (trailing stops, TP/SL logic) to signal_executor
+                from euroscope.skills.base import SkillContext  # type: ignore
+                ctx = SkillContext()
                 
-                # 3. Check Trailing Stops & TP/SL
-                for trade in open_trades:
-                    direction = trade.get("direction")
-                    sl = trade.get("stop_loss")
-                    tp = trade.get("take_profit")
-                    entry = trade.get("entry_price")
-                    trade_id = trade.get("trade_id")
-                    
-                    # Context required for signal_executor standard signature
-                    from euroscope.skills.base import SkillContext  # type: ignore
-                    ctx = SkillContext()
-                    
-                    # --- Trailing Stop Logic ---
-                    if direction == "BUY":
-                        floating_pips = (current_price - entry) * 10000
-                        if floating_pips >= 20.0:
-                            # Move SL to Break-Even + 5 pips if SL is still below that
-                            new_sl = entry + 0.0005
-                            if sl < new_sl:
-                                logger.info(f"Trailing Stop Triggered ON {trade_id}: Moving SL {sl:.5f} -> {new_sl:.5f}")
-                                async with self._trade_lock:
-                                    await cast(Any, orch).run_skill(
-                                        "signal_executor", "update_trade", context=ctx,
-                                        trade_id=trade_id, stop_loss=new_sl
-                                    )
-                                sl = new_sl # Update local variable for TP/SL check below
-                                
-                    elif direction == "SELL":
-                        floating_pips = (entry - current_price) * 10000
-                        if floating_pips >= 20.0:
-                            # Move SL to Break-Even + 5 pips if SL is still above that
-                            new_sl = entry - 0.0005
-                            if sl > new_sl:
-                                logger.info(f"Trailing Stop Triggered ON {trade_id}: Moving SL {sl:.5f} -> {new_sl:.5f}")
-                                async with self._trade_lock:
-                                    await cast(Any, orch).run_skill(
-                                        "signal_executor", "update_trade", context=ctx,
-                                        trade_id=trade_id, stop_loss=new_sl
-                                    )
-                                sl = new_sl
-
-                    # --- TP/SL Hit Logic ---
-                    hit_tp = False
-                    hit_sl = False
-                    
-                    if direction == "BUY":
-                        if current_price >= tp: hit_tp = True
-                        if current_price <= sl: hit_sl = True
-                    elif direction == "SELL":
-                        if current_price <= tp: hit_tp = True
-                        if current_price >= sl: hit_sl = True
-                        
-                    if hit_tp or hit_sl:
-                        logger.info(f"Trade Monitor: {trade_id} hit {'TP' if hit_tp else 'SL'} at {current_price:.5f}")
-                        
-                        async with self._trade_lock:
-                            close_res = await cast(Any, orch).run_skill(
-                                "signal_executor", 
-                                "close_trade", 
-                                context=ctx,
-                                trade_id=trade_id, 
-                                exit_price=current_price
-                            )
-                        
-                        if close_res.success:
-                            closed_trade = close_res.data
-                            pnl = closed_trade.get("pnl_pips", 0)
-                            outcome_emoji = "✅" if pnl > 0 else "❌"
-                            
-                            chat_ids = getattr(self.config, "admin_chat_ids", [])
-                            for chat_id in chat_ids:
-                                msg = (
-                                    f"🤖 <b>Autonomous Trade Closed</b>\n\n"
-                                    f"Status: {outcome_emoji} {'Take Profit' if hit_tp else 'Stop Loss'} Hit\n"
-                                    f"Direction: <b>{direction}</b>\n"
-                                    f"Exit Price: {current_price:.5f}\n"
-                                    f"PnL: <b>{'+' if pnl > 0 else ''}{pnl:.1f} pips</b>\n\n"
-                                    f"<i>— EuroScope Auto-Trader</i>"
-                                )
-                                await self._send_proactive_alert_message(chat_id, msg)
+                async with self._trade_lock:
+                    await cast(Any, orch).run_skill(
+                        "signal_executor", "process_tick", 
+                        context=ctx,
+                        current_price=current_price
+                    )
             except Exception as e:
                 logger.error(f"Trade Monitor task failed: {e}", exc_info=True)
 

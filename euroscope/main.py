@@ -62,7 +62,7 @@ def main():
         logger.exception(f"EuroScope crashed during runtime: {e}")
         raise
     finally:
-        pass
+        logger.info("EuroScope V5 shutdown complete.")
 
 
 if __name__ == "__main__":
