@@ -88,6 +88,44 @@ class TradingStrategySkill(BaseSkill):
                         signal.reasoning.append(f"Warning: Counter H-TF Trend ({mtf_bias})")
                     else:
                         signal.reasoning += f" | Warning: Counter H-TF Trend ({mtf_bias})"
+                        
+            # --- Phase 3: Market Regime Memory Bank ---
+            current_state = {
+                "adx": ind["adx"],
+                "rsi": ind["rsi"],
+                "macd": ind["macd"],
+                "trend": signal.regime,
+                "volatility": "high" if isinstance(ind.get("atr"), dict) and ind["atr"].get("value", 0) > 0.0020 else "low",
+                "macro_bias": macro_data.get("bias", "neutral") if isinstance(macro_data, dict) else "neutral"
+            }
+            
+            try:
+                from euroscope.container import get_container
+                container = get_container()
+                if container and hasattr(container, "memory") and container.memory:
+                    similar = container.memory.query_similar_regimes(current_state, k=3)
+                    if similar and len(similar) >= 2:
+                        win_count = sum(1 for s in similar if s.get("outcome") in ("WIN", "PROFIT"))
+                        loss_count = sum(1 for s in similar if s.get("outcome") in ("LOSS", "STOPPED"))
+                        
+                        win_rate = win_count / len(similar)
+                        if win_rate < 0.33 and signal.direction != "WAIT":
+                            signal.confidence *= 0.6  # Penalize poor historical regimes
+                            msg = f"Regime Penalty: Similar past regimes failed {loss_count}/{len(similar)} times"
+                            if isinstance(signal.reasoning, list):
+                                signal.reasoning.append(msg)
+                            else:
+                                signal.reasoning += f" | {msg}"
+                        elif win_rate > 0.66 and signal.direction != "WAIT":
+                            signal.confidence = min(95.0, signal.confidence * 1.2)
+                            msg = f"Regime Boost: Similar past regimes succeeded {win_count}/{len(similar)} times"
+                            if isinstance(signal.reasoning, list):
+                                signal.reasoning.append(msg)
+                            else:
+                                signal.reasoning += f" | {msg}"
+            except Exception as mem_err:
+                import logging
+                logging.getLogger("euroscope.skill.strategy").debug(f"Regime memory check failed: {mem_err}")
 
             if isinstance(signal, TradingSignal):
                 return self._build_from_fallback(

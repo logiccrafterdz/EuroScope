@@ -441,6 +441,28 @@ class SignalExecutor:
         # Clean up high-water marks for trailing stops
         if signal_id in self._trailing_high_water_marks:
             del self._trailing_high_water_marks[signal_id]
+            
+        # Phase 3: Trigger Counterfactual Engine
+        try:
+            from euroscope.learning.counterfactual import CounterfactualEngine
+            from euroscope.data.models import Trade
+            from datetime import datetime, UTC
+            trade_obj = Trade(
+                id=signal_id,
+                direction=direction,
+                entry_price=entry,
+                exit_price=exit_price,
+                stop_loss=signal.get("stop_loss", 0),
+                take_profit=signal.get("take_profit", 0),
+                status="CLOSED",
+                pnl=pnl_pips,
+                entry_time=datetime.fromisoformat(signal["opened_at"]) if signal.get("opened_at") else datetime.now(UTC),
+                exit_time=datetime.now(UTC),
+            )
+            engine = CounterfactualEngine()
+            engine.run_in_background(trade_obj)
+        except Exception as e:
+            logger.error(f"Failed to trigger Counterfactual Engine: {e}")
 
         return {
             "id": signal_id,

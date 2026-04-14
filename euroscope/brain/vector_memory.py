@@ -56,6 +56,9 @@ class VectorMemory:
 
                 CREATE VIRTUAL TABLE IF NOT EXISTS market_events
                 USING fts5(doc_id, text, stored_at, timestamp, impact, metadata);
+
+                CREATE VIRTUAL TABLE IF NOT EXISTS regimes
+                USING fts5(doc_id, text, stored_at, timestamp, state_vector, outcome);
             """)
             self._conn.commit()
             self._available = True
@@ -234,13 +237,82 @@ class VectorMemory:
 
         return "\n".join(lines) if lines else ""
 
+    def store_regime_snapshot(self, state: dict, outcome: str) -> Optional[str]:
+        """Store a snapshot of the current market regime and its resulting outcome."""
+        if not self._available: return None
+        
+        doc_id = f"regime_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}"
+        now_iso = datetime.now(UTC).isoformat()
+        
+        # Formulate a text description of the state for FTS5 matching
+        text_desc = (
+            f"ADX: {state.get('adx')} RSI: {state.get('rsi')} "
+            f"MACD: {state.get('macd')} Trend: {state.get('trend')} "
+            f"Volatility: {state.get('volatility')} "
+            f"Macro: {state.get('macro_bias')}"
+        )
+        
+        try:
+            self._conn.execute(
+                "INSERT INTO regimes (doc_id, text, stored_at, timestamp, state_vector, outcome) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (doc_id, text_desc, now_iso, now_iso, str(state), outcome)
+            )
+            self._conn.commit()
+            return doc_id
+        except Exception as e:
+            logger.error(f"Failed to store regime snapshot: {e}")
+            return None
+
+    def query_similar_regimes(self, current_state: dict, k: int = 3) -> list[dict]:
+        """Find past market regimes that resemble the current state."""
+        if not self._available: return []
+        
+        # Build logical search query based on current prominent features
+        search_terms = []
+        if current_state.get('trend') in ('trending', 'ranging'):
+            search_terms.append(current_state.get('trend'))
+        if current_state.get('volatility') in ('high', 'low'):
+            search_terms.append(current_state.get('volatility'))
+        
+        if not search_terms:
+            return []
+            
+        fts_query = " OR ".join(search_terms)
+        results = self.search_similar(fts_query, k=k, collection="regimes")
+        
+        parsed_results = []
+        import ast
+        for r in results:
+            try:
+                # We need to extract outcome from the DB
+                # since search_similar doesn't return custom columns directly, let's fetch it
+                doc_id = r.get('doc_id')
+                # Wait, search_similar doesn't return doc_id in its list! It returns text and metadata.
+                # I will construct a direct query here to get 'outcome'
+                cursor = self._conn.execute(
+                    "SELECT text, state_vector, outcome, rank FROM regimes WHERE regimes MATCH ? ORDER BY rank LIMIT ?",
+                    (fts_query, k)
+                )
+                for row in cursor:
+                    parsed_results.append({
+                        "text": row["text"],
+                        "state_vector": ast.literal_eval(row["state_vector"]),
+                        "outcome": row["outcome"],
+                        "distance": abs(row["rank"])
+                    })
+                break # Only run the direct query once to get exactly what we need
+            except Exception as e:
+                logger.error(f"Failed to parse past regime: {e}")
+        return parsed_results
+
     def get_collection_stats(self) -> dict:
         """Get stats about all collections."""
         if not self._available:
             return {"available": False}
 
         stats = {"available": True}
-        for name in ("analyses", "insights", "market_events"):
+        for name in ("analyses", "insights", "market_events", "regimes"):
             try:
                 row = self._conn.execute(f"SELECT COUNT(*) FROM {name}").fetchone()
                 stats[name] = row[0]
@@ -257,7 +329,7 @@ class VectorMemory:
         cutoff_iso = cutoff_date.isoformat()
         total_deleted = 0
 
-        for name in ("analyses", "insights", "market_events"):
+        for name in ("analyses", "insights", "market_events", "regimes"):
             try:
                 cursor = self._conn.execute(
                     f"DELETE FROM {name} WHERE timestamp < ?",
