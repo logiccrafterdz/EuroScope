@@ -8,15 +8,15 @@
 
 EuroScope is an always-on trading intelligence agent that continuously monitors EUR/USD, forms market theses, and makes autonomous decisions. It combines a skills-based multi-agent architecture with an OODA-loop cognitive framework, institutional-grade analysis, adaptive learning, and real-time Telegram control.
 
-> **System Status:** Fully operational as an autonomous agent. The system runs a 30-second heartbeat loop, maintains a structured world model, tracks trading convictions with evidence-based confidence decay, and generates session-aware game plans.
+**System Status:** Fully operational as an autonomous agent. The system runs a 30-second heartbeat loop, maintains a structured world model, tracks trading convictions with evidence-based confidence decay, and generates session-aware game plans.
 
 ---
 
 ## Architecture Overview
 
-EuroScope operates as an **autonomous agent**, not a chatbot. The core difference:
+EuroScope operates as an **autonomous agent**, transcending the traditional chatbot paradigm.
 
-| Aspect | Old (Chatbot) | New (Agent) |
+| Aspect | Traditional Chatbot | EuroScope Autonomous Agent |
 |:---|:---|:---|
 | **Behavior** | Waits for user commands | Continuously monitors and acts |
 | **Decision Making** | One-off analysis per request | Conviction-based with evidence tracking |
@@ -26,303 +26,194 @@ EuroScope operates as an **autonomous agent**, not a chatbot. The core differenc
 
 ### Cognitive Loop (OODA)
 
-The Agent Core runs a state machine that follows the **Observe → Orient → Decide → Act** cycle every 30 seconds:
+The Agent Core runs a state machine that follows the **Observe -> Orient -> Decide -> Act** cycle every 30 seconds:
 
+```text
++---------------------------------------------------------+
+|                    CRON HEARTBEAT (30s)                 |
+|                         |                               |
+|                    +----v----+                          |
+|                    |  IDLE   |<------------------+      |
+|                    +----+----+                   |      |
+|                         | tick()                 |      |
+|                    +----v----+                   |      |
+|                    |OBSERVING| <- run_scan()     |      |
+|                    +----+----+                   |      |
+|                         | deltas?                |      |
+|                    +----v----+                   |      |
+|                    |ORIENTING| <- World Model    |      |
+|                    |         |   update          |      |
+|                    +----+----+                   |      |
+|                         |                        |      |
+|                    +----v----+                   |      |
+|                    |DECIDING | <- LLM reasoning  |      |
+|                    +----+----+                   |      |
+|                    +----v----+                   |      |
+|                    | ACTING  | <- Execute/Alert  |      |
+|                    +----+----+                   |      |
+|                         |                        |      |
+|                    +----v----+                   |      |
+|                    |REVIEWING| <- Track outcomes -+      |
+|                    +---------+                          |
++---------------------------------------------------------+
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    CRON HEARTBEAT (30s)                  │
-│                         │                               │
-│                    ┌────▼────┐                           │
-│                    │  IDLE   │◄──────────────────┐       │
-│                    └────┬────┘                   │       │
-│                         │ tick()                 │       │
-│                    ┌────▼────┐                   │       │
-│                    │OBSERVING│ ← run_scan()      │       │
-│                    └────┬────┘                   │       │
-│                         │ deltas?                │       │
-│                    ┌────▼────┐                   │       │
-│                    │ORIENTING│ ← World Model     │       │
-│                    │         │   update           │       │
-│                    └────┬────┘                   │       │
-│                         │                        │       │
-│                    ┌────▼────┐                   │       │
-│                    │DECIDING │ ← LLM reasoning   │       │
-│                    └────┬────┘                   │       │
-│                    ┌────▼────┐                   │       │
-│                    │ ACTING  │ ← Execute/Alert   │       │
-│                    └────┬────┘                   │       │
-│                         │                        │       │
-│                    ┌────▼────┐                   │       │
-│                    │REVIEWING│ ← Track outcomes  ─┘       │
-│                    └─────────┘                           │
-└─────────────────────────────────────────────────────────┘
-```
 
 ---
 
-## Core Components
+## Intelligence & Core Components
 
-### 1. World Model (`brain/world_model.py`)
-A structured, always-current representation of the EUR/USD market state. Contains 8 sub-models:
+### 1. Multi-Agent Deliberation Committee (`brain/multi_agent.py`)
+Resolves high-ambiguity market conditions using an adversarial committee framework.
+- Consists of three specialized LLM agents: Bull Advocate, Bear Advocate, and Risk Manager.
+- A Chief Judge (Conflict Arbiter) synthesizes the arguments and establishes a consensus direction and confidence score.
+- Implements strict LLM fallback routing, parallel asynchronous execution, and time-bound deliberation to guarantee system stability during volatile events.
 
-| Sub-Model | What It Tracks |
-|:---|:---|
-| **PriceState** | Current price, daily range, pip change, spread |
-| **TechnicalState** | RSI, MACD, ADX, trend direction, support/resistance |
-| **FundamentalState** | ECB/Fed rate differential, CPI, GDP, NFP |
-| **SentimentState** | FinBERT score, COT positioning, retail sentiment |
-| **RegimeState** | Trending/Ranging/Breakout/Volatile classification |
-| **RiskState** | Open exposure, drawdown, daily P&L |
-| **LiquidityState** | PDH/PDL levels, weekly highs/lows, spread |
-| **SessionState** | Active session (London/NY/Asia/Overlap), time-of-day |
+### 2. Sentiment Network Graph (`data/sentiment_graph.py`)
+Utilizes a directed acyclic graph (via NetworkX) to track macroeconomic narrative linkages from real-time news.
+- Extracts causal relationships using LLMs (e.g., FED -> strengthens -> USD).
+- Persists data with automated temporal decay on edge weights to prioritize recent narratives while gracefully forgetting stale hypotheses.
 
-Each sub-model includes **delta detection** — the agent only reasons about what has *changed* since the last tick.
+### 3. Market Regime Memory Bank (`brain/vector_memory.py`)
+Records the state of the market (ADX, RSI, MACD, Trend, Volatility, Macro Bias) alongside trading outcomes.
+- Before executing a trade, the system queries SQLite FTS5 vector memory to locate historically similar market regimes.
+- Dynamically adjusts signal confidence based on the historic win rate of analogous past environments.
 
-### 2. Conviction System (`brain/conviction.py`)
-The agent forms, maintains, and invalidates trading theses:
+### 4. Counterfactual Engine (`learning/counterfactual.py`)
+An asynchronous background task that analyzes closed trades to simulate alternative 'what-if' scenarios.
+- Evaluates if wider stop losses would have prevented stop hunts or if tighter taking profits would have optimized yield.
+- Results are embedded directly into the vector memory insights collection to dynamically tune future risk parameters.
 
-- **Evidence-based**: Every conviction is backed by specific data points
-- **Confidence decay**: Convictions lose strength over time without reinforcing evidence
-- **Auto-invalidation**: If price hits an invalidation level, the conviction is killed immediately
-- **Multi-conviction**: The agent can hold multiple theses simultaneously (e.g., short-term bearish + long-term bullish)
+### 5. World Model (`brain/world_model.py`)
+A structured, always-current representation of the EUR/USD market state tracking Price, Technicals, Fundamentals, Sentiment, Regimes, Risk, Liquidity, and Session states. Implements strict delta detection to restrict agent reasoning to state transitions.
 
-### 3. Agent Core (`brain/agent_core.py`)
-The main state machine with 8 states: `IDLE → OBSERVING → ORIENTING → DECIDING → ACTING → MONITORING → PLANNING → REVIEWING`. Drives the autonomous loop and coordinates all other components.
+### 6. Conviction System (`brain/conviction.py`)
+Maintains logical trading theses with decay vectors. If reinforcing evidence ceases or hard invalidation levels are breached, convictions auto-terminate gracefully.
 
-### 4. Session Planner (`brain/session_planner.py`)
-Generates daily trading game plans before each major session opens:
-
-- **London Session Plan**: Generated before 07:00 UTC
-- **New York Session Plan**: Generated before 12:00 UTC
-- Each plan includes 1-3 **If-Then scenarios** with entry zones, invalidation levels, and targets
-- Plans are enriched by LLM using the current World Model and active convictions
-
-### 5. LLM Interface (`brain/llm_interface.py`)
-Handles all LLM interactions (formerly `agent.py`):
-
-- `chat()` — Conversational responses for Telegram
-- `run_react_loop()` — Multi-step reasoning with tool calling
-- `reason_about()` — Internal deliberation for the Agent Core (no direct action)
-- `call_stateless()` — One-shot LLM calls for specific tasks
-
-### 6. Orchestrator (`brain/orchestrator.py`)
-Coordinates skills to produce analysis. Includes two new Agent Core APIs:
-
-- `run_scan()` — Lightweight price + session check (<2s)
-- `get_quick_state()` — Instant market snapshot without full pipeline
-- `run_full_analysis_pipeline()` — Complete multi-skill analysis
+### 7. Orchestrator & Containerization (`container.py`, `brain/orchestrator.py`)
+Implements a strict Dependency Injection (DI) framework with a global service registry to eliminate circular dependencies. Exposes pipelines for complete market analysis or lightweight tick scans.
 
 ---
 
-## Key Features
+## Key Features Matrix
 
-| Category | Features |
+| Domain | Capabilities |
 |:---|:---|
-| **Agent Brain** | OODA Loop, World Model, Conviction Tracker, Session Planner, LLM Interface |
-| **Skills Engine** | 9+ auto-discovered skills, Orchestrator, SkillsRegistry, dynamic prompt generation |
-| **Trading** | Risk Management, Strategy Engine (Trend/MR/Breakout), Signal Executor, Paper Trading |
-| **Analytics** | Performance Metrics (Sharpe/Sortino), Walk-Forward Backtesting, Equity Curves |
-| **Analysis** | RSI, MACD, Patterns (H&S, Double Top), Fibonacci & Pivot levels, Sentiment |
-| **Macro** | FRED & ECB integration (Rate differentials, CPI, GDP), Economic Calendar |
-| **Learning** | Trade Journal, Prediction Tracker, Pattern Success Rates, Adaptive Parameter Tuner |
-| **Telegram** | Agent commands, Smart Alerts, Cron Scheduler, Proactive Intelligence |
-| **Validation** | Behavioral Testing Suite (5 Scenarios), Historical Scenario Replay |
+| **Agent Intelligence** | OODA Loop, Multi-Agent Deliberation, Regime Memory, Sentiment Graphs |
+| **Skills Engine** | Auto-discovered discrete capabilities, Dynamic Prompting |
+| **Trading & Execution** | Signal Executor, Risk Manager, Strategy Engine, Paper Trading |
+| **Quantitative Analytics**| Equity Curves, Walk-Forward Backtesting, Sharpe/Sortino calculations |
+| **Technical Analysis** | Adaptive RSI, MACD, Automated support/resistance, Pattern Detection |
+| **Macro Intelligence** | FRED/ECB integration, Causal Impact Attribution, Calendar Events |
+| **Adaptive Learning** | Counterfactual Analysis, Parameter Tuning, Knowledge Vectorization |
+| **Interoperability** | Telegram Command API, Smart Protocol Alerts, Containerized DI |
 
 ---
 
-## Bot Commands
+## Command Interface Reference
 
-### Standard Commands
+### Standard Operations
+- `/menu` - Main interactive dashboard
+- `/price` - Real-time EUR/USD quotes
+- `/analysis` - Full technical analysis report
+- `/chart` - Rendered candlestick chart graphics
+- `/forecast` - AI-driven directional outlook
+- `/news` - Live sentiment and fundamental headlines
+- `/signals` - Active trading signals and entries
+- `/strategy` - Current algorithmic strategy recommendation
+- `/risk` - Risk allocation assessment for the next sequential trade
+- `/trades` - Paper trading ledger execution history
+- `/performance` - Deep-dive ROI and Sharpe statistics
+- `/report` - Pipeline compilation of all skills into a singular report
+- `/health` - System diagnostic and runtime metrics
+- `/settings` - Configuration management
 
-| Command | Description |
-|:---|:---|
-| `/menu` | Main interactive dashboard |
-| `/price` | Real-time EUR/USD quotes |
-| `/analysis` | Full technical analysis report |
-| `/chart` | Dark-themed candlestick chart |
-| `/forecast` | AI directional outlook |
-| `/news` | Live sentiment & headlines |
-| `/signals` | Active trading signals |
-| `/strategy` | Current strategy recommendation |
-| `/risk` | Risk assessment for next trade |
-| `/trades` | Paper trade history |
-| `/performance` | ROI & Sharpe stats |
-| `/report` | Full skills-based analysis pipeline |
-| `/health` | System health & runtime stats |
-| `/settings` | Personal alert preferences |
+### Agent Introspection Commands
+- `/agent_status` - Dump of the Agent Core state, execution tick count, and active World Model components.
+- `/conviction` - Active trading theses sorted by confidence and direction.
+- `/session_plan` - Active algorithmic game plans organized into contingent If-Then scenarios.
 
-### 🤖 Agent Commands
-
-| Command | Description |
-|:---|:---|
-| `/agent_status` | Agent Core state, tick count, world model snapshot |
-| `/conviction` | Active trading theses with direction, confidence, and thesis text |
-| `/session_plan` | Today's game plan with If-Then scenarios and entry zones |
-
-### Smart Analysis Commands
-
-| Command | Description |
-|:---|:---|
-| `/comprehensive_analysis [query]` | Full ReAct loop with multi-step reasoning |
-| `/quick_analysis` | Faster 2-step analysis for quick checks |
+### Smart Analysis Executions
+- `/comprehensive_analysis [query]` - Instigates a full ReAct loop with multi-step logical deduction.
+- `/quick_analysis` - Restricted-depth analysis prioritized for latency.
 
 ---
 
-## Proactive Intelligence
+## Proactive Intelligence Protocol
 
-EuroScope autonomously monitors EUR/USD and sends intelligent alerts:
+EuroScope autonomously monitors EUR/USD data streams and generates event-driven notifications.
+- Executes distributed ReAct analysis loops at configurable intervals.
+- Manages stateful alert suppression within 60-minute rolling windows.
+- Prioritizes distributions into Critical, High, Medium, and Low severity classifications.
+- Utilizes context-aware throttling (e.g., weekend suppression, major holiday silences).
 
-- Runs a ReAct analysis loop at configurable intervals
-- Deduplicates alerts within a 60-minute window
-- Prioritizes as 🚨 Critical, 🔥 High, ⚠️ Medium, or ℹ️ Low
-- Context-aware suppression (quiet hours, weekends, holidays)
-
-**Example Alerts:**
-- 🚨 `Price sweeping liquidity below 1.0800 — reversal likely. Avoid shorts.`
-- ⚠️ `Bullish breakout above 1.0850 with volume confirmation. Watch for pullback entry.`
-- ℹ️ `Market consolidating ahead of NY session. Wait for London close direction.`
+**Example Notifications:**
+- [CRITICAL] Price sweeping liquidity below 1.0800 - reversal dynamic likely. Short allocations restricted.
+- [HIGH] Bullish structural breakout above 1.0850. Volume validation present. Watch for mean-reversion pullback for optimal entry.
+- [LOW] Market exhibiting tight consolidation preceding the New York session open. Awaiting liquidity injection.
 
 ---
 
-## Quick Start
+## Quick Start Configuration
 
-### 1. Clone & Install
+### 1. Environment & Dependencies
 ```bash
 git clone https://github.com/logiccrafterdz/EuroScope.git
 cd EuroScope
 python -m venv .venv
-.venv\Scripts\activate   # Windows
+# Activate virtual environment (.venv\Scripts\activate on Windows or source .venv/bin/activate on Linux/Mac)
 pip install -r requirements.txt
 ```
 
-### 2. Configure
-```bash
-copy .env.example .env
-```
-Edit `.env` with your API keys:
+### 2. Environment Variables
+Create a `.env` file referencing `.env.example`:
 
-| Variable | Purpose | Required |
+| Key | Purpose | Status |
 |:---|:---|:---|
-| `EUROSCOPE_LLM_API_KEY` | LLM provider (DeepSeek/OpenAI) | ✅ |
-| `EUROSCOPE_TELEGRAM_TOKEN` | From [@BotFather](https://t.me/BotFather) | ✅ |
-| `EUROSCOPE_ADMIN_CHAT_IDS` | Admin chat IDs (comma-separated) | ✅ |
-| `EUROSCOPE_LLM_FALLBACK_API_KEY` | Backup LLM for failover | Optional |
-| `EUROSCOPE_TIINGO_KEY` | Real-time market data (0s delay) | Recommended |
-| `EUROSCOPE_FRED_API_KEY` | FRED macro data | Recommended |
-| `EUROSCOPE_BRAVE_API_KEY` | News sentiment | Optional |
-| `EUROSCOPE_ALPHAVANTAGE_KEY` | AlphaVantage data | Optional |
-| `EUROSCOPE_PROACTIVE_CHAT_IDS` | Chat IDs for proactive alerts | Optional |
-| `EUROSCOPE_PROACTIVE_INTERVAL_MINUTES` | Analysis interval (default: 30) | Optional |
-| `EUROSCOPE_VECTOR_MEMORY_TTL_DAYS` | Vector Memory retention (default: 30) | Optional |
+| `EUROSCOPE_LLM_API_KEY` | Primary LLM Provider API Key (OpenRouter/DeepSeek/OpenAI) | Required |
+| `EUROSCOPE_TELEGRAM_TOKEN` | Telegram Bot Framework Token | Required |
+| `EUROSCOPE_ADMIN_CHAT_IDS` | Comma-separated strict admin authorization IDs | Required |
+| `EUROSCOPE_LLM_FALLBACK_API_KEY`| Secondary LLM key for failover redundancy | Optional |
+| `EUROSCOPE_FRED_API_KEY` | St. Louis Fed macro data access | Recommended |
+| `EUROSCOPE_TIINGO_KEY` | Real-time WebSocket market data | Recommended |
+| `EUROSCOPE_BRAVE_API_KEY` | News and sentiment aggregation | Optional |
+| `EUROSCOPE_VECTOR_MEMORY_TTL_DAYS`| Memory retention window (default: 30) | Optional |
 
-### 3. Run
+### 3. Execution Standard
 ```bash
 python -m euroscope.main
 ```
-
-The agent will:
-1. Initialize all skills and data providers
-2. Start the Telegram bot
-3. Begin the 30-second heartbeat loop
-4. Generate session plans before London/NY opens
-5. Form convictions as evidence accumulates
-6. Send proactive alerts when significant events occur
+The initialization sequence performs Dependency Injection bindings, loads SQLite/ChromaDB state files, initializes the Telegram listeners, and boots the Agent Core OODA loop.
 
 ---
 
-## Project Structure
+## Technical Stack
 
-```
-euroscope/
-├── brain/                  # Agent Intelligence
-│   ├── agent_core.py       # State machine (OODA loop)
-│   ├── world_model.py      # 8 structured market sub-models
-│   ├── conviction.py       # Thesis tracking with evidence & decay
-│   ├── session_planner.py  # Daily game plan generation
-│   ├── llm_interface.py    # LLM chat, ReAct, reason_about()
-│   ├── orchestrator.py     # Skills coordinator + scan/quick_state
-│   ├── prompts.py          # Agent identity & reasoning prompts
-│   ├── llm_router.py       # Multi-LLM routing with fallback
-│   ├── memory.py           # Conversation memory
-│   └── vector_memory.py    # ChromaDB semantic search
-├── skills/                 # 9+ auto-discovered skills
-│   ├── base.py             # BaseSkill, SkillResult, SkillContext
-│   ├── registry.py         # Auto-discovery & LLM prompt generation
-│   ├── market_data/        # Price & OHLCV data
-│   ├── technical_analysis/ # RSI, MACD, ADX, patterns
-│   ├── pattern_detection/  # H&S, Double Top/Bottom, Fibonacci
-│   ├── fundamental/        # FRED, ECB, macro data
-│   ├── signals/            # Signal generation
-│   ├── backtesting/        # Walk-forward + slippage
-│   ├── monitoring/         # Health + runtime stats
-│   ├── trade_journal/      # Full-context trade logging
-│   └── prediction_tracker/ # Forecast accuracy tracking
-├── trading/                # Execution Layer
-│   ├── risk_manager.py     # Position sizing, exposure limits
-│   ├── strategy_engine.py  # Trend/MR/Breakout strategies
-│   ├── signal_executor.py  # Paper & live trade execution
-│   ├── capital_provider.py # Capital.com REST API
-│   └── capital_ws.py       # Capital.com WebSocket streaming
-├── automation/             # Scheduling
-│   ├── cron.py             # Task scheduler + agent heartbeat
-│   └── daily_tracker.py    # Daily stats
-├── learning/               # Self-Improvement
-│   ├── pattern_tracker.py  # Pattern success rates
-│   ├── forecast_tracker.py # Prediction accuracy
-│   └── adaptive_tuner.py   # Auto-tune parameters
-├── bot/                    # Telegram Interface
-│   ├── telegram_bot.py     # Main bot class
-│   ├── handlers/           # Command & task handlers
-│   ├── api_server.py       # REST API for Mini App
-│   └── rate_limiter.py     # Per-user rate limiting
-├── data/                   # Data Providers
-│   ├── multi_provider.py   # Tiingo, OANDA, fallback
-│   ├── news.py             # News aggregation
-│   ├── calendar.py         # Economic calendar
-│   ├── fundamental.py      # FRED, ECB macro data
-│   └── storage.py          # SQLite persistence
-├── forecast/               # AI Forecasting
-│   └── engine.py           # Neural directional outlook
-├── analytics/              # Performance
-│   └── report_generator.py # PDF reports
-├── workspace/              # Agent Identity
-│   └── IDENTITY.md         # Agent personality & rules
-└── utils/                  # Utilities
-    ├── charts.py           # Candlestick chart generation
-    └── formatting.py       # Telegram message formatting
-```
-
----
-
-## Tech Stack
-
-| Layer | Technologies |
+| Domain | Applied Technologies |
 |:---|:---|
-| **Runtime** | Python 3.12+ |
-| **AI/ML** | ONNX Runtime, FinBERT (quantized int8), DeepSeek & OpenAI |
-| **Memory** | ChromaDB (vector), SQLite (relational) |
-| **Market Data** | Tiingo, OANDA, Capital.com (REST + WebSocket) |
-| **Telegram** | python-telegram-bot (Async V21+) |
-| **Security** | pycryptodome (RSA/AES for Capital.com) |
-| **Monitoring** | psutil, custom health checks |
+| **Runtime & Language** | Python 3.12+ |
+| **Logic & AI** | DeepSeek, OpenAI APIs, FinBERT (INT8 Quantized), ONNX Runtime |
+| **State Persistence** | SQLite (with FTS5 for vector text), NetworkX (Graphs) |
+| **Data Pipelines** | Tiingo API, OANDA API, Capital.com (REST and WebSocket integrations) |
+| **Client Interface** | python-telegram-bot (Async V21+) |
+| **Cryptographic Security** | PyCryptodome (AES/RSA handling for institutional endpoints) |
 
 ---
 
-## Testing
+## Testing & Validation Framework
 
-**558+ tests** covering all modules:
+The repository is covered by continuous integration tests guaranteeing robustness across discrete analytical skills.
 ```bash
 python -m pytest tests/
 ```
 
-### Behavioral Validation
-Run comprehensive behavioral tests against historical market scenarios:
+### End-to-End Behavioral Validation
+A deterministic scenario replay engine evaluates the agent against historical market anomalies:
 ```bash
 python -m euroscope.testing.report_generator --output behavioral_report.md
 ```
-Validates against: Sideways Market Trap, Lagarde Shock, Liquidity Sweep, Session Transition, Macro Override.
+Validates resilience against constraints such as the Sideways Market Trap, Central Bank Rate Shocks, Institutional Liquidity Sweeps, and Conflicting Multi-Timeframe signals.
 
 ---
 
 ## License
-Private project.
+Proprietary software. All rights reserved.
