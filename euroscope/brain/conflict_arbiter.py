@@ -120,10 +120,10 @@ class ConflictArbiter:
             if llm:
                 committee = DeliberationCommittee(llm)
                 committee_verdict = await committee.deliberate(context)
-                if committee_verdict.get("final_direction") != "NEUTRAL":
-                    logger.info("Committee override applied.")
-                    committee_verdict["conflicts_resolved"] = self._list_conflicts(committee_verdict["final_direction"], weighted_signals, context)
-                    return committee_verdict
+                # Let the committee override to NEUTRAL if they find it too ambiguous
+                logger.info("Committee override applied.")
+                committee_verdict["conflicts_resolved"] = self._list_conflicts(committee_verdict["final_direction"], weighted_signals, context)
+                return committee_verdict
             else:
                 logger.warning("Could not instantiate Multi-Agent Committee: No LLM router.")
 
