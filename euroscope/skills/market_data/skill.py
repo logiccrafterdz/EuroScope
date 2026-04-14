@@ -96,8 +96,8 @@ class MarketDataSkill(BaseSkill):
                         
                         from euroscope.container import get_container
                         container = get_container()
-                        if container and hasattr(container, "memory") and container.memory:
-                            container.memory.store_market_event(
+                        if container and hasattr(container, "vector_memory") and container.vector_memory:
+                            container.vector_memory.store_market_event(
                                 f"Sudden {pip_range:.1f} pip {spike_dir} spike. Initiated Causal Attribution.",
                                 impact="high",
                                 metadata={"pip_range": pip_range, "direction": spike_dir}

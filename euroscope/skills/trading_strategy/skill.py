@@ -102,8 +102,8 @@ class TradingStrategySkill(BaseSkill):
             try:
                 from euroscope.container import get_container
                 container = get_container()
-                if container and hasattr(container, "memory") and container.memory:
-                    similar = container.memory.query_similar_regimes(current_state, k=3)
+                if container and hasattr(container, "vector_memory") and container.vector_memory:
+                    similar = container.vector_memory.query_similar_regimes(current_state, k=3)
                     if similar and len(similar) >= 2:
                         win_count = sum(1 for s in similar if s.get("outcome") in ("WIN", "PROFIT"))
                         loss_count = sum(1 for s in similar if s.get("outcome") in ("LOSS", "STOPPED"))
