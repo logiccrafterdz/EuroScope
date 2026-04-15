@@ -219,27 +219,7 @@
             transform: scale(0.97);
         }
 
-        /* --- System Menu Overlay CSS --- */
-        #system-overlay.active {
-            display: flex !important;
-        }
-
-        #system-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(4, 5, 7, 0.95);
-            backdrop-filter: blur(30px);
-            -webkit-backdrop-filter: blur(30px);
-            z-index: 9999;
-            padding: 40px 24px;
-            display: none;
-            flex-direction: column;
-            overflow-y: auto;
-            animation: fadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-        }
+        /* --- System Menu Overlay CSS (consolidated) --- */
 
         #system-overlay .close-btn {
             position: absolute;
@@ -648,16 +628,18 @@
             box-shadow: 0 0 10px currentColor;
         }
 
-        /* Overview System */
+        /* System Menu Overlay */
         #system-overlay {
             display: none;
             position: fixed;
             inset: 0;
             background: rgba(4, 5, 7, 0.95);
-            backdrop-filter: blur(20px);
-            z-index: 2000;
+            backdrop-filter: blur(30px);
+            -webkit-backdrop-filter: blur(30px);
+            z-index: 9999;
             padding: 20px;
             overflow-y: auto;
+            animation: fadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
         }
 
         #system-overlay.active {
@@ -984,7 +966,6 @@
                 <div id="forecast-text" style="display: none;"></div> <!-- Hidden compatibility div -->
             </div>
         </div>
-        </div>
 
         <!-- TRADES TAB -->
         <div id="trades-view" class="tab-content">
@@ -1192,6 +1173,10 @@
                         <div class="label-sm" style="margin-bottom:4px;">ESTIMATED COST</div>
                         <div id="sys-cost" class="num-md" style="color: var(--warn-color);">$0.00</div>
                     </div>
+                </div>
+                <div class="label-sm" style="margin-bottom:4px; font-size:0.55rem;">BUDGET USAGE</div>
+                <div class="glow-bar-container" style="margin: 8px 0;">
+                    <div id="sys-budget-bar" class="glow-bar" style="background: var(--up-color); width: 0%;"></div>
                 </div>
             </div>
         </div>
@@ -1750,7 +1735,7 @@
             try {
                 // To force a fresh analysis on the backend, we might normally hit a specific endpoint.
                 // For now, re-syncing the analysis view achieves the UI refresh.
-                await sync('analysis');
+                await sync('intelligence');
                 btnText.textContent = "ANALYSIS COMPLETE";
                 setTimeout(() => { btnText.textContent = "RUN NEURAL ANALYSIS"; }, 2000);
                 try { tg.HapticFeedback.notificationOccurred('success'); } catch (e) { }
@@ -1816,7 +1801,7 @@
             const btnText = document.getElementById('scan-btn-text');
             const spinner = document.getElementById('scan-spinner');
             const btn = document.getElementById('scan-btn');
-            const emptyState = document.getElementById('signal-empty-state');
+
 
             if (btn.disabled) return;
 
@@ -1863,7 +1848,7 @@
                         btn.style.borderColor = 'var(--up-color)';
                         btn.style.color = 'var(--up-color)';
                         btn.style.background = 'transparent';
-                        await sync('signals');
+                        await sync('trades');
                         try { tg.HapticFeedback.notificationOccurred('success'); } catch (e) { }
                         setTimeout(() => { btnText.textContent = "AUTO-SCAN FOR TRADES"; btn.style.background = ''; btn.style.color = ''; btn.style.borderColor = ''; }, 3000);
                     }
@@ -2098,6 +2083,17 @@
                             list.innerHTML = res.data.map(n => `<div class="info-row"><span class="label">${n.source.toUpperCase()}</span><span class="val" style="color:var(--text-main)">${n.target}</span></div>`).join('');
                         } else {
                             list.innerHTML = `<div class="empty-state" style="padding: 10px 0;">NO GRAPH DATA</div>`;
+                        }
+                    });
+
+                    // Fetch Regime Memory
+                    api('/regime_history').then(res => {
+                        const list = document.getElementById('regime-memory-list');
+                        if (!list) return;
+                        if (res.success && res.data && res.data.length > 0) {
+                            list.innerHTML = res.data.map(r => `<div class="info-row"><span class="label">${r.regime || r.label || '---'}</span><span class="val" style="color:var(--text-main)">${r.duration || r.period || '---'}</span></div>`).join('');
+                        } else {
+                            list.innerHTML = `<div class="empty-state" style="padding: 10px 0;">NO REGIME DATA</div>`;
                         }
                     });
 
