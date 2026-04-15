@@ -438,6 +438,14 @@
             letter-spacing: 2.5px;
             font-weight: 700;
             margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .label-sm svg {
+            stroke-width: 1.8;
+            color: var(--text-dim);
         }
 
         .num-hero {
@@ -448,28 +456,24 @@
         }
 
         .num-lg {
-            font-family: var(--font-data);
             font-size: 1.4rem;
             font-weight: 300;
             letter-spacing: -0.5px;
         }
 
         .num-md {
-            font-family: var(--font-data);
             font-size: 1.05rem;
             font-weight: 400;
             letter-spacing: 0px;
         }
 
         .num-sm {
-            font-family: var(--font-data);
             font-size: 0.95rem;
             font-weight: 400;
             letter-spacing: 0px;
         }
 
         .num-xs {
-            font-family: var(--font-data);
             font-size: 0.85rem;
             font-weight: 300;
             letter-spacing: 0px;
@@ -648,7 +652,6 @@
         .info-row .val {
             font-size: 0.85rem;
             font-weight: 600;
-            font-family: 'Fira Code', monospace;
         }
 
         .glow-bar-container {
@@ -919,11 +922,17 @@
 
             <div class="bento">
                 <div class="glass-card" style="padding:16px;">
-                    <div class="label-sm">Broker Balance</div>
+                    <div class="label-sm">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/></svg>
+                        Broker Balance
+                    </div>
                     <div id="stat-balance" class="num-md" style="white-space:nowrap;">--.--</div>
                 </div>
                 <div class="glass-card" style="padding:16px;">
-                    <div class="label-sm">Account Equity</div>
+                    <div class="label-sm">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
+                        Account Equity
+                    </div>
                     <div id="stat-equity" class="num-md" style="color:var(--accent-primary); white-space:nowrap;">--.--
                     </div>
                 </div>
@@ -931,11 +940,17 @@
 
             <div class="bento">
                 <div class="glass-card" style="padding:16px;">
-                    <div class="label-sm">Vol. Reach</div>
+                    <div class="label-sm">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+                        Vol. Reach
+                    </div>
                     <div id="stat-range" class="num-sm">--- pips</div>
                 </div>
                 <div class="glass-card" style="padding:16px;">
-                    <div class="label-sm">Day Range</div>
+                    <div class="label-sm">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8a2 2 0 0 0-1-3.73L12.22 2.1a2 2 0 0 0-1.65 0L3.31 4.27A2 2 0 0 0 2 6.07a2 2 0 0 0 1 3.73l8.22 3.84a2 2 0 0 0 1.65 0z"/><path d="m3 13 9 4 9-4"/><path d="m3 18 9 4 9-4"/></svg>
+                        Day Range
+                    </div>
                     <div id="stat-hilo" class="num-sm" style="white-space:nowrap;">-.--- <span
                             style="opacity:0.3; margin:0 4px;">/</span> -.---</div>
                 </div>
@@ -968,7 +983,10 @@
                 <div style="position:absolute; top:-30px; right:-30px; width:140px; height:140px; border-radius:50%; background:radial-gradient(circle, rgba(0,255,157,0.06) 0%, transparent 70%);"></div>
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
                     <div style="display:flex; align-items:center; gap:8px;">
-                        <div class="label-sm" style="margin:0; font-size:0.55rem; letter-spacing:2.5px; opacity:0.5;">COMMITTEE VERDICT</div>
+                        <div class="label-sm" style="margin:0; font-size:0.55rem; letter-spacing:2.5px; opacity:0.5;">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
+                            COMMITTEE VERDICT
+                        </div>
                         <div id="briefing-urgency" style="font-size:0.45rem; font-weight:800; letter-spacing:2px; padding:2px 6px; border-radius:3px; background:rgba(0,255,157,0.1); color:var(--accent-primary); border:1px solid rgba(0,255,157,0.15);">NORMAL</div>
                     </div>
                 </div>
@@ -994,14 +1012,20 @@
                 </div>
                 <!-- Macro Bias Card -->
                 <div class="glass-card" style="padding:16px;">
-                    <div class="label-sm">MACRO CONTEXT</div>
+                    <div class="label-sm">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
+                        MACRO CONTEXT
+                    </div>
                     <div id="macro-data-list" style="font-size: 0.75rem;"><div class="empty-state" style="padding: 10px 0;">AWAITING DATA</div></div>
                 </div>
             </div>
 
             <!-- Committee Deliberation Log -->
             <div class="glass-card bento-full" style="margin-bottom: 12px; padding: 16px;">
-                <div class="label-sm" style="color:var(--text-main);">Multi-Agent Deliberation Log</div>
+                <div class="label-sm" style="color:var(--text-main);">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                    Multi-Agent Deliberation Log
+                </div>
                 <div id="committee-log" style="font-size: 0.75rem; color: var(--text-muted); line-height: 1.6; max-height: 150px; overflow-y: auto; padding: 10px; background: rgba(0,0,0,0.2) ; border-radius: 8px; border: 1px solid var(--border-color);">
                     <div class="empty-state" style="padding: 10px 0;">NO DELIBERATION TRIGGERED YET</div>
                 </div>
@@ -1010,12 +1034,18 @@
             <div class="bento">
                 <!-- Regime Memory Card -->
                 <div class="glass-card">
-                    <div class="label-sm">REGIME MEMORY</div>
+                    <div class="label-sm">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/><path d="M8 14h.01"/><path d="M12 14h.01"/><path d="M16 14h.01"/><path d="M8 18h.01"/><path d="M12 18h.01"/><path d="M16 18h.01"/></svg>
+                        REGIME MEMORY
+                    </div>
                     <div id="regime-memory-list" style="font-size: 0.75rem;"><div class="empty-state" style="padding: 10px 0;">AWAITING DATA</div></div>
                 </div>
                 <!-- Sentiment Narratives Card -->
                 <div class="glass-card">
-                    <div class="label-sm">SENTIMENT GRAPH</div>
+                    <div class="label-sm">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>
+                        SENTIMENT GRAPH
+                    </div>
                     <div id="narratives-list" style="font-size: 0.75rem;"><div class="empty-state" style="padding: 10px 0;">AWAITING DATA</div></div>
                 </div>
             </div>
@@ -1024,7 +1054,10 @@
             <div id="b-narrative-card" class="glass-card bento-full" style="padding:20px; display:none;">
                 <div style="display:flex; align-items:center; gap:6px; margin-bottom:14px;">
                     <div style="width:6px; height:6px; border-radius:50%; background:var(--accent-primary); animation:pulse 2s infinite;"></div>
-                    <div class="label-sm" style="margin:0; font-size:0.55rem; letter-spacing:2px;">STRATEGIC REASONING</div>
+                    <div class="label-sm" style="margin:0; font-size:0.55rem; letter-spacing:2px;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="16" y2="12"/><line x1="12" x2="12.01" y1="8" y2="8"/></svg>
+                        STRATEGIC REASONING
+                    </div>
                 </div>
                 <div id="b-narrative" style="font-size:0.82rem; color:var(--text-muted); line-height:1.9; letter-spacing:0.2px;"></div>
                 <div id="forecast-text" style="display: none;"></div> <!-- Hidden compatibility div -->
@@ -1035,7 +1068,10 @@
         <div id="trades-view" class="tab-content">
             <div style="margin-bottom: 16px;">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-                    <div class="label-sm" style="font-size:0.7rem;">AUTO-TRADING</div>
+                    <div class="label-sm" style="font-size:0.7rem;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+                        AUTO-TRADING
+                    </div>
                     <div id="auto-trade-toggle" onclick="toggleAutoTrading()"
                         style="width:44px; height:24px; border-radius:12px; background:rgba(255,255,255,0.1); border:1px solid var(--border-color); cursor:pointer; position:relative; transition:all 0.3s ease;">
                         <div id="auto-trade-knob"
@@ -1051,8 +1087,11 @@
             </div>
 
             <div class="glass-card bento-full" style="margin-bottom: 16px; padding-bottom: 8px;">
-                <div class="label-sm" style="margin-bottom: 12px; display: flex; justify-content: space-between;">
-                    <span>Active Positions</span>
+                <div class="label-sm" style="margin-bottom: 12px; justify-content: space-between;">
+                    <div style="display:flex; align-items:center; gap:6px;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+                        <span>Active Positions</span>
+                    </div>
                     <span id="open-trades-count" style="color: var(--accent-primary);">0</span>
                 </div>
                 <div id="open-trades-list">
@@ -1061,14 +1100,20 @@
             </div>
 
             <div class="glass-card bento-full" style="margin-bottom: 16px; padding-bottom: 8px;">
-                <div class="label-sm" style="margin-bottom: 12px;">Recent Signals</div>
+                <div class="label-sm" style="margin-bottom: 12px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12h4l2-9 5 18 3-9h6"/></svg>
+                    Recent Signals
+                </div>
                 <div id="recent-signals-list">
                     <div class="empty-state" style="padding: 20px 0;">NO SIGNALS</div>
                 </div>
             </div>
 
             <div class="glass-card bento-full">
-                <div class="label-sm" style="margin-bottom: 12px;">Recent History</div>
+                <div class="label-sm" style="margin-bottom: 12px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                    Recent History
+                </div>
                 <div id="trade-history-list">
                     <div class="empty-state" style="padding: 20px 0;">NO HISTORY</div>
                 </div>
@@ -1080,7 +1125,10 @@
             <!-- Backtest Section -->
             <div class="glass-card bento-full" style="margin-bottom: 12px; padding-bottom:12px;">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
-                    <div class="label-sm" style="margin:0;">BACKTEST ENGINE</div>
+                    <div class="label-sm" style="margin:0;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 2h7"/><path d="M10 2v7.31L4.85 18a2 2 0 0 0 1.65 3h11a2 2 0 0 0 1.65-3L14 9.31V2"/><path d="M6.3 14h11.4"/></svg>
+                        BACKTEST ENGINE
+                    </div>
                     <div id="bt-status"
                         style="font-size:0.6rem; color:var(--text-dim); font-family:'Fira Code'; letter-spacing:0.5px;">
                     </div>
@@ -1207,7 +1255,10 @@
         <div id="system-view" class="tab-content">
             <!-- Agent Core Status -->
             <div class="glass-card bento-full" style="margin-bottom: 12px; border-left: 3px solid var(--accent-primary);">
-                <div class="label-sm">AGENT CORE STATE</div>
+                <div class="label-sm">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/></svg>
+                    AGENT CORE STATE
+                </div>
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
                     <div>
                         <div id="sys-mode" style="font-size:1.4rem; font-family:'Fira Code'; font-weight:800; color:var(--accent-primary); letter-spacing:1px; text-shadow:0 0 10px rgba(0, 255, 157, 0.4);">AWAITING SYNC</div>
@@ -1221,13 +1272,19 @@
 
             <!-- Counterfactual Insights -->
             <div class="glass-card bento-full" style="margin-bottom: 12px;">
-                <div class="label-sm">COUNTERFACTUAL INSIGHTS</div>
+                <div class="label-sm">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+                    COUNTERFACTUAL INSIGHTS
+                </div>
                 <div id="counterfactual-list" style="font-size: 0.75rem;"><div class="empty-state" style="padding: 10px 0;">AWAITING DATA</div></div>
             </div>
 
             <!-- System Resource / Health Monitor -->
             <div class="glass-card bento-full">
-                <div class="label-sm">RESOURCE MONITOR</div>
+                <div class="label-sm">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+                    RESOURCE MONITOR
+                </div>
                 <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-bottom:12px; margin-top:12px;">
                     <div style="background:rgba(255,255,255,0.02); padding:10px; border-radius:8px; border:1px solid var(--border-color);">
                         <div class="label-sm" style="margin-bottom:4px;">LLM DAILY TOKENS</div>
@@ -1298,7 +1355,10 @@
                 SYSTEM CONTROLS</h2>
 
             <div class="sys-group">
-                <div class="label-sm" style="margin-bottom:12px;">ENGINE DIAGNOSTICS</div>
+                <div class="label-sm" style="margin-bottom:12px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><path d="M16 13H8"/><path d="M16 17H8"/><path d="M10 9H8"/></svg>
+                    ENGINE DIAGNOSTICS
+                </div>
                 <div id="alert-list" style="margin-bottom: 16px;"></div>
                 <div class="sys-row" style="border:none; padding-bottom:0;">
                     <span style="font-size:0.9rem; font-weight:700;">Local UI Debug Console</span>
@@ -1308,7 +1368,10 @@
             </div>
 
             <div class="sys-group">
-                <div class="label-sm" style="margin-bottom:12px;">RISK PARAMETERS</div>
+                <div class="label-sm" style="margin-bottom:12px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/></svg>
+                    RISK PARAMETERS
+                </div>
                 <div id="settings-loader" class="empty-state" style="padding: 10px 0;">SYNCING CORE...</div>
                 <div id="settings-form" style="display:none;">
                     <div class="sys-row" style="padding-top:0;">
@@ -1340,7 +1403,10 @@
             </div>
 
             <div class="sys-group">
-                <div class="label-sm" style="margin-bottom:12px;">API OVERRIDE</div>
+                <div class="label-sm" style="margin-bottom:12px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                    API OVERRIDE
+                </div>
                 <div style="display:flex; gap:8px;">
                     <input type="text" id="api-url-input" class="action-in" placeholder="https://bot-url.com"
                         style="margin:0;">
