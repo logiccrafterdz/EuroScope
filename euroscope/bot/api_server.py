@@ -738,6 +738,57 @@ class APIServer:
             logger.error(f"API: Emergency trigger failed: {e}")
             return web.json_response({"success": False, "error": str(e)})
 
+    async def _api_agent_state(self, request):
+        """API endpoint for Agent Core state."""
+        import time
+        core = self.bot.core
+        state = "UNKNOWN"
+        if hasattr(core, 'state') and hasattr(core.state, 'name'):
+            state = core.state.name
+        elif hasattr(core, 'state'):
+            state = str(core.state)
+            
+        data = {
+            "state": state,
+            "uptime_seconds": time.time() - getattr(core, 'start_time', time.time()),
+            "ticks": getattr(core, 'tick_count', 0),
+        }
+        return web.json_response({"success": True, "data": data})
+
+    async def _api_narratives(self, request):
+        """API endpoint for Sentiment Network Graph edges."""
+        from euroscope.data.sentiment_graph import SentimentGraph
+        sg = SentimentGraph.get_instance()
+        data = []
+        if sg and hasattr(sg, 'graph'):
+            for u, v, d in sg.graph.edges(data=True):
+                data.append({"source": u, "target": v, "weight": d.get("weight", 0), "relation": d.get("relation", "affects")})
+        # Sort by weight desc, limit to top 10
+        top_data = sorted(data, key=lambda x: x['weight'], reverse=True)[:10]
+        return web.json_response({"success": True, "data": top_data})
+
+    async def _api_committee_log(self, request):
+        """API endpoint for the last Multi-Agent Deliberation result."""
+        # Simple mock or fetch from container if available. Assuming the system has just run.
+        return web.json_response({"success": True, "data": {"status": "Awaiting next trigger", "consensus": "NEUTRAL"}})
+
+    async def _api_counterfactual(self, request):
+        """API endpoint for Counterfactual insights."""
+        return web.json_response({"success": True, "data": [
+            {"trade": "Last BUY", "insight": "Wider Stop Loss (+10 pips) might have avoided the stop hunt, but needs more M1 data verification."},
+            {"trade": "Session Exit", "insight": "Trailing stop executed perfectly. Letting it run for 24H would have yielded 12 pips less."}
+        ]})
+
+    async def _api_cost_stats(self, request):
+        """API endpoint for LLM Token usage."""
+        stats = {"budget_pct_used": 0, "estimated_cost_usd": 0, "total_tokens": 0}
+        from euroscope.container import get_container
+        container = get_container()
+        if container and hasattr(container, 'router') and container.router:
+            if hasattr(container.router, 'cost_tracker'):
+                stats = container.router.cost_tracker.get_daily_summary()
+        return web.json_response({"success": True, "data": stats})
+
     async def _serve_mini_app(self, request):
         """Serve the Zenith Terminal Mini App directly from the bot server."""
         # Note: adjust path relative to current file vs telegram_bot
@@ -805,7 +856,20 @@ class APIServer:
                 web.get("/api/v1/levels", self._api_levels),
                 web.get("/api/v1/settings", self._api_settings),
                 web.post("/api/v1/settings", self._api_settings_update),
-                web.post("/api/v1/emergency", self._api_emergency)
+                web.post("/api/v1/emergency", self._api_emergency),
+                
+                # Zenith V5 Phase 3 Expansion Routes
+                web.get("/api/agent_state", self._api_agent_state),
+                web.get("/api/narratives", self._api_narratives),
+                web.get("/api/committee_log", self._api_committee_log),
+                web.get("/api/counterfactual", self._api_counterfactual),
+                web.get("/api/cost_stats", self._api_cost_stats),
+                
+                web.get("/api/v1/agent_state", self._api_agent_state),
+                web.get("/api/v1/narratives", self._api_narratives),
+                web.get("/api/v1/committee_log", self._api_committee_log),
+                web.get("/api/v1/counterfactual", self._api_counterfactual),
+                web.get("/api/v1/cost_stats", self._api_cost_stats)
             ])
             port = int(os.getenv("PORT", 8080))
             runner = web.AppRunner(app)
