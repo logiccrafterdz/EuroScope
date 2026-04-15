@@ -908,84 +908,86 @@
             <button class="action-btn action-outline" onclick="sync('terminal')">SYNC TERMINAL</button>
         </div>
 
-        <!-- FORECAST TAB -->
-        <div id="forecast-view" class="tab-content">
-            <div class="glass-card bento-full" style="text-align: center;">
-                <div class="label-sm">AI Directional Bias</div>
-                <div id="forecast-dir"
-                    style="font-family: var(--font-data); font-size: 2rem; font-weight: 200; margin: 16px 0; letter-spacing: 0.15em; text-transform: uppercase;">
-                    NEUTRAL</div>
-                <div class="glow-bar-container">
-                    <div id="forecast-conf-bar" class="glow-bar" style="background: var(--text-muted); width: 0%;">
+        <!-- INTELLIGENCE TAB (Phase 3 Unified Decision Dashboard) -->
+        <div id="intelligence-view" class="tab-content">
+            <!-- Loading State -->
+            <div id="briefing-loading" style="display:none; text-align:center; padding:40px 0;">
+                <span class="loading-spinner"></span>
+                <div style="font-size:0.7rem; color:var(--text-dim); margin-top:12px; letter-spacing:1.5px;">AGENT DELIBERATING...</div>
+                <div style="font-size:0.55rem; color:var(--text-dim); margin-top:4px; opacity:0.5;">Integrating market regime & macro data</div>
+            </div>
+
+            <!-- Committee Agent Verdict Banner (Merges Forecast & Briefing Headers) -->
+            <div class="glass-card bento-full" style="text-align: center; margin-bottom: 12px; position: relative; overflow: hidden;">
+                <div style="position:absolute; top:-30px; right:-30px; width:140px; height:140px; border-radius:50%; background:radial-gradient(circle, rgba(0,255,157,0.06) 0%, transparent 70%);"></div>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <div class="label-sm" style="margin:0; font-size:0.55rem; letter-spacing:2.5px; opacity:0.5;">COMMITTEE VERDICT</div>
+                        <div id="briefing-urgency" style="font-size:0.45rem; font-weight:800; letter-spacing:2px; padding:2px 6px; border-radius:3px; background:rgba(0,255,157,0.1); color:var(--accent-primary); border:1px solid rgba(0,255,157,0.15);">NORMAL</div>
                     </div>
                 </div>
+
+                <div id="forecast-dir" style="font-family: var(--font-data); font-size: 2rem; font-weight: 200; margin: 16px 0; letter-spacing: 0.15em; text-transform: uppercase;">NEUTRAL</div>
+                <div class="glow-bar-container">
+                    <div id="forecast-conf-bar" class="glow-bar" style="background: var(--text-muted); width: 0%;"></div>
+                </div>
                 <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <span
-                        style="font-size: 0.65rem; color: var(--text-muted); font-weight: 500; letter-spacing:1px;">CONVICTION</span>
+                    <span style="font-size: 0.65rem; color: var(--text-muted); font-weight: 500; letter-spacing:1px;">CONVICTION SCORE</span>
                     <span id="forecast-conf-text" class="num-md" style="font-weight:300;">0%</span>
                 </div>
             </div>
-            <div class="glass-card bento-full" style="margin-top: 12px;">
-                <div class="label-sm" style="color:var(--text-main);">Strategic Reasoning</div>
-                <p id="forecast-text" style="font-size: 0.8rem; color: var(--text-muted); line-height: 1.6;">Awaiting AI
-                    analysis...</p>
-            </div>
-        </div>
 
-        <!-- ANALYSIS TAB -->
-        <div id="analysis-view" class="tab-content">
-            <div style="margin-bottom: 16px;">
-                <button class="action-btn action-outline" onclick="runAnalysis()" id="analysis-btn"
-                    style="display: flex; align-items: center; justify-content: center; gap: 8px;">
-                    <span id="analysis-btn-text">RUN NEURAL ANALYSIS</span> <span class="loading-spinner"
-                        id="analysis-spinner"
-                        style="display: none; border-top-color: var(--accent-primary); margin: 0;"></span>
-                </button>
-            </div>
-
-            <div class="glass-card bento-full" style="margin-bottom: 12px; border:1px solid rgba(0,255,157,0.15);">
-                <div class="label-sm" style="margin-bottom: 16px; display:flex; justify-content:space-between;">
-                    <span>Neural Indicators</span>
-                    <span style="font-size:0.5rem; color:var(--text-dim);">PROVIDER: ONNX_QUANTIZED</span>
+            <!-- Evidence Grid (Bento cards for Analysis & Macro) -->
+            <div class="bento">
+                <!-- Technical Bias Card -->
+                <div class="glass-card" style="padding:16px;">
+                    <button class="action-btn action-outline" onclick="runAnalysis()" id="analysis-btn" style="padding: 6px; margin: 0 0 12px 0;">
+                        <span id="analysis-btn-text" style="font-size: 0.65rem;">SCAN TECHNICALS</span><span class="loading-spinner" id="analysis-spinner" style="display: none; border-top-color: var(--accent-primary); width:10px; height:10px;"></span>
+                    </button>
+                    <div id="node-analysis"><div class="empty-state" style="padding: 10px 0;">AWAITING DATA</div></div>
                 </div>
-                <div id="node-analysis">
-                    <div class="empty-state">SYNCING ANALYTICS...</div>
+                <!-- Macro Bias Card -->
+                <div class="glass-card" style="padding:16px;">
+                    <div class="label-sm">MACRO CONTEXT</div>
+                    <div id="macro-data-list" style="font-size: 0.75rem;"><div class="empty-state" style="padding: 10px 0;">AWAITING DATA</div></div>
+                </div>
+            </div>
+
+            <!-- Committee Deliberation Log -->
+            <div class="glass-card bento-full" style="margin-bottom: 12px; padding: 16px;">
+                <div class="label-sm" style="color:var(--text-main);">Multi-Agent Deliberation Log</div>
+                <div id="committee-log" style="font-size: 0.75rem; color: var(--text-muted); line-height: 1.6; max-height: 150px; overflow-y: auto; padding: 10px; background: rgba(0,0,0,0.2) ; border-radius: 8px; border: 1px solid var(--border-color);">
+                    <div class="empty-state" style="padding: 10px 0;">NO DELIBERATION TRIGGERED YET</div>
                 </div>
             </div>
 
             <div class="bento">
-                <div class="glass-card bento-full" style="margin-bottom: 0px;">
-                    <div class="label-sm" style="margin-bottom: 12px;">Detected Patterns</div>
-                    <div id="patterns-list">
-                        <div class="empty-state" style="padding: 10px 0;">SCANNING...</div>
-                    </div>
+                <!-- Regime Memory Card -->
+                <div class="glass-card">
+                    <div class="label-sm">REGIME MEMORY</div>
+                    <div id="regime-memory-list" style="font-size: 0.75rem;"><div class="empty-state" style="padding: 10px 0;">AWAITING DATA</div></div>
                 </div>
+                <!-- Sentiment Narratives Card -->
+                <div class="glass-card">
+                    <div class="label-sm">SENTIMENT GRAPH</div>
+                    <div id="narratives-list" style="font-size: 0.75rem;"><div class="empty-state" style="padding: 10px 0;">AWAITING DATA</div></div>
+                </div>
+            </div>
 
-                <div class="glass-card bento-full" style="margin-top: 0px;">
-                    <div class="label-sm" style="margin-bottom: 12px;">Key Levels (S/R)</div>
-                    <div id="levels-list">
-                        <div class="empty-state" style="padding: 10px 0;">CALCULATING...</div>
-                    </div>
+            <!-- Strategic Reasoning (Merged Briefing & Forecast Text) -->
+            <div id="b-narrative-card" class="glass-card bento-full" style="padding:20px; display:none;">
+                <div style="display:flex; align-items:center; gap:6px; margin-bottom:14px;">
+                    <div style="width:6px; height:6px; border-radius:50%; background:var(--accent-primary); animation:pulse 2s infinite;"></div>
+                    <div class="label-sm" style="margin:0; font-size:0.55rem; letter-spacing:2px;">STRATEGIC REASONING</div>
                 </div>
+                <div id="b-narrative" style="font-size:0.82rem; color:var(--text-muted); line-height:1.9; letter-spacing:0.2px;"></div>
+                <div id="forecast-text" style="display: none;"></div> <!-- Hidden compatibility div -->
             </div>
         </div>
-
-        <!-- MACRO TAB -->
-        <div id="macro-view" class="tab-content">
-            <div class="bento" id="macro-data-list"></div>
-            <div class="glass-card bento-full" style="margin-top: 0px;">
-                <div class="label-sm" style="color:var(--text-main);">Contextual Bias</div>
-                <p id="macro-context" style="font-size: 0.8rem; color: var(--text-muted); line-height: 1.6;">Loading
-                    macro data...</p>
-                <div id="mixed-signal-warn"
-                    style="display:none; margin-top:12px; padding:10px; background:rgba(255,200,0,0.1); border:1px solid var(--warn-color); border-radius:8px; color:var(--warn-color); font-size:0.75rem;">
-                    ⚠️ <strong>Mixed Signals:</strong> AI Forecast and Contextual Bias are diverging.
-                </div>
-            </div>
         </div>
 
         <!-- TRADES TAB -->
-        <div id="signals-view" class="tab-content">
+        <div id="trades-view" class="tab-content">
             <div style="margin-bottom: 16px;">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
                     <div class="label-sm" style="font-size:0.7rem;">AUTO-TRADING</div>
@@ -1028,8 +1030,8 @@
             </div>
         </div>
 
-        <!-- STATS TAB -->
-        <div id="stats-view" class="tab-content">
+        <!-- ANALYTICS TAB -->
+        <div id="analytics-view" class="tab-content">
             <!-- Backtest Section -->
             <div class="glass-card bento-full" style="margin-bottom: 12px; padding-bottom:12px;">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
@@ -1156,83 +1158,43 @@
             </div>
         </div>
 
-        <!-- BRIEFING TAB -->
-        <div id="briefing-view" class="tab-content">
-
-            <!-- Compact Price + Session Header -->
-            <div class="glass-card bento-full" style="padding:16px; position:relative; overflow:hidden;">
-                <div
-                    style="position:absolute; top:-30px; right:-30px; width:140px; height:140px; border-radius:50%; background:radial-gradient(circle, rgba(0,255,157,0.06) 0%, transparent 70%);">
-                </div>
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                    <div style="display:flex; align-items:center; gap:8px;">
-                        <div class="label-sm" style="margin:0; font-size:0.55rem; letter-spacing:2.5px; opacity:0.5;">AI
-                            MARKET INTELLIGENCE</div>
-                        <div id="briefing-urgency"
-                            style="font-size:0.45rem; font-weight:800; letter-spacing:2px; padding:2px 6px; border-radius:3px; background:rgba(0,255,157,0.1); color:var(--accent-primary); border:1px solid rgba(0,255,157,0.15);">
-                            NORMAL</div>
+        <!-- SYSTEM TAB -->
+        <div id="system-view" class="tab-content">
+            <!-- Agent Core Status -->
+            <div class="glass-card bento-full" style="margin-bottom: 12px; border-left: 3px solid var(--accent-primary);">
+                <div class="label-sm">AGENT CORE STATE</div>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
+                    <div>
+                        <div id="sys-mode" style="font-size:1.4rem; font-family:'Fira Code'; font-weight:800; color:var(--accent-primary); letter-spacing:1px; text-shadow:0 0 10px rgba(0, 255, 157, 0.4);">AWAITING SYNC</div>
                     </div>
-                    <div id="b-session-pill"
-                        style="font-size:0.5rem; font-weight:800; letter-spacing:1.5px; padding:3px 10px; border-radius:20px; background:rgba(59,130,246,0.12); color:#60a5fa; border:1px solid rgba(59,130,246,0.15);">
-                        ---</div>
-                </div>
-
-                <!-- Price Row -->
-                <div style="display:flex; align-items:baseline; gap:10px; margin-bottom:4px;">
-                    <div id="b-price"
-                        style="font-size:1.6rem; font-weight:900; font-family:'Fira Code'; color:var(--text-main); letter-spacing:-0.5px;">
-                        —</div>
-                    <div id="b-change-badge"
-                        style="font-size:0.65rem; font-weight:700; padding:2px 8px; border-radius:4px; font-family:'Fira Code';">
-                        —</div>
-                </div>
-                <div id="briefing-time" style="font-size:0.45rem; color:var(--text-dim); font-family:'Fira Code';">
-                </div>
-
-                <!-- Conviction Meter -->
-                <div
-                    style="margin-top:14px; padding:10px 12px; background:rgba(255,255,255,0.02); border-radius:8px; border:1px solid var(--border-color);">
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-                        <span style="font-size:0.5rem; color:var(--text-dim); font-weight:700; letter-spacing:1.5px;">AI
-                            CONVICTION</span>
-                        <span id="b-conviction-val"
-                            style="font-size:0.65rem; font-family:'Fira Code'; font-weight:900; color:var(--accent-primary);">—%</span>
-                    </div>
-                    <div style="height:4px; background:rgba(255,255,255,0.05); border-radius:2px; overflow:hidden;">
-                        <div id="b-conviction-bar"
-                            style="height:100%; width:50%; border-radius:2px; background:var(--accent-primary); transition:width 1s ease, background 0.8s ease;">
-                        </div>
+                    <div style="text-align:right;">
+                        <div class="label-sm" style="margin-bottom:2px;">INTERNAL TICKS</div>
+                        <div id="sys-ticks" class="num-md" style="font-family:'Fira Code'; font-weight:300;">0</div>
                     </div>
                 </div>
             </div>
 
-            <!-- Loading State -->
-            <div id="briefing-loading" style="display:none; text-align:center; padding:40px 0;">
-                <span class="loading-spinner"></span>
-                <div style="font-size:0.7rem; color:var(--text-dim); margin-top:12px; letter-spacing:1.5px;">AI IS
-                    ANALYZING MARKETS...</div>
-                <div style="font-size:0.55rem; color:var(--text-dim); margin-top:4px; opacity:0.5;">This may take 10-20
-                    seconds</div>
+            <!-- Counterfactual Insights -->
+            <div class="glass-card bento-full" style="margin-bottom: 12px;">
+                <div class="label-sm">COUNTERFACTUAL INSIGHTS</div>
+                <div id="counterfactual-list" style="font-size: 0.75rem;"><div class="empty-state" style="padding: 10px 0;">AWAITING DATA</div></div>
             </div>
 
-            <!-- AI Narrative — The Core Content -->
-            <div id="b-narrative-card" class="glass-card bento-full" style="padding:20px; display:none;">
-                <div style="display:flex; align-items:center; gap:6px; margin-bottom:14px;">
-                    <div
-                        style="width:6px; height:6px; border-radius:50%; background:var(--accent-primary); animation:pulse 2s infinite;">
+            <!-- System Resource / Health Monitor -->
+            <div class="glass-card bento-full">
+                <div class="label-sm">RESOURCE MONITOR</div>
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-bottom:12px; margin-top:12px;">
+                    <div style="background:rgba(255,255,255,0.02); padding:10px; border-radius:8px; border:1px solid var(--border-color);">
+                        <div class="label-sm" style="margin-bottom:4px;">LLM DAILY TOKENS</div>
+                        <div id="sys-tokens" class="num-md" style="color: var(--text-main);">0</div>
                     </div>
-                    <div class="label-sm" style="margin:0; font-size:0.55rem; letter-spacing:2px;">ANALYST REPORT</div>
+                    <div style="background:rgba(255,255,255,0.02); padding:10px; border-radius:8px; border:1px solid var(--border-color);">
+                        <div class="label-sm" style="margin-bottom:4px;">ESTIMATED COST</div>
+                        <div id="sys-cost" class="num-md" style="color: var(--warn-color);">$0.00</div>
+                    </div>
                 </div>
-                <div id="b-narrative"
-                    style="font-size:0.82rem; color:var(--text-muted); line-height:1.9; letter-spacing:0.2px;"></div>
-            </div>
-
-            <!-- Footer -->
-            <div id="briefing-count"
-                style="text-align:center; padding:10px 0; font-size:0.45rem; color:var(--text-dim); letter-spacing:2px;">
             </div>
         </div>
-    </div>
     </div>
 
     <!-- DOCK NAVIGATION -->
@@ -1245,38 +1207,22 @@
                 <line x1="9" y1="21" x2="9" y2="9"></line>
             </svg>
         </button>
-        <button class="dock-btn" id="tab-forecast" onclick="switchTab('forecast')">
+        <button class="dock-btn" id="tab-intelligence" onclick="switchTab('intelligence')">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                 stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="12" cy="12" r="10"></circle>
-                <circle cx="12" cy="12" r="6"></circle>
-                <circle cx="12" cy="12" r="2"></circle>
+                <path d="M12 2a9 9 0 0 0-9 9c0 4.97 4 9 9 9s9-4.03 9-9a9 9 0 0 0-9-9Z"></path>
+                <path d="M12 8v4l3 3"></path>
+                <path d="M12 2v2"></path>
             </svg>
         </button>
-        <button class="dock-btn" id="tab-signals" onclick="switchTab('signals')">
-            <!-- Briefcase Icon for Trades -->
+        <button class="dock-btn" id="tab-trades" onclick="switchTab('trades')">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                 stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                 <rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect>
                 <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path>
             </svg>
         </button>
-        <button class="dock-btn" id="tab-analysis" onclick="switchTab('analysis')">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
-            </svg>
-        </button>
-        <button class="dock-btn" id="tab-macro" onclick="switchTab('macro')">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="12" cy="12" r="10"></circle>
-                <line x1="2" y1="12" x2="22" y2="12"></line>
-                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z">
-                </path>
-            </svg>
-        </button>
-        <button class="dock-btn" id="tab-stats" onclick="switchTab('stats')">
+        <button class="dock-btn" id="tab-analytics" onclick="switchTab('analytics')">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                 stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                 <line x1="18" y1="20" x2="18" y2="10"></line>
@@ -1284,12 +1230,12 @@
                 <line x1="6" y1="20" x2="6" y2="14"></line>
             </svg>
         </button>
-        <button class="dock-btn" id="tab-briefing" onclick="switchTab('briefing')">
+        <button class="dock-btn" id="tab-system" onclick="switchTab('system')">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                 stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path>
-                <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
-                <line x1="12" y1="19" x2="12" y2="22"></line>
+                <rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect>
+                <line x1="9" y1="9" x2="15" y2="15"></line>
+                <line x1="15" y1="9" x2="9" y2="15"></line>
             </svg>
         </button>
     </div>
@@ -2070,33 +2016,18 @@
                 } catch (e) {
                     statusEl.style.display = 'flex'; statusEl.textContent = "SYNC FAILED";
                 }
-            } else if (activeTab === 'forecast') {
-                // --- RACE CONDITION GUARD ---
-                // Skip if a forecast request is already in-flight
-                if (window._forecastLoading) return;
-                window._forecastLoading = true;
-                // ---
+            } else if (activeTab === 'intelligence') {
+                if (window._intelLoading) return;
+                window._intelLoading = true;
+                const bLoading = document.getElementById('briefing-loading');
+                if (!document.getElementById('forecast-dir').dataset.loaded) bLoading.style.display = 'block';
 
-                const fText = document.getElementById('forecast-text');
-                let progressInterval;
-                if (!fText.dataset.loaded) {
-                    let progress = 0;
-                    fText.innerHTML = `AI analyzing market conditions... <span id="forecast-progress" style="color:var(--accent-primary); font-family:'Fira Code'; font-weight:bold;">0%</span> <span class="loading-spinner"></span>`;
-
-                    progressInterval = setInterval(() => {
-                        progress += Math.floor(Math.random() * 5) + 1;
-                        if (progress > 99) progress = 99;
-                        const pSpan = document.getElementById('forecast-progress');
-                        if (pSpan) pSpan.textContent = progress + '%';
-                    }, 800);
-                }
                 try {
-                    const res = await api('/forecast');
-                    if (progressInterval) clearInterval(progressInterval);
-
-                    if (res.success && res.data) {
-                        fText.dataset.loaded = 'true'; // Mark as loaded so we don't show loading next time
-                        const d = res.data;
+                    // Fetch Forecast & Briefing Data
+                    const resF = await api('/forecast');
+                    if (resF.success && resF.data) {
+                        document.getElementById('forecast-dir').dataset.loaded = 'true';
+                        const d = resF.data;
                         const dir = String(d.direction || 'NEUTRAL').toUpperCase();
                         document.getElementById('forecast-dir').textContent = dir;
                         const isUp = dir === 'BUY' || dir === 'BULLISH';
@@ -2104,7 +2035,6 @@
                         document.getElementById('forecast-dir').style.color = isUp ? 'var(--up-color)' : isDown ? 'var(--down-color)' : 'var(--text-muted)';
                         document.getElementById('forecast-dir').style.textShadow = `0 0 20px ${isUp ? 'var(--up-color)' : isDown ? 'var(--down-color)' : 'transparent'}`;
 
-                        // Dynamic Gradient for Confidence Bar
                         const color = isUp ? 'var(--up-color)' : isDown ? 'var(--down-color)' : 'var(--text-muted)';
                         const bar = document.getElementById('forecast-conf-bar');
                         bar.style.width = `${(d.confidence || 0) * 100}%`;
@@ -2112,176 +2042,70 @@
                         bar.style.boxShadow = `0 0 15px ${color}`;
 
                         document.getElementById('forecast-conf-text').textContent = `${((d.confidence || 0) * 100).toFixed(0)}%`;
-                        document.getElementById('forecast-text').innerHTML = parseMd(d.reasoning || "...");
-                    } else if (res.error) {
-                        document.getElementById('forecast-text').innerHTML = `<span style="color:var(--down-color)">${res.error}</span>`;
+                        
+                        const narrativeCard = document.getElementById('b-narrative-card');
+                        const narrativeEl = document.getElementById('b-narrative');
+                        if (d.reasoning) {
+                            narrativeCard.style.display = 'block';
+                            narrativeEl.innerHTML = parseMd(d.reasoning);
+                        }
                     }
-                } finally {
-                    window._forecastLoading = false;
-                }
-            } else if (activeTab === 'analysis') {
-                const res = await api('/analysis');
-                if (res.data) {
-                    const ta = res.data || {}; const ind = ta.indicators || {};
-                    const biasRaw = String(ta.overall_bias || 'NEUTRAL').toUpperCase();
-                    const isUp = biasRaw === 'BUY' || biasRaw === 'BULLISH';
-                    const isDown = biasRaw === 'SELL' || biasRaw === 'BEARISH';
-                    const node = document.getElementById('node-analysis');
-                    node.innerHTML = '';
 
-                    // Add Sentiment Card
-                    if (res.sentiment) {
-                        const s = res.sentiment;
-                        const sColor = s.label === 'BULLISH' ? 'var(--up-color)' : s.label === 'BEARISH' ? 'var(--down-color)' : 'var(--text-muted)';
-                        node.innerHTML += `
-                            <div class="info-row" style="background:rgba(255,255,255,0.03); padding:12px; border-radius:12px; margin-bottom:12px; border-left:4px solid ${sColor}">
-                                <div>
-                                    <div class="label-sm" style="margin-bottom:2px;">NEURAL SENTIMENT</div>
-                                    <div style="font-size:1.1rem; font-weight:800; color:${sColor}">${s.label}</div>
-                                </div>
-                                <div style="text-align:right">
-                                    <div class="label-sm" style="margin-bottom:2px;">CONVICTION</div>
-                                    <div class="num-md">${(s.score * 100).toFixed(1)}%</div>
-                                </div>
-                            </div>
+                    // Fetch Technicals
+                    api('/analysis').then(res => {
+                        if (res.data) {
+                            const ta = res.data; const ind = ta.indicators || {};
+                            const node = document.getElementById('node-analysis');
+                            const rsiVal = ind.RSI?.value || 50;
+                            const rsiColor = rsiVal > 70 ? 'var(--down-color)' : rsiVal < 30 ? 'var(--up-color)' : 'var(--accent-primary)';
+                            const adxVal = ind.ADX?.value || 0;
+                            const adxColor = adxVal > 25 ? 'var(--warn-color)' : 'var(--text-muted)';
+
+                            node.innerHTML = `
+                                <div class="gauge-wrap"><div class="label-sm" style="width:40px; margin:0;">RSI</div><div class="gauge-bar-bg"><div class="gauge-fill" style="width:${rsiVal}%; background:${rsiColor}"></div></div><div class="num-md" style="width:40px; text-align:right;">${f2(rsiVal)}</div></div>
+                                <div class="gauge-wrap"><div class="label-sm" style="width:40px; margin:0;">ADX</div><div class="gauge-bar-bg"><div class="gauge-fill" style="width:${Math.min(adxVal, 100)}%; background:${adxColor}"></div></div><div class="num-md" style="width:40px; text-align:right;">${f2(adxVal)}</div></div>
+                                <div class="info-row" style="margin-top:8px"><span class="label">MACD</span><span class="val">${ind.MACD?.signal_text || '---'}</span></div>
+                                <div class="info-row"><span class="label">ATR</span><span class="val" style="color:var(--warn-color);">${f2(ind.ATR?.pips)} Pips</span></div>
+                            `;
+                        }
+                    });
+
+                    // Fetch Macro
+                    api('/macro').then(res => {
+                        const m = res.data || {};
+                        const eu = m.macro_data?.eu_data || {};
+                        const us = m.macro_data?.us_data || {};
+                        const spread = eu.yield_spread;
+                        document.getElementById('macro-data-list').innerHTML = `
+                            <div class="info-row"><span class="label">FED / ECB</span><span class="val">${f2(us.fed?.rate)}% / ${f2(eu.ecb?.value)}%</span></div>
+                            <div class="info-row"><span class="label">US / EU CPI</span><span class="val">${f2(us.cpi?.value)}% / ${f2(eu.cpi?.value)}%</span></div>
+                            <div class="info-row"><span class="label">YIELD SPREAD</span><span class="val" style="color:var(--accent-primary);">${spread ? f2(spread.spread)+'%' : '---'}</span></div>
+                            <div class="info-row"><span class="label">MACRO BIAS</span><span class="val" style="color:${m.macro_impact==='bullish'?'var(--up-color)':m.macro_impact==='bearish'?'var(--down-color)':'var(--text-main)'}">${(m.macro_impact||'---').toUpperCase()}</span></div>
                         `;
-                    }
+                    });
 
-                    // Render Neural Gauges
-                    const rsiVal = ind.RSI?.value || 50;
-                    const rsiColor = rsiVal > 70 ? 'var(--down-color)' : rsiVal < 30 ? 'var(--up-color)' : 'var(--accent-primary)';
-
-                    const adxVal = ind.ADX?.value || 0;
-                    const adxColor = adxVal > 25 ? 'var(--warn-color)' : 'var(--text-muted)';
-
-                    node.innerHTML += `
-                        <div class="gauge-wrap">
-                            <div class="label-sm" style="width:40px; margin:0;">RSI</div>
-                            <div class="gauge-bar-bg"><div class="gauge-fill" style="width:${rsiVal}%; background:${rsiColor}"></div></div>
-                            <div class="num-md" style="width:40px; text-align:right;">${f2(rsiVal)}</div>
-                        </div>
-                        <div class="gauge-wrap">
-                            <div class="label-sm" style="width:40px; margin:0;">ADX</div>
-                            <div class="gauge-bar-bg"><div class="gauge-fill" style="width:${Math.min(adxVal, 100)}%; background:${adxColor}"></div></div>
-                            <div class="num-md" style="width:40px; text-align:right;">${f2(adxVal)}</div>
-                        </div>
-                        <div class="info-row"><span class="label">MACD</span><span class="val">${ind.MACD?.signal_text || '---'}</span></div>
-                        <div class="info-row"><span class="label">EMA 50 / 200</span><span class="val">${f5(ind.EMA?.ema50)} / ${f5(ind.EMA?.ema200)}</span></div>
-                        <div class="info-row"><span class="label">ATR</span><span class="val" style="color:var(--warn-color);">${f2(ind.ATR?.pips)} Pips</span></div>
-                    `;
-                }
-
-                // Fetch Patterns
-                api('/patterns').then(res => {
-                    const list = document.getElementById('patterns-list');
-                    if (res.success && res.data && res.data.length > 0) {
-                        list.innerHTML = res.data.map(p => {
-                            const isHigh = p.significance === 'high';
-                            const color = isHigh ? 'var(--accent-primary)' : 'var(--text-muted)';
-                            return `
-                            <div class="radar-node">
-                                <div class="radar-dot" style="background:${color};"></div>
-                                <div style="flex-grow:1;">
-                                    <div style="font-size: 0.85rem; font-weight:700; color:var(--text-main); letter-spacing:0.5px;">${p.name || p.pattern}</div>
-                                    <div style="font-size: 0.7rem; color:var(--text-dim); margin-top:2px;">DETECTED VIA NEURAL NET</div>
-                                </div>
-                                <div style="font-size: 0.75rem; color:${color}; font-weight:800; letter-spacing:1px;">${(p.status || 'ACTIVE').toUpperCase()}</div>
-                            </div>
-                        `}).join('');
-                    } else {
-                        list.innerHTML = `<div class="empty-state" style="padding: 10px 0;">NO PATTERNS DETECTED</div>`;
-                    }
-                });
-
-                // Fetch Levels
-                api('/levels').then(res => {
-                    const list = document.getElementById('levels-list');
-                    if (res.success && res.data) {
-                        const lvls = res.data;
-                        let html = '';
-                        if (lvls.resistance && lvls.resistance.length > 0) {
-                            html += lvls.resistance.slice(0, 2).map(r => `
-                                <div class="radar-node" style="padding:12px 14px; border-color:rgba(239, 68, 68, 0.2); background:rgba(239, 68, 68, 0.02)">
-                                    <div class="radar-dot" style="background:var(--down-color);"></div>
-                                    <div style="flex-grow:1; font-size: 0.8rem; font-weight:700; color:var(--text-main);">RESISTANCE R${lvls.resistance.indexOf(r) + 1}</div>
-                                    <div style="font-size: 0.85rem; font-family:'Fira Code'; font-weight:700; color:var(--down-color);">${f5(r)}</div>
-                                </div>
-                            `).join('');
+                    // Fetch New Phase 3 Features (Committee, Sentiment Narratives, Regime Memory)
+                    api('/committee_log').then(res => {
+                        const logEl = document.getElementById('committee-log');
+                        if (res.success && res.data) {
+                            logEl.innerHTML = `<div style="margin-bottom:8px;"><strong>Status:</strong> ${res.data.status}</div><div><strong>Consensus:</strong> <span style="color:var(--accent-primary)">${res.data.consensus}</span></div>`;
                         }
-                        if (lvls.support && lvls.support.length > 0) {
-                            html += lvls.support.slice(0, 2).map(s => `
-                                <div class="radar-node" style="padding:12px 14px; border-color:rgba(16, 185, 129, 0.2); background:rgba(16, 185, 129, 0.02)">
-                                    <div class="radar-dot" style="background:var(--up-color);"></div>
-                                    <div style="flex-grow:1; font-size: 0.8rem; font-weight:700; color:var(--text-main);">SUPPORT S${lvls.support.indexOf(s) + 1}</div>
-                                    <div style="font-size: 0.85rem; font-family:'Fira Code'; font-weight:700; color:var(--up-color);">${f5(s)}</div>
-                                </div>
-                            `).join('');
+                    });
+
+                    api('/narratives').then(res => {
+                        const list = document.getElementById('narratives-list');
+                        if (res.success && res.data && res.data.length > 0) {
+                            list.innerHTML = res.data.map(n => `<div class="info-row"><span class="label">${n.source.toUpperCase()}</span><span class="val" style="color:var(--text-main)">${n.target}</span></div>`).join('');
+                        } else {
+                            list.innerHTML = `<div class="empty-state" style="padding: 10px 0;">NO GRAPH DATA</div>`;
                         }
-                        if (html === '') html = `<div class="empty-state" style="padding: 10px 0;">NO LEVELS PROXIMITY</div>`;
-                        list.innerHTML = html;
-                    } else {
-                        list.innerHTML = `<div class="empty-state" style="padding: 10px 0;">NO LEVELS FOUND</div>`;
-                    }
-                });
+                    });
 
-            } else if (activeTab === 'macro') {
-                const res = await api('/macro');
-                const m = res.data || { macro_data: {}, macro_impact: 'NEUTRAL' };
-                const eu = m.macro_data?.eu_data || {};
-                const us = m.macro_data?.us_data || {};
-
-                const getTrendColor = (val, neutral) => {
-                    if (!val) return 'var(--text-main)';
-                    return val > neutral ? 'var(--up-color)' : val < neutral ? 'var(--down-color)' : 'var(--text-main)';
-                };
-
-                document.getElementById('macro-data-list').innerHTML = `
-                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-bottom:16px;">
-                        <div class="glass-card" style="padding:16px; border-top: 2px solid var(--accent-primary);">
-                            <div class="label-sm" style="margin-bottom:8px;">FED FUND RATE</div>
-                            <div class="num-lg" style="color:var(--text-main);">${f2(us.fed?.rate)}%</div>
-                        </div>
-                        <div class="glass-card" style="padding:16px; border-top: 2px solid #3b82f6;">
-                            <div class="label-sm" style="margin-bottom:8px;">ECB MAIN RATE</div>
-                            <div class="num-lg" style="color:var(--text-main);">${f2(eu.ecb?.value)}%</div>
-                        </div>
-                        <div class="glass-card" style="padding:16px;">
-                            <div class="label-sm" style="margin-bottom:8px;">US CPI (YoY)</div>
-                            <div class="num-lg" style="color:var(--text-main);">${f2(us.cpi?.value)}%</div>
-                        </div>
-                        <div class="glass-card" style="padding:16px;">
-                            <div class="label-sm" style="margin-bottom:8px;">EU CPI (YoY)</div>
-                            <div class="num-lg" style="color:var(--text-main);">${f2(eu.cpi?.value)}%</div>
-                        </div>
-                    </div>
-                    <div class="glass-card bento-full" style="padding:16px; margin-bottom:12px;">
-                        <div style="display:flex; justify-content:space-between; align-items:center;">
-                            <div>
-                                <div class="label-sm" style="margin-bottom:4px;">10Y YIELD SPREAD (US-DE)</div>
-                                <div class="num-lg" style="color:${getTrendColor(eu.yield_spread?.spread, 0)};">${f2(eu.yield_spread?.spread)}%</div>
-                            </div>
-                            <div style="text-align:right;">
-                                <div class="label-sm" style="margin-bottom:4px;">GLOBAL MACRO BIAS</div>
-                                <div style="font-size:1.1rem; font-weight:800; color:${m.macro_impact === 'bullish' ? 'var(--up-color)' : m.macro_impact === 'bearish' ? 'var(--down-color)' : 'var(--text-main)'}; text-shadow:0 0 10px currentColor;">${(m.macro_impact || '---').toUpperCase()}</div>
-                            </div>
-                        </div>
-                    </div>
-                `;
-                const spread = eu.yield_spread;
-                let contextText = spread ? `Current Capital Flow Analysis: US 10Y Yield at ${f2(spread.us_10y)}% vs German 10Y at ${f2(spread.german_10y)}%. The spread of ${f2(spread.spread)}% indicates the relative strength and institutional capital direction.` : "Data loaded.";
-                if (!res.success && res.error) contextText = res.error;
-                if (res.formatted) contextText = res.formatted;
-                document.getElementById('macro-context').textContent = contextText;
-
-                const fDir = document.getElementById('forecast-dir').textContent.trim().toUpperCase();
-                const mDir = (m.macro_impact || '').toUpperCase();
-                const warnEl = document.getElementById('mixed-signal-warn');
-                if (fDir && mDir && fDir !== 'NEUTRAL' && mDir !== 'NEUTRAL' && fDir !== mDir && fDir !== 'LOADING...') {
-                    warnEl.style.display = 'block';
-                } else {
-                    warnEl.style.display = 'none';
+                } finally {
+                    bLoading.style.display = 'none';
+                    window._intelLoading = false;
                 }
-            } else if (activeTab === 'signals') {
+            } else if (activeTab === 'trades') {
                 // Load auto-trading toggle state
                 api('/settings').then(res => {
                     if (res.success && res.data) {
@@ -2357,76 +2181,39 @@
                 } else {
                     listHist.innerHTML = `<div class="empty-state">NO HISTORY YET</div>`;
                 }
-            } else if (activeTab === 'stats') {
+            } else if (activeTab === 'analytics') {
                 if (!_btLoaded) runBacktest(null);
                 loadPerformance();
-            } else if (activeTab === 'briefing') {
-                if (_briefingLoaded) return;
-                const bLoading = document.getElementById('briefing-loading');
-                bLoading.style.display = 'block';
-
-                const res = await api('/briefing');
-                bLoading.style.display = 'none';
-
-                if (res.success && res.data) {
-                    const b = res.data;
-
-                    // Urgency badge
-                    const urgEl = document.getElementById('briefing-urgency');
-                    const urgColors = {
-                        normal: { bg: 'rgba(0,255,157,0.1)', color: 'var(--accent-primary)', border: 'rgba(0,255,157,0.15)' },
-                        alert: { bg: 'rgba(255,171,0,0.1)', color: 'var(--warn-color)', border: 'rgba(255,171,0,0.15)' },
-                        critical: { bg: 'rgba(255,51,102,0.1)', color: 'var(--down-color)', border: 'rgba(255,51,102,0.15)' },
-                    };
-                    const uc = urgColors[b.urgency] || urgColors.normal;
-                    urgEl.textContent = (b.urgency || 'normal').toUpperCase();
-                    urgEl.style.cssText = `font-size:0.45rem;font-weight:800;letter-spacing:2px;padding:2px 6px;border-radius:3px;color:${uc.color};background:${uc.bg};border:1px solid ${uc.border}`;
-
-                    // Timestamp
-                    if (b.timestamp) document.getElementById('briefing-time').textContent = formatDate(b.timestamp);
-
-                    // Price + Change
-                    const price = b.price || 0;
-                    const changePct = b.change_pct || 0;
-                    const isUp = (b.change || 0) >= 0;
-                    const sign = isUp ? '+' : '';
-
-                    document.getElementById('b-price').textContent = price ? price.toFixed(5) : '—';
-                    const changeBadge = document.getElementById('b-change-badge');
-                    changeBadge.textContent = price ? `${sign}${changePct.toFixed(2)}%` : '—';
-                    changeBadge.style.cssText = `font-size:0.65rem;font-weight:700;padding:2px 8px;border-radius:4px;font-family:'Fira Code';color:${isUp ? 'var(--up-color)' : 'var(--down-color)'};background:${isUp ? 'rgba(0,255,157,0.08)' : 'rgba(255,51,102,0.08)'}`;
-
-                    // Session
-                    document.getElementById('b-session-pill').textContent = b.session || '---';
-
-                    // Conviction meter
-                    const conviction = b.conviction || 50;
-                    document.getElementById('b-conviction-val').textContent = `${conviction}%`;
-                    const convBar = document.getElementById('b-conviction-bar');
-                    convBar.style.width = `${conviction}%`;
-                    convBar.style.background = conviction > 75 ? 'var(--up-color)' : conviction > 50 ? 'var(--accent-primary)' : conviction > 30 ? 'var(--warn-color)' : 'var(--down-color)';
-
-                    // AI Narrative — the core content
-                    const narrativeCard = document.getElementById('b-narrative-card');
-                    const narrativeEl = document.getElementById('b-narrative');
-                    const narrative = b.narrative || '';
-                    if (narrative) {
-                        narrativeCard.style.display = 'block';
-                        // Convert plain text paragraphs to HTML
-                        narrativeEl.innerHTML = narrative
-                            .split('\n\n')
-                            .filter(p => p.trim())
-                            .map(p => `<p style="margin:0 0 14px 0;">${parseMd(p.trim())}</p>`)
-                            .join('');
+            } else if (activeTab === 'system') {
+                // System Tab - Core Health & Analytics
+                api('/agent_state').then(res => {
+                    if(res.success && res.data){
+                        document.getElementById('sys-mode').textContent = res.data.state;
+                        document.getElementById('sys-ticks').textContent = res.data.ticks;
+                        document.getElementById('sys-mode').style.color = res.data.state === 'RUNNING' ? 'var(--up-color)' : 'var(--accent-primary)';
                     }
+                });
+                
+                api('/cost_stats').then(res => {
+                    if(res.success && res.data){
+                        document.getElementById('sys-tokens').textContent = (res.data.total_tokens || 0).toLocaleString();
+                        document.getElementById('sys-cost').textContent = '$' + (res.data.estimated_cost_usd || 0).toFixed(4);
+                        if(res.data.budget_pct_used) {
+                            document.getElementById('sys-budget-bar').style.width = Math.min(res.data.budget_pct_used, 100) + '%';
+                            document.getElementById('sys-budget-bar').style.background = res.data.budget_pct_used > 80 ? 'var(--down-color)' : 'var(--up-color)';
+                        }
+                    }
+                });
 
-                    document.getElementById('briefing-count').textContent = 'SYNTHESIZED BY AI · FULL ANALYSIS PIPELINE';
-                    _briefingLoaded = true;
-                } else {
-                    document.getElementById('b-narrative-card').style.display = 'block';
-                    document.getElementById('b-narrative').textContent = res.error || 'Failed to load briefing';
-                }
-            }
+                api('/counterfactual').then(res => {
+                    const list = document.getElementById('counterfactual-list');
+                    if (res.success && res.data && res.data.length > 0) {
+                        list.innerHTML = res.data.map(i => `<div style="padding:10px 0; border-bottom:1px solid rgba(255,255,255,0.05);"><strong style="color:var(--text-main);">${i.trade}</strong>: <span style="color:var(--text-muted);">${i.insight}</span></div>`).join('');
+                    } else {
+                        list.innerHTML = `<div class="empty-state" style="padding: 10px 0;">NO INSIGHTS YET</div>`;
+                    }
+                });
+
         }
         async function runInit() {
             initChart();
