@@ -41,6 +41,8 @@
             padding: 0;
             box-sizing: border-box;
             -webkit-tap-highlight-color: transparent;
+            user-select: none; /* Crucial for native TMA feel */
+            -webkit-user-select: none;
         }
 
         body {
@@ -56,7 +58,7 @@
             overflow-x: hidden;
             padding: 16px;
             padding-bottom: calc(100px + var(--safe-bottom));
-            min-height: 100vh;
+            min-height: var(--tg-viewport-stable-height, 100vh);
             font-variant-numeric: tabular-nums;
             font-feature-settings: "tnum" 1, "ss01" 1;
             letter-spacing: -0.01em; /* Sleeker typography */
@@ -423,9 +425,9 @@
             stroke: var(--accent-primary);
         }
 
-        /* Typography & Data */
+        /* Typography & Data (Scaled for Mobile Legibility) */
         .label-sm {
-            font-size: 0.65rem;
+            font-size: 0.75rem;
             color: var(--text-muted);
             text-transform: uppercase;
             letter-spacing: 2.5px;
@@ -442,28 +444,28 @@
 
         .num-lg {
             font-family: var(--font-data);
-            font-size: 1.25rem;
+            font-size: 1.4rem;
             font-weight: 300;
             letter-spacing: -0.5px;
         }
 
         .num-md {
             font-family: var(--font-data);
-            font-size: 0.95rem;
+            font-size: 1.05rem;
             font-weight: 400;
             letter-spacing: 0px;
         }
 
         .num-sm {
             font-family: var(--font-data);
-            font-size: 0.85rem;
+            font-size: 0.95rem;
             font-weight: 400;
             letter-spacing: 0px;
         }
 
         .num-xs {
             font-family: var(--font-data);
-            font-size: 0.75rem;
+            font-size: 0.85rem;
             font-weight: 300;
             letter-spacing: 0px;
         }
@@ -589,7 +591,7 @@
             background: transparent;
             border: none;
             color: var(--text-muted);
-            font-size: 0.6rem;
+            font-size: 0.75rem;
             padding: 6px 10px;
             border-radius: 8px;
             font-weight: 700;
@@ -631,13 +633,13 @@
         }
 
         .info-row .label {
-            font-size: 0.7rem;
+            font-size: 0.8rem;
             color: var(--text-muted);
             font-weight: 500;
         }
 
         .info-row .val {
-            font-size: 0.75rem;
+            font-size: 0.85rem;
             font-weight: 600;
             font-family: 'Fira Code', monospace;
         }
@@ -684,7 +686,7 @@
             padding: 16px;
             border-radius: 16px;
             font-weight: 600;
-            font-size: 0.75rem;
+            font-size: 0.85rem;
             letter-spacing: 1px;
             margin-top: 12px;
             cursor: pointer;
@@ -748,7 +750,7 @@
         button.bt-filter-btn {
             margin: 0;
             padding: 8px 12px;
-            font-size: 0.6rem;
+            font-size: 0.7rem;
             flex: 1;
             font-weight: 700;
         }
@@ -2263,6 +2265,12 @@
             }
         }
         async function runInit() {
+            try { 
+                tg.expand(); 
+                tg.ready(); 
+            } catch (e) {
+                console.log("Not in Telegram environment");
+            }
             initChart();
             await sync();
             setInterval(() => sync(), 15000);
