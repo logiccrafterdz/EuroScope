@@ -849,6 +849,28 @@
             letter-spacing: 1.5px;
             text-transform: uppercase;
             opacity: 0.5;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+        }
+
+        .empty-state::before {
+            content: '';
+            display: block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: currentColor;
+            opacity: 0.3;
+            animation: pulse-dot 2s infinite;
+        }
+
+        @keyframes pulse-dot {
+            0% { transform: scale(0.8); opacity: 0.3; }
+            50% { transform: scale(1.5); opacity: 0.6; }
+            100% { transform: scale(0.8); opacity: 0.3; }
         }
     </style>
 </head>
