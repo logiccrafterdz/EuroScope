@@ -36,6 +36,12 @@
             --text-price-hero: clamp(2.5rem, 8vw, 3.5rem);
         }
 
+        html {
+            -webkit-text-size-adjust: 100%;
+            text-size-adjust: 100%;
+            overscroll-behavior: none;
+        }
+
         * {
             margin: 0;
             padding: 0;
@@ -56,8 +62,7 @@
             background-position: center top, center center, center center;
             color: var(--text-main);
             overflow-x: hidden;
-            padding: 16px;
-            padding-bottom: calc(100px + var(--safe-bottom));
+            padding: max(16px, env(safe-area-inset-top)) 16px calc(100px + var(--safe-bottom)) 16px;
             min-height: var(--tg-viewport-stable-height, 100vh);
             font-variant-numeric: tabular-nums;
             font-feature-settings: "tnum" 1, "ss01" 1;
@@ -622,9 +627,11 @@
             transition: background 0.2s ease, transform 0.2s ease;
         }
 
-        .info-row:hover {
-            background: rgba(255, 255, 255, 0.03);
-            transform: translateX(2px);
+        @media (hover: hover) {
+            .info-row:hover {
+                background: rgba(255, 255, 255, 0.03);
+                transform: translateX(2px);
+            }
         }
 
         .info-row:last-child {
@@ -713,14 +720,16 @@
             pointer-events: none;
         }
 
-        button.action-btn:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
-        }
+        @media (hover: hover) {
+            button.action-btn:hover {
+                transform: translateY(-1px);
+                box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
+            }
 
-        button.action-btn:hover::after {
-            left: 100%;
-            top: 100%;
+            button.action-btn:hover::after {
+                left: 100%;
+                top: 100%;
+            }
         }
 
         button.action-btn:active {
@@ -735,11 +744,13 @@
             transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
         }
 
-        button.action-outline:hover {
-            border-color: var(--accent-primary);
-            color: var(--accent-primary);
-            background: rgba(0, 212, 170, 0.03);
-            box-shadow: 0 0 15px var(--accent-glow);
+        @media (hover: hover) {
+            button.action-outline:hover {
+                border-color: var(--accent-primary);
+                color: var(--accent-primary);
+                background: rgba(0, 212, 170, 0.03);
+                box-shadow: 0 0 15px var(--accent-glow);
+            }
         }
 
         button.action-outline:active {
@@ -2268,6 +2279,8 @@
             try { 
                 tg.expand(); 
                 tg.ready(); 
+                tg.setHeaderColor('#020305');
+                tg.setBackgroundColor('#020305');
             } catch (e) {
                 console.log("Not in Telegram environment");
             }
