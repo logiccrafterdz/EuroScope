@@ -59,6 +59,28 @@
             min-height: 100vh;
             font-variant-numeric: tabular-nums;
             font-feature-settings: "tnum" 1, "ss01" 1;
+            letter-spacing: -0.01em; /* Sleeker typography */
+        }
+
+        /* Essential Scrollbar Customization */
+        ::-webkit-scrollbar {
+            width: 4px;
+            height: 4px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 4px;
+            transition: background 0.3s ease;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.3);
         }
 
         .container {
@@ -182,8 +204,8 @@
         .bento {
             display: grid;
             grid-template-columns: repeat(2, 1fr);
-            gap: 12px;
-            margin-bottom: 12px;
+            gap: 16px;
+            margin-bottom: 16px;
         }
 
         .bento-full {
@@ -196,7 +218,7 @@
             -webkit-backdrop-filter: blur(24px) saturate(150%);
             border: 1px solid var(--border-color);
             border-radius: 24px;
-            padding: 16px;
+            padding: 20px;
             position: relative;
             overflow: hidden;
             box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.05);
@@ -406,7 +428,7 @@
             font-size: 0.65rem;
             color: var(--text-muted);
             text-transform: uppercase;
-            letter-spacing: 2px;
+            letter-spacing: 2.5px;
             font-weight: 700;
             margin-bottom: 8px;
         }
