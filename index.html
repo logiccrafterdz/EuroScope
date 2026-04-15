@@ -444,8 +444,12 @@
         }
 
         .label-sm svg {
+            width: 16px;
+            height: 16px;
             stroke-width: 1.8;
             color: var(--text-dim);
+            flex-shrink: 0;
+            transform: translateY(-0.5px); /* Optical vertical alignment */
         }
 
         .num-hero {
@@ -963,7 +967,9 @@
                     <button class="tf-btn" onclick="updateTimeframe('D1')">D1</button>
                 </div>
                 <div id="chart-container"></div>
-                <div id="chart-status">INITIALIZING...</div>
+                <div id="chart-status" style="display:flex; flex-direction:column; gap:8px; align-items:center; justify-content:center; position:absolute; inset:0;">
+                    <div class="empty-state" style="padding:0;">INITIALIZING...</div>
+                </div>
             </div>
 
             <button class="action-btn action-outline" onclick="sync('terminal')">SYNC TERMINAL</button>
