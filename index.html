@@ -811,7 +811,7 @@
             border-radius: 16px;
             font-size: 0.75rem;
             margin-bottom: 12px;
-            font-family: 'Fira Code';
+            font-family: var(--font-data);
         }
 
         /* Analysis Tab Visuals */
@@ -1033,7 +1033,7 @@
                     Multi-Agent Deliberation Log
                 </div>
                 <div id="committee-log" style="font-size: 0.75rem; color: var(--text-muted); line-height: 1.6; max-height: 150px; overflow-y: auto; padding: 10px; background: rgba(0,0,0,0.2) ; border-radius: 8px; border: 1px solid var(--border-color);">
-                    <div class="empty-state" style="padding: 10px 0;">NO DELIBERATION TRIGGERED YET</div>
+                    <div class="empty-state"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg><span>NO DELIBERATION TRIGGERED YET</span></div>
                 </div>
             </div>
 
@@ -1111,7 +1111,7 @@
                     Recent Signals
                 </div>
                 <div id="recent-signals-list">
-                    <div class="empty-state" style="padding: 20px 0;">NO SIGNALS</div>
+                    <div class="empty-state"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg><span>NO SIGNALS</span></div>
                 </div>
             </div>
 
@@ -1121,7 +1121,7 @@
                     Recent History
                 </div>
                 <div id="trade-history-list">
-                    <div class="empty-state" style="padding: 20px 0;">NO HISTORY</div>
+                    <div class="empty-state"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg><span>NO HISTORY</span></div>
                 </div>
             </div>
         </div>
@@ -1136,7 +1136,7 @@
                         BACKTEST ENGINE
                     </div>
                     <div id="bt-status"
-                        style="font-size:0.6rem; color:var(--text-dim); font-family:'Fira Code'; letter-spacing:0.5px;">
+                        style="font-size:0.6rem; color:var(--text-dim); font-family:var(--font-data); letter-spacing:0.5px;">
                     </div>
                 </div>
                 <div style="display: flex; gap: 6px; margin-bottom: 16px;">
@@ -1190,15 +1190,14 @@
                         <div class="info-row" style="margin:0; border:none;"><span class="label">BEST</span><span id="bt-best" class="val" style="color:var(--up-color)">--</span></div>
                         <div class="info-row" style="margin:0; border:none;"><span class="label">WORST</span><span id="bt-worst" class="val" style="color:var(--down-color)">--</span></div>
                     </div>
-                </div>
 
                     <!-- Equity Curve -->
-                    <div style="margin-bottom:12px;">
+                    <div style="margin-top:20px; margin-bottom:12px;">
                         <div
                             style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
                             <div class="label-sm" style="margin:0;">EQUITY CURVE</div>
                             <div id="bt-bars"
-                                style="font-size:0.55rem; color:var(--text-dim); font-family:'Fira Code';"></div>
+                                style="font-size:0.55rem; color:var(--text-dim); font-family:var(--font-data);"></div>
                         </div>
                         <div id="bt-equity"
                             style="height: 120px; width: 100%; border-radius:10px; overflow:hidden; background:rgba(0,0,0,0.2);">
@@ -1206,11 +1205,11 @@
                     </div>
 
                     <!-- Trade History -->
-                    <div id="bt-trade-history" style="display:none;">
+                    <div id="bt-trade-history" style="display:none; margin-top:20px;">
                         <div class="label-sm" style="margin-bottom:8px;">RECENT TRADES</div>
                         <div id="bt-trade-list" style="max-height:150px; overflow-y:auto;"></div>
                     </div>
-                </div>
+                </div> <!-- Closing bt-results properly -->
             </div>
 
             <!-- Performance Section -->
@@ -1245,7 +1244,7 @@
                 <div class="label-sm" style="margin-bottom:8px;">AI TUNING RECOMMENDATIONS</div>
                 <div id="perf-recommendations"
                     style="padding:10px; background:rgba(255,255,255,0.02); border-radius:12px; border:1px solid var(--border-color);">
-                    <div class="empty-state" style="padding:12px 0;">ANALYZING...</div>
+                    <div class="empty-state"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg><span>ANALYZING...</span></div>
                 </div>
             </div>
         </div>
@@ -1260,11 +1259,11 @@
                 </div>
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
                     <div>
-                        <div id="sys-mode" style="font-size:1.4rem; font-family:'Fira Code'; font-weight:800; color:var(--accent-primary); letter-spacing:1px; text-shadow:0 0 10px rgba(0, 255, 157, 0.4);">AWAITING SYNC</div>
+                        <div id="sys-mode" style="font-size:1.4rem; font-family:var(--font-data); font-weight:800; color:var(--accent-primary); letter-spacing:1px; text-shadow:0 0 10px rgba(0, 255, 157, 0.4);">AWAITING SYNC</div>
                     </div>
                     <div style="text-align:right;">
                         <div class="label-sm" style="margin-bottom:2px;">INTERNAL TICKS</div>
-                        <div id="sys-ticks" class="num-md" style="font-family:'Fira Code'; font-weight:300;">0</div>
+                        <div id="sys-ticks" class="num-md" style="font-family:var(--font-data); font-weight:300;">0</div>
                     </div>
                 </div>
             </div>
@@ -1275,7 +1274,7 @@
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
                     COUNTERFACTUAL INSIGHTS
                 </div>
-                <div id="counterfactual-list" style="font-size: 0.75rem;"><div class="empty-state" style="padding: 10px 0;">AWAITING DATA</div></div>
+                <div id="counterfactual-list" style="font-size: 0.75rem;"><div class="empty-state"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg><span>AWAITING DATA</span></div></div>
             </div>
 
             <!-- System Resource / Health Monitor -->
