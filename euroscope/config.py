@@ -72,6 +72,8 @@ class Config(BaseSettings):
     safety_news_block_minutes: int = 30
     safety_asian_min_confidence: float = 0.75
     safety_volatility_stop_min: int = 25
+    safety_max_weekly_drawdown_pct: float = 6.0
+    safety_max_monthly_drawdown_pct: float = 10.0
 
     @classmethod
     def _validate_env_syntax(cls, filepath=".env"):
@@ -165,6 +167,8 @@ class Config(BaseSettings):
             safety_news_block_minutes=int(os.getenv("EUROSCOPE_SAFETY_NEWS_BLOCK_MINUTES", "30")),
             safety_asian_min_confidence=float(os.getenv("EUROSCOPE_SAFETY_ASIAN_MIN_CONFIDENCE", "0.75")),
             safety_volatility_stop_min=int(os.getenv("EUROSCOPE_SAFETY_VOLATILITY_STOP_MIN", "25")),
+            safety_max_weekly_drawdown_pct=float(os.getenv("EUROSCOPE_MAX_WEEKLY_DRAWDOWN", "6.0")),
+            safety_max_monthly_drawdown_pct=float(os.getenv("EUROSCOPE_MAX_MONTHLY_DRAWDOWN", "10.0")),
         )
         return cls(**config_data)
 

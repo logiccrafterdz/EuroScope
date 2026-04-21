@@ -20,6 +20,8 @@ class RiskConfig:
     account_balance: float = 10000.0       # Account balance in USD
     risk_per_trade: float = 1.0            # Risk % per trade
     max_daily_drawdown: float = 3.0        # Max daily loss %
+    max_weekly_drawdown: float = 6.0       # Max weekly loss %
+    max_monthly_drawdown: float = 10.0     # Max monthly loss %
     max_open_trades: int = 3               # Max simultaneous positions
     max_consecutive_losses: int = 3        # Pause after N consecutive losses
     default_rr_ratio: float = 2.0          # Default risk:reward (1:2)
@@ -56,6 +58,10 @@ class RiskManager:
         self.storage = storage
         self._daily_pnl: float = 0.0
         self._daily_pnl_date: str = ""
+        self._weekly_pnl: float = 0.0
+        self._weekly_pnl_start: str = ""
+        self._monthly_pnl: float = 0.0
+        self._monthly_pnl_start: str = ""
         self._consecutive_losses: int = 0
         self._open_trade_count: int = 0
 
@@ -66,16 +72,34 @@ class RiskManager:
 
         state = await self.storage.load_json("risk_manager_state")
         if state:
-            today = datetime.now(UTC).strftime("%Y-%m-%d")
-            if state.get("daily_pnl_date") == today:
+            today = datetime.now(UTC)
+            today_str = today.strftime("%Y-%m-%d")
+            week_str = today.strftime("%Y-%V")
+            month_str = today.strftime("%Y-%m")
+            
+            if state.get("daily_pnl_date") == today_str:
                 self._daily_pnl = state.get("daily_pnl", 0.0)
-                self._daily_pnl_date = today
+                self._daily_pnl_date = today_str
             else:
                 self._daily_pnl = 0.0
-                self._daily_pnl_date = today
+                self._daily_pnl_date = today_str
                 
+            if state.get("weekly_pnl_start") == week_str:
+                self._weekly_pnl = state.get("weekly_pnl", 0.0)
+                self._weekly_pnl_start = week_str
+            else:
+                self._weekly_pnl = 0.0
+                self._weekly_pnl_start = week_str
+
+            if state.get("monthly_pnl_start") == month_str:
+                self._monthly_pnl = state.get("monthly_pnl", 0.0)
+                self._monthly_pnl_start = month_str
+            else:
+                self._monthly_pnl = 0.0
+                self._monthly_pnl_start = month_str
+
             self._consecutive_losses = state.get("consecutive_losses", 0)
-            logger.info(f"RiskManager state loaded: PnL={self._daily_pnl:.2f}, Streak={self._consecutive_losses}")
+            logger.info(f"RiskManager state loaded: PnL={self._daily_pnl:.2f}, W_PnL={self._weekly_pnl:.2f}, M_PnL={self._monthly_pnl:.2f}, Streak={self._consecutive_losses}")
 
     async def save_state(self):
         """Save risk state to storage."""
@@ -85,6 +109,10 @@ class RiskManager:
         state = {
             "daily_pnl": self._daily_pnl,
             "daily_pnl_date": self._daily_pnl_date,
+            "weekly_pnl": self._weekly_pnl,
+            "weekly_pnl_start": self._weekly_pnl_start,
+            "monthly_pnl": self._monthly_pnl,
+            "monthly_pnl_start": self._monthly_pnl_start,
             "consecutive_losses": self._consecutive_losses,
             "updated_at": datetime.now(UTC).isoformat()
         }
@@ -319,14 +347,35 @@ class RiskManager:
         risk_amount = round(self.config.account_balance * (self.config.risk_per_trade / 100), 2)
 
         # ── Drawdown checks ──
-        today = datetime.now(UTC).strftime("%Y-%m-%d")
-        if self._daily_pnl_date != today:
+        today = datetime.now(UTC)
+        today_str = today.strftime("%Y-%m-%d")
+        week_str = today.strftime("%Y-%V")
+        month_str = today.strftime("%Y-%m")
+        
+        if self._daily_pnl_date != today_str:
             self._daily_pnl = 0.0
-            self._daily_pnl_date = today
+            self._daily_pnl_date = today_str
+        if getattr(self, '_weekly_pnl_start', "") != week_str:
+            self._weekly_pnl = 0.0
+            self._weekly_pnl_start = week_str
+        if getattr(self, '_monthly_pnl_start', "") != month_str:
+            self._monthly_pnl = 0.0
+            self._monthly_pnl_start = month_str
 
         daily_loss_pct = abs(self._daily_pnl / self.config.account_balance * 100) if self._daily_pnl < 0 else 0
+        weekly_loss_pct = abs(getattr(self, '_weekly_pnl', 0.0) / self.config.account_balance * 100) if getattr(self, '_weekly_pnl', 0.0) < 0 else 0
+        monthly_loss_pct = abs(getattr(self, '_monthly_pnl', 0.0) / self.config.account_balance * 100) if getattr(self, '_monthly_pnl', 0.0) < 0 else 0
+
         if daily_loss_pct >= self.config.max_daily_drawdown:
             warnings.append(f"🛑 Daily drawdown limit reached ({daily_loss_pct:.1f}%)")
+            approved = False
+            
+        if weekly_loss_pct >= getattr(self.config, 'max_weekly_drawdown', 6.0):
+            warnings.append(f"🛑 Weekly drawdown limit reached ({weekly_loss_pct:.1f}%)")
+            approved = False
+            
+        if monthly_loss_pct >= getattr(self.config, 'max_monthly_drawdown', 10.0):
+            warnings.append(f"🛑 Monthly drawdown limit reached ({monthly_loss_pct:.1f}%)")
             approved = False
 
         if self._open_trade_count >= self.config.max_open_trades:
@@ -387,12 +436,28 @@ class RiskManager:
 
     async def record_trade_result(self, pnl: float):
         """Record a closed trade's PnL for drawdown tracking."""
-        today = datetime.now(UTC).strftime("%Y-%m-%d")
-        if self._daily_pnl_date != today:
+        today = datetime.now(UTC)
+        today_str = today.strftime("%Y-%m-%d")
+        week_str = today.strftime("%Y-%V")
+        month_str = today.strftime("%Y-%m")
+        
+        if self._daily_pnl_date != today_str:
             self._daily_pnl = 0.0
-            self._daily_pnl_date = today
+            self._daily_pnl_date = today_str
+        if getattr(self, '_weekly_pnl_start', "") != week_str:
+            self._weekly_pnl = 0.0
+            self._weekly_pnl_start = week_str
+        if getattr(self, '_monthly_pnl_start', "") != month_str:
+            self._monthly_pnl = 0.0
+            self._monthly_pnl_start = month_str
             
         self._daily_pnl += pnl
+        if not hasattr(self, '_weekly_pnl'):
+            self._weekly_pnl = 0.0
+        if not hasattr(self, '_monthly_pnl'):
+            self._monthly_pnl = 0.0
+        self._weekly_pnl += pnl
+        self._monthly_pnl += pnl
 
         if pnl < 0:
             self._consecutive_losses += 1
