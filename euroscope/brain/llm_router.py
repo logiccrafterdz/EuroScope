@@ -321,7 +321,7 @@ class LLMRouter:
         """Make a single API call to a provider."""
         temp = temperature if temperature is not None else provider.temperature
 
-        async with httpx.AsyncClient(timeout=60) as client:
+        async with httpx.AsyncClient(timeout=15.0) as client:
             response = await client.post(
                 f"{provider.api_base}/chat/completions",
                 headers={
@@ -368,7 +368,7 @@ class LLMRouter:
             "response_format": {"type": "json_object"},
         }
 
-        async with httpx.AsyncClient(timeout=60) as client:
+        async with httpx.AsyncClient(timeout=15.0) as client:
             try:
                 response = await client.post(
                     f"{provider.api_base}/chat/completions",
@@ -446,7 +446,7 @@ class LLMRouter:
             payload["functions"] = functions
             payload["function_call"] = function_call
 
-        async with httpx.AsyncClient(timeout=60) as client:
+        async with httpx.AsyncClient(timeout=15.0) as client:
             try:
                 response = await client.post(
                     f"{provider.api_base}/chat/completions",

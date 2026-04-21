@@ -83,10 +83,10 @@ class DeliberationCommittee:
                     self._ask_risk_manager(context_str),
                     return_exceptions=True
                 ),
-                timeout=20.0  # Hard ceiling: 20 seconds for all 3 agents
+                timeout=15.0  # Hard ceiling: 15 seconds for all 3 agents
             )
         except asyncio.TimeoutError:
-            logger.error("Committee timed out after 20s. Defaulting to NEUTRAL.")
+            logger.error("Committee timed out after 15s. Defaulting to NEUTRAL.")
             return {"final_direction": "NEUTRAL", "confidence": 0, "reasoning": "Committee timed out."}
         except Exception as e:
             logger.error(f"Committee crashed: {e}")

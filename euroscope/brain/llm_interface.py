@@ -102,7 +102,7 @@ class LLMInterface:
             return "⚠️ AI features disabled — no API key configured."
 
         try:
-            async with httpx.AsyncClient(timeout=60) as client:
+            async with httpx.AsyncClient(timeout=15.0) as client:
                 response = await client.post(
                     f"{self.config.api_base}/chat/completions",
                     headers={
@@ -159,7 +159,7 @@ class LLMInterface:
             return "⚠️ AI features disabled — no API key configured."
 
         try:
-            async with httpx.AsyncClient(timeout=60) as client:
+            async with httpx.AsyncClient(timeout=15.0) as client:
                 response = await client.post(
                     f"{self.config.api_base}/chat/completions",
                     headers={
@@ -1016,7 +1016,7 @@ class LLMInterface:
                 return reply
         if not self.config.api_key:
             return "⚠️ AI features disabled — no API key configured."
-        async with httpx.AsyncClient(timeout=60) as client:
+        async with httpx.AsyncClient(timeout=15.0) as client:
             response = await client.post(
                 f"{self.config.api_base}/chat/completions",
                 headers={
@@ -1361,7 +1361,7 @@ class LLMInterface:
                 {"role": "user", "content": prompt}
             ]
             try:
-                async with httpx.AsyncClient(timeout=60) as client:
+                async with httpx.AsyncClient(timeout=15.0) as client:
                     response = await client.post(
                         f"{self.config.fallback_api_base}/chat/completions",
                         headers={
