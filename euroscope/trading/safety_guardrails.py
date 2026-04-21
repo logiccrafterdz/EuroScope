@@ -28,20 +28,44 @@ class SafetyGuardrail:
             if context.metadata.get("emergency_mode"):
                 return True, "EMERGENCY: market regime shift"
                 
-            # --- DAILY DRAWDOWN CHECK ---
+            # --- DRAWDOWN CHECKS ---
             max_dd_pips = float(getattr(self.config, "safety_max_daily_drawdown_pips", 50.0))
-            if max_dd_pips > 0 and self.storage:
+            max_dd_weekly_pct = float(getattr(self.config, "safety_max_weekly_drawdown_pct", 6.0))
+            max_dd_monthly_pct = float(getattr(self.config, "safety_max_monthly_drawdown_pct", 10.0))
+            
+            if self.storage:
                 try:
-                    from datetime import datetime, timezone
-                    today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-                    today_trades = await self.storage.get_trade_journal_for_date(today_str, status="closed")
-                    daily_pnl = sum(t.get("pnl_pips", 0.0) for t in today_trades)
+                    from datetime import datetime, timezone, timedelta
+                    now = datetime.now(timezone.utc)
+                    today_str = now.strftime("%Y-%m-%d")
+                    week_start = (now - timedelta(days=now.weekday())).strftime("%Y-%m-%d")
+                    month_start = now.replace(day=1).strftime("%Y-%m-%d")
                     
-                    if daily_pnl <= -max_dd_pips:
-                        return True, f"DAILY DRAWDOWN REACHED: {daily_pnl:.1f} pips (Limit: -{max_dd_pips}). Trading halted for today."
+                    if max_dd_pips > 0:
+                        today_trades = await self.storage.get_trade_journal_for_date(today_str, status="closed")
+                        daily_pnl = sum(t.get("pnl_pips", 0.0) for t in today_trades)
+                        if daily_pnl <= -max_dd_pips:
+                            return True, f"DAILY DRAWDOWN REACHED: {daily_pnl:.1f} pips (Limit: -{max_dd_pips}). Trading halted for today."
+                            
+                    account_balance = float(getattr(self.config, "account_balance", 10000.0))
+                    
+                    if max_dd_weekly_pct > 0 and hasattr(self.storage, 'get_trade_journal_for_period'):
+                        week_trades = await self.storage.get_trade_journal_for_period(week_start, today_str, status="closed")
+                        weekly_pnl_pips = sum(t.get("pnl_pips", 0.0) for t in week_trades)
+                        weekly_loss_pct = abs(weekly_pnl_pips / account_balance * 100) if weekly_pnl_pips < 0 else 0
+                        if weekly_loss_pct >= max_dd_weekly_pct:
+                            return True, f"WEEKLY DRAWDOWN REACHED: {weekly_loss_pct:.1f}% (Limit: {max_dd_weekly_pct}%)."
+
+                    if max_dd_monthly_pct > 0 and hasattr(self.storage, 'get_trade_journal_for_period'):
+                        month_trades = await self.storage.get_trade_journal_for_period(month_start, today_str, status="closed")
+                        monthly_pnl_pips = sum(t.get("pnl_pips", 0.0) for t in month_trades)
+                        monthly_loss_pct = abs(monthly_pnl_pips / account_balance * 100) if monthly_pnl_pips < 0 else 0
+                        if monthly_loss_pct >= max_dd_monthly_pct:
+                            return True, f"MONTHLY DRAWDOWN REACHED: {monthly_loss_pct:.1f}% (Limit: {max_dd_monthly_pct}%)."
+
                 except Exception as e:
                     import logging
-                    logging.getLogger("euroscope.guardrails").warning(f"Could not fetch daily PnL: {e}")
+                    logging.getLogger("euroscope.guardrails").warning(f"Could not fetch drawdown PnL: {e}")
 
             direction = (context.signals or {}).get("direction")
             if direction not in ("BUY", "SELL"):

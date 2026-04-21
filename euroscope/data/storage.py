@@ -754,6 +754,31 @@ class Storage:
             t["causal_chain"] = self._parse_json_payload(t.get("causal_chain"))
         return trades
 
+    async def get_trade_journal_for_period(self, start_date: str, end_date: str, status: Optional[str] = None) -> list[dict]:
+        try:
+            start_day = datetime.fromisoformat(start_date)
+        except ValueError:
+            start_day = datetime.strptime(start_date, "%Y-%m-%d")
+        try:
+            end_day = datetime.fromisoformat(end_date)
+        except ValueError:
+            end_day = datetime.strptime(end_date, "%Y-%m-%d")
+            
+        start = start_day.replace(hour=0, minute=0, second=0, microsecond=0)
+        end = end_day.replace(hour=23, minute=59, second=59, microsecond=999999)
+
+        query = "SELECT * FROM trade_journal WHERE timestamp >= ? AND timestamp <= ?"
+        params: list[Any] = [start.isoformat(), end.isoformat()]
+        if status:
+            query += " AND status=?"
+            params.append(status)
+        query += " ORDER BY timestamp DESC"
+
+        trades = await self._query_rows(query, tuple(params))
+        for t in trades:
+            t["causal_chain"] = self._parse_json_payload(t.get("causal_chain"))
+        return trades
+
     async def get_trade_with_causal(self, trade_id: int) -> Optional[dict]:
         trade = await self._query_one(
             "SELECT * FROM trade_journal WHERE id=?",
