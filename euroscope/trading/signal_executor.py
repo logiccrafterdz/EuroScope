@@ -190,7 +190,7 @@ class SignalExecutor:
                     stop_loss: float, take_profit: float,
                     strategy: str = "manual", timeframe: str = "H1",
                     confidence: float = 50.0, reasoning: str = "",
-                    atr: float = None, spread: float = 0.0) -> int:
+                    atr: float = None, spread: float = 0.0, position_size: float = 0.01) -> int:
         """
         Open a new trading signal (paper trade).
 
@@ -240,7 +240,8 @@ class SignalExecutor:
                 return -1
             
             # Note: For real execution, stop_loss and take_profit are passed to broker
-            res = await self.broker.execute_trade("EURUSD", direction, 0.01, stop_loss, take_profit)
+            # Task 1.3: Fixed lot size bypass (now uses position_size instead of 0.01)
+            res = await self.broker.execute_trade("EURUSD", direction, position_size, stop_loss, take_profit)
             if not res.get("success"):
                 logger.error(f"REAL TRADE FAILED: {res.get('error')}")
                 await self.storage.update_transaction_status(tx_id, "failed")

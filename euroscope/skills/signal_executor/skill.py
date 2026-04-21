@@ -178,6 +178,7 @@ class SignalExecutorSkill(BaseSkill):
         reasoning = signal.get("reasoning", "")
         atr = context.analysis.get("indicators", {}).get("atr")
         spread = float(context.metadata.get("spread_pips", 0.0))
+        position_size = float(risk.get("position_size", 0.01))
 
         # M-5: Trade Deduplication within 60 seconds
         import time
@@ -207,7 +208,8 @@ class SignalExecutorSkill(BaseSkill):
             confidence=confidence,
             reasoning=reasoning,
             atr=atr,
-            spread=spread
+            spread=spread,
+            position_size=position_size
         )
 
         if signal_id == -1:
