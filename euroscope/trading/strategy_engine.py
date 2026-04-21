@@ -67,7 +67,8 @@ class StrategyEngine:
 
     def detect_strategy(self, indicators: dict, levels: dict,
                         patterns: list = None, uncertainty: Optional[dict] = None,
-                        macro_data: Optional[dict] = None) -> StrategySignal:
+                        macro_data: Optional[dict] = None,
+                        user_prefs: Optional[dict] = None) -> StrategySignal:
         """
         Analyze market conditions and recommend a strategy.
 
@@ -75,10 +76,15 @@ class StrategyEngine:
             indicators: Technical indicator data (RSI, MACD, EMA, ADX, BB, ATR)
             levels: {"current_price", "support", "resistance"}
             patterns: Detected chart patterns
+            uncertainty: Uncertainty data
+            macro_data: Macroeconomic data
+            user_prefs: Dynamically tuned parameters from tuning.json
 
         Returns:
             StrategySignal with recommended action
         """
+        if user_prefs:
+            self._tuning_params.update(user_prefs)
         regime_info = self._detect_regime(indicators)
         patterns = patterns or []
         if regime_info.regime != "breakout" and self._has_breakout_trigger(indicators, levels):

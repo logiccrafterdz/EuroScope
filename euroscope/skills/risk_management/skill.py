@@ -350,6 +350,9 @@ class RiskManagementSkill(BaseSkill):
         return abs(self.manager._daily_pnl / self.manager.config.account_balance * 100)
 
     def _get_base_risk_pct(self, user_prefs: dict) -> float:
+        tuned_risk = user_prefs.get("risk_per_trade_pct")
+        if tuned_risk is not None:
+            return float(tuned_risk)
         risk_pref = user_prefs.get("risk_tolerance", "")
         if risk_pref == "low":
             return 0.5

@@ -886,6 +886,8 @@ class EuroScopeAgent:
             "convictions": self.conviction_tracker.serialize(),
             "cycle_count": self._cycle_count,
             "total_actions": self._total_actions,
+            "emergency_mode": self.orchestrator.global_context.metadata.get("emergency_mode", False),
+            "emergency_until": self.orchestrator.global_context.metadata.get("emergency_until", 0.0),
             "saved_at": datetime.now(UTC).isoformat(),
         }
         try:
@@ -908,6 +910,19 @@ class EuroScopeAgent:
             self.conviction_tracker.deserialize(state.get("convictions", {}))
             self._cycle_count = state.get("cycle_count", 0)
             self._total_actions = state.get("total_actions", 0)
+            
+            # Restore emergency mode
+            em_mode = state.get("emergency_mode", False)
+            em_until = state.get("emergency_until", 0.0)
+            self.orchestrator.global_context.metadata["emergency_mode"] = em_mode
+            self.orchestrator.global_context.metadata["emergency_until"] = em_until
+            
+            # Close the adaptive tuning loop
+            tuning = await self.storage.load_json("tuning")
+            if tuning:
+                self.orchestrator.global_context.user_prefs.update(tuning)
+                logger.info("Adaptive tuning parameters loaded into global context")
+            
             logger.info("Agent state restored from storage")
         except Exception as e:
             logger.warning(f"Could not restore agent state: {e}")

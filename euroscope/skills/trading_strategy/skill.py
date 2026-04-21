@@ -74,7 +74,8 @@ class TradingStrategySkill(BaseSkill):
             }
             macro_data = context.analysis.get("macro_data", {})
             signal = self.engine.detect_strategy(
-                ind, levels, patterns, uncertainty=uncertainty, macro_data=macro_data
+                ind, levels, patterns, uncertainty=uncertainty, macro_data=macro_data,
+                user_prefs=context.user_prefs
             )
 
             # --- Phase 2: MTF Confirmation Check ---
