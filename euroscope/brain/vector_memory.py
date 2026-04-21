@@ -279,31 +279,23 @@ class VectorMemory:
             return []
             
         fts_query = " OR ".join(search_terms)
-        results = self.search_similar(fts_query, k=k, collection="regimes")
-        
         parsed_results = []
         import ast
-        for r in results:
-            try:
-                # We need to extract outcome from the DB
-                # since search_similar doesn't return custom columns directly, let's fetch it
-                doc_id = r.get('doc_id')
-                # Wait, search_similar doesn't return doc_id in its list! It returns text and metadata.
-                # I will construct a direct query here to get 'outcome'
-                cursor = self._conn.execute(
-                    "SELECT text, state_vector, outcome, rank FROM regimes WHERE regimes MATCH ? ORDER BY rank LIMIT ?",
-                    (fts_query, k)
-                )
-                for row in cursor:
-                    parsed_results.append({
-                        "text": row["text"],
-                        "state_vector": ast.literal_eval(row["state_vector"]),
-                        "outcome": row["outcome"],
-                        "distance": abs(row["rank"])
-                    })
-                break # Only run the direct query once to get exactly what we need
-            except Exception as e:
-                logger.error(f"Failed to parse past regime: {e}")
+        try:
+            cursor = self._conn.execute(
+                "SELECT text, state_vector, outcome, rank FROM regimes WHERE regimes MATCH ? ORDER BY rank LIMIT ?",
+                (fts_query, k)
+            )
+            for row in cursor:
+                parsed_results.append({
+                    "text": row["text"],
+                    "state_vector": ast.literal_eval(row["state_vector"]),
+                    "outcome": row["outcome"],
+                    "distance": abs(row["rank"])
+                })
+        except Exception as e:
+            logger.error(f"Failed to query past regimes: {e}")
+            
         return parsed_results
 
     def get_collection_stats(self) -> dict:
