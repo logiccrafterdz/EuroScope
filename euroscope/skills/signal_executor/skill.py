@@ -254,6 +254,8 @@ class SignalExecutorSkill(BaseSkill):
             return "UNCERTAINTY: confidence too low"
         if context.metadata.get("confidence_adjustment", 1.0) < 0.5:
             return "CONFIDENCE: signal degraded"
+        if context.risk and context.risk.get("approved") is False:
+            return "RISK: Trade denied by risk manager checks"
         return None
 
     def set_emergency_halt(self, duration_seconds: int = 300):

@@ -382,8 +382,9 @@ class RiskManager:
             warnings.append(f"🛑 Max open trades reached ({self._open_trade_count})")
             approved = False
 
-        if self._consecutive_losses >= self.config.max_consecutive_losses:
-            warnings.append(f"⚠️ {self._consecutive_losses} consecutive losses — consider pausing")
+        if self._consecutive_losses >= getattr(self.config, 'max_consecutive_losses', 3):
+            warnings.append(f"🛑 {self._consecutive_losses} consecutive losses limit reached — trading paused")
+            approved = False
 
         # ── Risk score (1-10) ──
         risk_score = self._calculate_risk_score(stop_pips, rr, daily_loss_pct)
