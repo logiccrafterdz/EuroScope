@@ -54,6 +54,12 @@ class LLMRouter:
             failure_threshold=5,
             recovery_timeout=60.0
         )
+        limits = httpx.Limits(max_keepalive_connections=20, max_connections=40)
+        self._client = httpx.AsyncClient(timeout=15.0, limits=limits)
+
+    async def close(self):
+        """Close the persistent HTTP client."""
+        await self._client.aclose()
 
     @classmethod
     def from_config(cls, primary_key: str = "", primary_base: str = "",
@@ -321,22 +327,21 @@ class LLMRouter:
         """Make a single API call to a provider."""
         temp = temperature if temperature is not None else provider.temperature
 
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            response = await client.post(
-                f"{provider.api_base}/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {provider.api_key}",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "model": provider.model,
-                    "messages": messages,
-                    "max_tokens": provider.max_tokens,
-                    "temperature": temp,
-                },
-            )
-            response.raise_for_status()
-            data = response.json()
+        response = await self._client.post(
+            f"{provider.api_base}/chat/completions",
+            headers={
+                "Authorization": f"Bearer {provider.api_key}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": provider.model,
+                "messages": messages,
+                "max_tokens": provider.max_tokens,
+                "temperature": temp,
+            },
+        )
+        response.raise_for_status()
+        data = response.json()
 
         reply = data["choices"][0]["message"]["content"]
         self._log_usage(provider.name, data)
@@ -368,9 +373,23 @@ class LLMRouter:
             "response_format": {"type": "json_object"},
         }
 
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            try:
-                response = await client.post(
+        try:
+            response = await self._client.post(
+                f"{provider.api_base}/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {provider.api_key}",
+                    "Content-Type": "application/json",
+                },
+                json=payload,
+            )
+            response.raise_for_status()
+            data = response.json()
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 400:
+                # Provider may not support response_format — fall back to plain
+                logger.info(f"{provider.name}: response_format unsupported, falling back to plain")
+                payload.pop("response_format", None)
+                response = await self._client.post(
                     f"{provider.api_base}/chat/completions",
                     headers={
                         "Authorization": f"Bearer {provider.api_key}",
@@ -380,23 +399,8 @@ class LLMRouter:
                 )
                 response.raise_for_status()
                 data = response.json()
-            except httpx.HTTPStatusError as e:
-                if e.response.status_code == 400:
-                    # Provider may not support response_format — fall back to plain
-                    logger.info(f"{provider.name}: response_format unsupported, falling back to plain")
-                    payload.pop("response_format")
-                    response = await client.post(
-                        f"{provider.api_base}/chat/completions",
-                        headers={
-                            "Authorization": f"Bearer {provider.api_key}",
-                            "Content-Type": "application/json",
-                        },
-                        json=payload,
-                    )
-                    response.raise_for_status()
-                    data = response.json()
-                else:
-                    raise
+            else:
+                raise
 
         raw = data["choices"][0]["message"]["content"] or ""
         self._log_usage(provider.name, data)
@@ -446,41 +450,41 @@ class LLMRouter:
             payload["functions"] = functions
             payload["function_call"] = function_call
 
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            try:
-                response = await client.post(
+        try:
+            response = await self._client.post(
+                f"{provider.api_base}/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {provider.api_key}",
+                    "Content-Type": "application/json",
+                },
+                json=payload,
+            )
+            response.raise_for_status()
+            data = response.json()
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 400 and functions:
+                tools_payload = {
+                    "model": provider.model,
+                    "messages": messages,
+                    "max_tokens": max_tokens if max_tokens is not None else provider.max_tokens,
+                    "temperature": temp,
+                    "tools": [{"type": "function", "function": f} for f in functions],
+                }
+                if function_call is not None:
+                    tools_payload["tool_choice"] = function_call
+                response = await self._client.post(
                     f"{provider.api_base}/chat/completions",
                     headers={
                         "Authorization": f"Bearer {provider.api_key}",
                         "Content-Type": "application/json",
                     },
-                    json=payload,
+                    json=tools_payload,
                 )
                 response.raise_for_status()
                 data = response.json()
-            except httpx.HTTPStatusError as e:
-                if e.response.status_code == 400 and functions:
-                    tools_payload = {
-                        "model": provider.model,
-                        "messages": messages,
-                        "max_tokens": max_tokens if max_tokens is not None else provider.max_tokens,
-                        "temperature": temp,
-                        "tools": [{"type": "function", "function": f} for f in functions],
-                    }
-                    if function_call is not None:
-                        tools_payload["tool_choice"] = function_call
-                    response = await client.post(
-                        f"{provider.api_base}/chat/completions",
-                        headers={
-                            "Authorization": f"Bearer {provider.api_key}",
-                            "Content-Type": "application/json",
-                        },
-                        json=tools_payload,
-                    )
-                    response.raise_for_status()
-                    data = response.json()
-                else:
-                    raise
+            else:
+                logger.error(f"{provider.name} provider error: {e.response.status_code} - {e.response.text[:500]}")
+                raise
 
         self._log_usage(provider.name, data)
         return data
