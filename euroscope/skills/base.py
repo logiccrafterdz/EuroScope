@@ -8,6 +8,7 @@ Every skill extends BaseSkill and provides:
 - Auto-discoverable by SkillsRegistry
 """
 
+import asyncio
 import inspect
 import logging
 import os
@@ -97,6 +98,7 @@ class BaseSkill(ABC):
     category: SkillCategory = SkillCategory.SYSTEM
     version: str = "1.0.0"
     capabilities: list[str] = []
+    execution_timeout: int = 30  # Default timeout in seconds
 
     def __init__(self):
         self._skill_md: Optional[str] = None
@@ -179,7 +181,18 @@ class BaseSkill(ABC):
             )
         try:
             maybe_result = self.execute(context, action, **params)
-            result = await maybe_result if inspect.isawaitable(maybe_result) else maybe_result
+            if inspect.isawaitable(maybe_result):
+                try:
+                    result = await asyncio.wait_for(maybe_result, timeout=self.execution_timeout)
+                except asyncio.TimeoutError:
+                    error_msg = f"Timed out after {self.execution_timeout}s"
+                    logger.error(f"[{self.name}] {action} failed: {error_msg}")
+                    error_result = SkillResult(success=False, error=error_msg)
+                    context.add_result(self.name, error_result)
+                    return error_result
+            else:
+                result = maybe_result
+            
             context.add_result(self.name, result)
             return result
         except Exception as e:
