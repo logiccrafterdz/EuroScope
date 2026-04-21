@@ -190,7 +190,7 @@ class SignalExecutor:
                     stop_loss: float, take_profit: float,
                     strategy: str = "manual", timeframe: str = "H1",
                     confidence: float = 50.0, reasoning: str = "",
-                    atr: float = None) -> int:
+                    atr: float = None, spread: float = 0.0) -> int:
         """
         Open a new trading signal (paper trade).
 
@@ -211,6 +211,17 @@ class SignalExecutor:
             "strategy": strategy, "timeframe": timeframe
         }
         tx_id = await self.storage.log_transaction("open_trade", tx_payload, "pending")
+
+        # 0.5. Spread Limit Check as a hard gate (Task 1.2)
+        try:
+            max_spread = getattr(self.risk_manager.config, "safety_max_spread_pips", 8.0)
+        except AttributeError:
+            max_spread = 8.0
+
+        if spread > max_spread:
+            logger.warning(f"Exec blocked: SPREAD BLOWOUT {spread:.1f} > {max_spread}")
+            await self.storage.update_transaction_status(tx_id, "failed")
+            return -1
 
         # 1. Simulate execution for paper trading or get real fill
         if self.paper_trading:

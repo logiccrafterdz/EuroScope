@@ -31,6 +31,7 @@ class PriceState:
     low_today: float = 0.0
     change_pips: float = 0.0
     tick_velocity: float = 0.0       # pips/min — how fast price is moving
+    spread_blowout: bool = False
     last_updated: float = 0.0
 
 
@@ -184,6 +185,11 @@ class WorldModel:
             self.price.spread_pips = price_data.get("spread_pips", self.price.spread_pips)
             self.price.change_pips = price_data.get("change_pips", self.price.change_pips)
             self.price.last_updated = now
+            # Hardcoded limit check or from config (though WorldModel doesn't inject config directly here, assume 8.0 normally)
+            if self.price.spread_pips > 8.0:
+                self.price.spread_blowout = True
+            else:
+                self.price.spread_blowout = False
 
         # --- Technical ---
         analysis = ctx.analysis or {}

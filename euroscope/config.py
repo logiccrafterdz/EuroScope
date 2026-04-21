@@ -74,6 +74,7 @@ class Config(BaseSettings):
     safety_volatility_stop_min: int = 25
     safety_max_weekly_drawdown_pct: float = 6.0
     safety_max_monthly_drawdown_pct: float = 10.0
+    safety_max_spread_pips: float = 8.0
 
     @classmethod
     def _validate_env_syntax(cls, filepath=".env"):
@@ -169,6 +170,7 @@ class Config(BaseSettings):
             safety_volatility_stop_min=int(os.getenv("EUROSCOPE_SAFETY_VOLATILITY_STOP_MIN", "25")),
             safety_max_weekly_drawdown_pct=float(os.getenv("EUROSCOPE_MAX_WEEKLY_DRAWDOWN", "6.0")),
             safety_max_monthly_drawdown_pct=float(os.getenv("EUROSCOPE_MAX_MONTHLY_DRAWDOWN", "10.0")),
+            safety_max_spread_pips=float(os.getenv("EUROSCOPE_SAFETY_MAX_SPREAD_PIPS", "8.0")),
         )
         return cls(**config_data)
 
