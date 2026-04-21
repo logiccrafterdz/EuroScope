@@ -506,9 +506,19 @@ class EuroScopeAgent:
         accuracy = self.conviction_tracker.get_accuracy_stats()
         if accuracy["total"] > 0:
             logger.info(
-                f"📊 Conviction Review: {accuracy['accuracy']:.1f}% accuracy "
+                f"🧠 Conviction Review: {accuracy['accuracy']:.1f}% accuracy "
                 f"({accuracy['realized']}/{accuracy['total']} realized)"
             )
+
+        # Trigger counterfactual analysis
+        try:
+            from euroscope.learning.counterfactual import CounterfactualEngine
+            md_skill = self.orchestrator.registry.get("market_data") if hasattr(self, 'orchestrator') and self.orchestrator else None
+            provider = md_skill._provider if md_skill else None
+            engine = CounterfactualEngine(data_provider=provider, storage=self.storage)
+            engine.run_in_background()
+        except Exception as e:
+            logger.error(f"Failed to launch CounterfactualEngine: {e}")
 
     # ── Evidence Generation ───────────────────────────────────
 
