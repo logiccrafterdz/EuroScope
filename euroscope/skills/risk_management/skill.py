@@ -424,6 +424,7 @@ class RiskManagementSkill(BaseSkill):
                 indicators=indicators,
                 patterns=patterns if isinstance(patterns, list) else [],
                 reasoning=reason,
+                status="rejected",
             )
         if self._bus:
             await self._bus.emit(Event("trade.rejected", "risk_management", {

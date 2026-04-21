@@ -116,6 +116,25 @@ class TradeJournalSkill(BaseSkill):
                 )
                 logger.info(f"Learning insight saved for trade #{trade_id}: {insight.key_factors}")
 
+                # Task 3.3: Store regime snapshot in VectorMemory
+                try:
+                    from ...container import get_container
+                    container = get_container()
+                    if container and hasattr(container, "vector_memory") and container.vector_memory:
+                        state = {
+                            "adx": indicators.get("adx"),
+                            "rsi": indicators.get("rsi"),
+                            "macd": indicators.get("macd", {}).get("histogram", 0) if isinstance(indicators.get("macd"), dict) else indicators.get("macd"),
+                            "trend": trade_data.get("regime"),
+                            "volatility": "high" if isinstance(indicators.get("atr"), dict) and indicators["atr"].get("value", 0) > 0.0020 else "low",
+                            "macro_bias": "neutral"
+                        }
+                        outcome = "WIN" if is_win else "LOSS"
+                        container.vector_memory.store_regime_snapshot(state, outcome)
+                        logger.info(f"Regime snapshot stored for trade #{trade_id} ({outcome})")
+                except Exception as e:
+                    logger.debug(f"Failed to store regime snapshot for trade #{trade_id}: {e}")
+
             await self.storage.close_trade_journal(trade_id, exit_price, pnl_pips, is_win)
 
             icon = "✅" if is_win else "❌"

@@ -229,6 +229,31 @@ class SignalExecutorSkill(BaseSkill):
         }
         context.open_positions.append(trade_data)
         
+        # Save to trade journal for learning (Task 3.1)
+        causal_chain = context.metadata.get("causal_chain") or getattr(context, "causal_chain", None)
+        if not causal_chain and "causal_chain" in params:
+            causal_chain = params["causal_chain"]
+            
+        if self._storage:
+            try:
+                await self._storage.save_trade_journal(
+                    direction=direction,
+                    entry_price=entry_price,
+                    stop_loss=stop_loss,
+                    take_profit=take_profit,
+                    strategy=strategy,
+                    timeframe=timeframe,
+                    regime=context.metadata.get("regime", ""),
+                    confidence=confidence,
+                    indicators=self._build_indicators(context),
+                    patterns=self._build_patterns(context),
+                    reasoning=reasoning,
+                    causal_chain=causal_chain,
+                    status="open"
+                )
+            except Exception as e:
+                logger.error(f"Failed to log to trade_journal: {e}")
+        
         # Fire webhook
         try:
             if getattr(self, '_webhooks', None):

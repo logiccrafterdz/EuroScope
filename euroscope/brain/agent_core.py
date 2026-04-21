@@ -429,6 +429,10 @@ class EuroScopeAgent:
                 "conviction_id": strongest.id,
                 "conviction_thesis": strongest.thesis,
                 "conviction_confidence": strongest.confidence,
+                "causal_chain": [
+                    {"text": e.text, "source": e.source, "weight": e.weight, "direction": e.direction} 
+                    for e in strongest.evidence
+                ] if hasattr(strongest, 'evidence') else [],
                 "regime": self.world_model.regime.regime,
                 "price": self.world_model.price.price,
             },
@@ -509,6 +513,19 @@ class EuroScopeAgent:
                 f"🧠 Conviction Review: {accuracy['accuracy']:.1f}% accuracy "
                 f"({accuracy['realized']}/{accuracy['total']} realized)"
             )
+            
+            # Auto-tuner trigger (Task 3.2)
+            if accuracy["total"] >= 5 and accuracy["accuracy"] < 40.0:
+                try:
+                    from euroscope.learning.adaptive_tuner import AdaptiveTuner
+                    logger.info("Auto-tuner triggered due to low conviction accuracy (< 40%).")
+                    tuner = AdaptiveTuner(storage=self.storage, config=self.config)
+                    new_prefs = await tuner.auto_tune()
+                    if hasattr(self, 'orchestrator') and self.orchestrator and hasattr(self.orchestrator, 'global_context'):
+                        self.orchestrator.global_context.user_prefs = new_prefs
+                        logger.info("Reloaded updated tuning preferences into global context.")
+                except Exception as e:
+                    logger.error(f"Failed to run AdaptiveTuner: {e}")
 
         # Trigger counterfactual analysis
         try:
