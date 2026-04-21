@@ -95,9 +95,18 @@ class DeviationMonitorSkill(BaseSkill):
 
         result = self._detect_deviation(candles)
         if not result:
+            result = await self._detect_concept_drift()
+            
+        if not result:
             return
+            
         session = result.get("session") or self._detect_trading_session(now_dt)
         emergency_seconds = 480 if session == "overlap" else 86400 if session == "weekend" else 300
+        
+        # Extended emergency halt for concept drift
+        if result.get("trigger") == "concept_drift":
+            emergency_seconds = 86400  # Halt for a full day if logic is broken
+
         context.metadata["emergency_mode"] = True
         context.metadata["emergency_until"] = now + emergency_seconds
         context.metadata["deviation_monitor_last_activation"] = now
@@ -105,6 +114,46 @@ class DeviationMonitorSkill(BaseSkill):
 
         await self._emit_event(result)
         await self._log_deviation(result, candles, timeframe)
+
+    async def _detect_concept_drift(self) -> Optional[dict]:
+        if not self._storage:
+            return None
+            
+        try:
+            stats = await self._storage.get_trade_journal_stats()
+            historical_win_rate = stats.get("win_rate", 0.0) / 100.0
+            
+            # Require at least 50 historical trades for a baseline
+            if stats.get("total", 0) < 50:
+                return None
+                
+            recent_trades = await self._storage.get_trade_journal(status="closed", limit=20)
+            if len(recent_trades) < 20:
+                return None
+                
+            wins = sum(1 for t in recent_trades if t.get("is_win"))
+            recent_win_rate = wins / len(recent_trades)
+            
+            # If recent win rate is significantly lower than historical baseline
+            if recent_win_rate < (historical_win_rate * 0.5) and recent_win_rate < 0.3:
+                now_val = self._context.metadata.get("now") if self._context else None
+                if isinstance(now_val, datetime):
+                    now_dt = now_val
+                else:
+                    now_dt = datetime.fromtimestamp(now_val) if now_val else datetime.now(timezone.utc)
+                session = self._context.metadata.get("session_regime") if self._context else self._detect_trading_session(now_dt)
+                
+                logger.warning(f"Concept Drift Detected: recent win rate {recent_win_rate:.1%} vs historical {historical_win_rate:.1%}")
+                return {
+                    "trigger": "concept_drift",
+                    "magnitude": round(historical_win_rate - recent_win_rate, 4),
+                    "details": [{"type": "win_rate_drop", "recent": recent_win_rate, "historical": historical_win_rate}],
+                    "session": session,
+                }
+        except Exception as e:
+            logger.debug(f"DeviationMonitor: concept drift check failed: {e}")
+            
+        return None
 
     def _get_buffer(self) -> Optional[dict]:
         if self._market_data_skill and hasattr(self._market_data_skill, "get_buffer"):
