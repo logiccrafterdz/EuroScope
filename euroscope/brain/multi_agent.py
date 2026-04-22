@@ -40,8 +40,8 @@ class DeliberationCommittee:
             f"{context_str}\n"
             "Argue your case in 2-3 sentences."
         )
-        # Assuming deepseek is primary
-        return await self.llm.chat([{"role": "user", "content": prompt}])
+        # Bull needs to be creative in finding bullish arguments
+        return await self.llm.chat([{"role": "user", "content": prompt}], temperature=0.7)
 
     async def _ask_bear_advocate(self, context_str: str) -> str:
         prompt = (
@@ -51,8 +51,8 @@ class DeliberationCommittee:
             f"{context_str}\n"
             "Argue your case in 2-3 sentences."
         )
-        # Use default router (model diversity is handled by LLMRouter fallback chain)
-        return await self.llm.chat([{"role": "user", "content": prompt}])
+        # Bear needs to be creative in finding bearish arguments
+        return await self.llm.chat([{"role": "user", "content": prompt}], temperature=0.7)
 
     async def _ask_risk_manager(self, context_str: str) -> str:
         prompt = (
@@ -61,7 +61,8 @@ class DeliberationCommittee:
             f"{context_str}\n"
             "State your concerns in 2-3 sentences."
         )
-        return await self.llm.chat([{"role": "user", "content": prompt}])
+        # Risk Manager must be deterministic and cold
+        return await self.llm.chat([{"role": "user", "content": prompt}], temperature=0.1)
 
     async def deliberate(self, context: SkillContext) -> Dict[str, Any]:
         """
@@ -113,7 +114,8 @@ class DeliberationCommittee:
         )
         
         try:
-            final_verdict = await self.llm.chat([{"role": "user", "content": judge_prompt}])
+            # Judge should be balanced and decisive
+            final_verdict = await self.llm.chat([{"role": "user", "content": judge_prompt}], temperature=0.3)
             import re, json
             match = re.search(r'\{.*\}', final_verdict, re.DOTALL)
             if match:

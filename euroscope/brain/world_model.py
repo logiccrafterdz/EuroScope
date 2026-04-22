@@ -156,6 +156,7 @@ class WorldModel:
         self._update_count: int = 0
         self._created_at: float = time.time()
         self._last_full_update: float = 0.0
+        self._cached_summary: Optional[str] = None
 
     # ── Update Methods ────────────────────────────────────────
 
@@ -298,6 +299,15 @@ class WorldModel:
             self.liquidity.session_low = liquidity_data.get("session_low", self.liquidity.session_low)
             self.liquidity.liquidity_bias = ctx.metadata.get("liquidity_signal", self.liquidity.liquidity_bias)
             self.liquidity.last_updated = now
+
+        # --- Sentiment ---
+        sentiment_data = ctx.metadata.get("sentiment_data", {})
+        if sentiment_data:
+            self.sentiment.news_sentiment = sentiment_data.get("label", self.sentiment.news_sentiment)
+            self.sentiment.news_score = sentiment_data.get("score", self.sentiment.news_score)
+            self.sentiment.cot_net_position = sentiment_data.get("cot_net", self.sentiment.cot_net_position)
+            self.sentiment.market_mood = sentiment_data.get("mood", self.sentiment.market_mood)
+            self.sentiment.last_updated = now
 
         # --- Risk ---
         risk = ctx.risk or {}
@@ -451,6 +461,10 @@ class WorldModel:
 
         This is what the Agent Core feeds to the LLM when reasoning.
         """
+        delta = self.get_delta()
+        if self._cached_summary and not delta and not delta.get("initial"):
+            return self._cached_summary
+
         age = time.time() - self._last_full_update if self._last_full_update else 999
 
         lines = [
@@ -494,7 +508,9 @@ class WorldModel:
             f"  Trading Allowed: {'YES' if self.risk.is_trading_allowed else '🛑 NO'}",
         ]
 
-        return "\n".join(lines)
+        summary = "\n".join(lines)
+        self._cached_summary = summary
+        return summary
 
     def get_compact_summary(self) -> str:
         """Ultra-short summary for quick agent decisions."""
@@ -529,13 +545,29 @@ class WorldModel:
         }
 
     def deserialize(self, data: dict) -> None:
-        """Restore the world model from stored data."""
+        """Restore the world model from stored data with type validation."""
         if not data:
             return
 
         def _update_dataclass(dc, values: dict):
             for key, val in values.items():
                 if hasattr(dc, key):
+                    # Basic type coercion based on dataclass hints
+                    expected_type = dc.__annotations__.get(key)
+                    if expected_type and val is not None:
+                        try:
+                            # Handle simple types
+                            if expected_type == float:
+                                val = float(val)
+                            elif expected_type == int:
+                                val = int(val)
+                            elif expected_type == str:
+                                val = str(val)
+                            elif expected_type == bool:
+                                val = bool(val)
+                        except (ValueError, TypeError):
+                            logger.warning(f"Type mismatch restoring {key} in {dc.__class__.__name__}: expected {expected_type}, got {type(val)}")
+                            continue  # Skip corrupted field
                     setattr(dc, key, val)
 
         for section, obj in [

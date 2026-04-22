@@ -31,6 +31,7 @@ class Evidence:
     weight: float = 1.0           # Importance multiplier (0.5 = minor, 2.0 = major)
     direction: str = "for"        # "for" or "against"
     timestamp: float = field(default_factory=time.time)
+    expired: bool = False         # True if age > 4 hours
 
     def age_minutes(self) -> float:
         return (time.time() - self.timestamp) / 60
@@ -332,7 +333,7 @@ class ConvictionTracker:
         return events
 
     def _apply_decay(self) -> None:
-        """Apply time-based confidence decay to all convictions."""
+        """Apply time-based confidence decay to all convictions and expire old evidence."""
         now = time.time()
         hours_since_decay = (now - self._last_decay_time) / 3600
 
@@ -343,7 +344,24 @@ class ConvictionTracker:
             if not conv.is_active():
                 continue
 
-            # Decay rate scales with age (older convictions decay faster)
+            # 1. Expire stale evidence (TTL = 4 hours)
+            for ev in conv.evidence_for + conv.evidence_against:
+                if getattr(ev, "expired", False):
+                    continue
+                    
+                if ev.age_minutes() > 240:
+                    ev.expired = True
+                    # Revert a portion of the evidence's initial impact
+                    if ev.direction == "for":
+                        penalty = ev.weight * 0.05
+                        conv.confidence = max(0.05, conv.confidence - penalty)
+                    else:
+                        boost = ev.weight * 0.05
+                        conv.confidence = min(0.95, conv.confidence + boost)
+                        
+                    logger.debug(f"Evidence TTL expired in [{conv.id}]: '{ev.text[:30]}...' ({ev.direction})")
+
+            # 2. General conviction decay rate scales with age (older convictions decay faster)
             age_factor = min(2.0, 1.0 + conv.age_hours() / 24)
             decay = self.CONFIDENCE_DECAY_RATE * hours_since_decay * age_factor
             conv.confidence = max(0.05, conv.confidence - decay)
@@ -419,7 +437,7 @@ class ConvictionTracker:
                 f"\n{icon} [{conv.id}] {conv.direction.upper()} — {conv.thesis}"
             )
             lines.append(f"  Status: {conv.status} | Confidence: {conv.confidence:.0%} (peak: {conv.peak_confidence:.0%})")
-            lines.append(f"  Age: {conv.age_hours():.1f}h | Evidence: {len(conv.evidence_for)} for, {len(conv.evidence_against)} against")
+            lines.append(f"  Age: {conv.age_hours():.1f}h | Evidence: {len([e for e in conv.evidence_for if not getattr(e, 'expired', False)])} active for, {len([e for e in conv.evidence_against if not getattr(e, 'expired', False)])} active against")
             if conv.invalidation_level:
                 lines.append(f"  Invalidation: {conv.invalidation_reason} @ {conv.invalidation_level:.5f}")
             if conv.target_level:
