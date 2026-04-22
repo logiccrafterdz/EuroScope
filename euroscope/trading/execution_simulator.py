@@ -8,6 +8,7 @@ degrades raw numbers by 20-40%.
 
 import logging
 import random
+import datetime
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -225,6 +226,13 @@ class ExecutionSimulator:
 
         # Add small randomness
         spread += random.uniform(-0.2, 0.3)
+        
+        # Widen spread during Asian session (22:00 - 07:00 UTC)
+        # Low liquidity = wider spreads
+        current_hour = datetime.datetime.now(datetime.UTC).hour
+        if current_hour >= 22 or current_hour < 7:
+            spread *= 1.5  # 50% wider spread during Asian session
+            
         return max(0.5, min(spread, self.config.max_spread_pips))
 
     def _get_slippage(self, multiplier: float = 1.0) -> float:

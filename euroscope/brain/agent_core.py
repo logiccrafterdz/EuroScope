@@ -213,69 +213,76 @@ class EuroScopeAgent:
             if new_state != self.state:
                 self._transition_to(new_state, stats)
 
-            if self.state == AgentState.IDLE:
-                # Check if we should wake up
-                if self._should_activate():
-                    self._transition_to(AgentState.SCANNING, stats)
-                else:
-                    stats.duration_seconds = time.time() - cycle_start
-                    return stats
+            # Max tick duration check
+            if time.time() - cycle_start > 45.0:
+                logger.warning(f"Tick taking too long (>45s) before state handling. Yielding.")
+                stats.duration_seconds = time.time() - cycle_start
+                return stats
 
-            # ── SCANNING: Quick market update ──
-            if self.state == AgentState.SCANNING:
-                await self._do_scan(stats)
+            match self.state:
+                case AgentState.IDLE:
+                    # Check if we should wake up
+                    if self._should_activate():
+                        self._transition_to(AgentState.SCANNING, stats)
+                    else:
+                        stats.duration_seconds = time.time() - cycle_start
+                        return stats
 
-                # Check if deep analysis needed
-                if self._needs_deep_analysis():
-                    self._transition_to(AgentState.ANALYZING, stats)
-                else:
+                case AgentState.SCANNING:
+                    # ── SCANNING: Quick market update ──
+                    await self._do_scan(stats)
+
+                    # Check if deep analysis needed
+                    if self._needs_deep_analysis():
+                        self._transition_to(AgentState.ANALYZING, stats)
+                    else:
+                        self._transition_to(AgentState.CONVICTION_FORMING, stats)
+
+                case AgentState.ANALYZING:
+                    # ── ANALYZING: Full pipeline ──
+                    await self._do_deep_analysis(stats)
                     self._transition_to(AgentState.CONVICTION_FORMING, stats)
 
-            # ── ANALYZING: Full pipeline ──
-            if self.state == AgentState.ANALYZING:
-                await self._do_deep_analysis(stats)
-                self._transition_to(AgentState.CONVICTION_FORMING, stats)
+                case AgentState.CONVICTION_FORMING:
+                    # ── CONVICTION_FORMING: Update theses ──
+                    await self._do_conviction_update(stats)
 
-            # ── CONVICTION_FORMING: Update theses ──
-            if self.state == AgentState.CONVICTION_FORMING:
-                await self._do_conviction_update(stats)
+                    # Decide what to do next
+                    if self.world_model.has_open_trades():
+                        self._transition_to(AgentState.MONITORING, stats)
+                    elif self._should_evaluate_trade():
+                        self._transition_to(AgentState.DECIDING, stats)
+                    else:
+                        self._transition_to(AgentState.SCANNING, stats)
 
-                # Decide what to do next
-                if self.world_model.has_open_trades():
+                case AgentState.DECIDING:
+                    # ── DECIDING: Evaluate potential actions ──
+                    actions = await self._do_decide(stats)
+                    if any(a.action_type in (AgentActionType.OPEN_TRADE, AgentActionType.CLOSE_TRADE) for a in actions):
+                        self._transition_to(AgentState.EXECUTING, stats)
+                    else:
+                        self._transition_to(AgentState.SCANNING, stats)
+
+                    for action in actions:
+                        await self._dispatch_action(action, stats)
+
+                case AgentState.EXECUTING:
+                    # ── EXECUTING: Execute trade actions ──
+                    # Execution is handled by dispatched actions above
                     self._transition_to(AgentState.MONITORING, stats)
-                elif self._should_evaluate_trade():
-                    self._transition_to(AgentState.DECIDING, stats)
-                else:
+
+                case AgentState.MONITORING:
+                    # ── MONITORING: Watch open positions ──
+                    await self._do_monitoring(stats)
+                    if not self.world_model.has_open_trades():
+                        self._transition_to(AgentState.REVIEWING, stats)
+                    else:
+                        self._transition_to(AgentState.SCANNING, stats)
+
+                case AgentState.REVIEWING:
+                    # ── REVIEWING: Post-trade learning ──
+                    await self._do_review(stats)
                     self._transition_to(AgentState.SCANNING, stats)
-
-            # ── DECIDING: Evaluate potential actions ──
-            if self.state == AgentState.DECIDING:
-                actions = await self._do_decide(stats)
-                if any(a.action_type in (AgentActionType.OPEN_TRADE, AgentActionType.CLOSE_TRADE) for a in actions):
-                    self._transition_to(AgentState.EXECUTING, stats)
-                else:
-                    self._transition_to(AgentState.SCANNING, stats)
-
-                for action in actions:
-                    await self._dispatch_action(action, stats)
-
-            # ── EXECUTING: Execute trade actions ──
-            if self.state == AgentState.EXECUTING:
-                # Execution is handled by dispatched actions above
-                self._transition_to(AgentState.MONITORING, stats)
-
-            # ── MONITORING: Watch open positions ──
-            if self.state == AgentState.MONITORING:
-                await self._do_monitoring(stats)
-                if not self.world_model.has_open_trades():
-                    self._transition_to(AgentState.REVIEWING, stats)
-                else:
-                    self._transition_to(AgentState.SCANNING, stats)
-
-            # ── REVIEWING: Post-trade learning ──
-            if self.state == AgentState.REVIEWING:
-                await self._do_review(stats)
-                self._transition_to(AgentState.SCANNING, stats)
 
         except Exception as e:
             stats.error = str(e)
