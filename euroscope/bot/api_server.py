@@ -689,8 +689,63 @@ class APIServer:
             return web.json_response({"success": False, "error": str(e)})
 
     async def _api_health(self, request):
-        """Standard health check endpoint."""
-        return web.Response(text="OK", content_type="text/plain")
+        """Standard health check endpoint reporting subsystem states."""
+        health_data = {
+            "status": "UP",
+            "timestamp": datetime.now().isoformat(),
+            "subsystems": {
+                "database": "UNKNOWN",
+                "broker": "UNKNOWN",
+                "websocket": "DISCONNECTED",
+                "agent_core": "UNKNOWN"
+            }
+        }
+        
+        # 1. Database Health
+        try:
+            if hasattr(self.bot, "storage") and self.bot.storage:
+                await self.bot.storage.get_signals(limit=1)
+                health_data["subsystems"]["database"] = "UP"
+            else:
+                health_data["subsystems"]["database"] = "NOT_CONFIGURED"
+        except Exception as e:
+            health_data["subsystems"]["database"] = f"DOWN ({str(e)})"
+            health_data["status"] = "DEGRADED"
+
+        # 2. Broker Health
+        try:
+            if hasattr(self.bot, "broker") and self.bot.broker:
+                health_data["subsystems"]["broker"] = "UP"
+            else:
+                health_data["subsystems"]["broker"] = "NOT_CONFIGURED"
+        except Exception as e:
+            health_data["subsystems"]["broker"] = f"DOWN ({str(e)})"
+            health_data["status"] = "DEGRADED"
+            
+        # 3. WebSocket Health
+        try:
+            if hasattr(self.bot, "ws_client") and self.bot.ws_client:
+                if self.bot.ws_client.ws and self.bot.ws_client.ws.state.name == "OPEN":
+                    health_data["subsystems"]["websocket"] = "CONNECTED"
+                else:
+                    health_data["subsystems"]["websocket"] = "DISCONNECTED"
+                    health_data["status"] = "DEGRADED"
+        except Exception as e:
+            health_data["subsystems"]["websocket"] = f"ERROR ({str(e)})"
+
+        # 4. Agent Core Health
+        try:
+            if hasattr(self.bot, "core") and self.bot.core:
+                state_name = getattr(self.bot.core.state, "name", str(self.bot.core.state))
+                health_data["subsystems"]["agent_core"] = f"UP ({state_name})"
+            else:
+                health_data["subsystems"]["agent_core"] = "NOT_CONFIGURED"
+        except Exception as e:
+            health_data["subsystems"]["agent_core"] = f"DOWN ({str(e)})"
+            health_data["status"] = "DEGRADED"
+
+        status_code = 200 if health_data["status"] == "UP" else 503
+        return web.json_response(health_data, status=status_code)
 
     async def _api_emergency(self, request):
         """API endpoint to trigger the Emergency Kill Switch."""

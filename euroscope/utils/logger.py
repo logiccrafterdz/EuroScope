@@ -1,24 +1,21 @@
 """
 Structured Logging for EuroScope
 
-Provides JSON-formatted file logging alongside human-readable console output.
-Includes a performance timing context manager for profiling operations.
+Provides JSON-formatted file logging alongside human-readable console output
+using `structlog` for ElasticSearch/Kibana ingestion.
 """
 
-import json
 import logging
 import sys
+import os
 import time
+import structlog
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
-
-
-from pythonjsonlogger import jsonlogger
 import uuid
 import threading
 
-# Thread-local storage for correlation IDs
 _log_context = threading.local()
 
 def get_correlation_id() -> str:
@@ -33,55 +30,13 @@ def clear_correlation_id():
     if hasattr(_log_context, "correlation_id"):
         del _log_context.correlation_id
 
-class CorrelationIdFilter(logging.Filter):
-    """Injects a correlation_id into all log records."""
-    def filter(self, record):
-        record.correlation_id = get_correlation_id()
-        return True
-
-class CustomJsonFormatter(jsonlogger.JsonFormatter):
-    """Extended JSON formatter with UTC injection and required fields."""
-    def add_fields(self, log_record, record, message_dict):
-        super().add_fields(log_record, record, message_dict)
-        if not log_record.get('timestamp'):
-            now = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.%fZ')
-            log_record['timestamp'] = now
-        if log_record.get('level'):
-            log_record['level'] = log_record['level'].upper()
-        else:
-            log_record['level'] = record.levelname
-        log_record['logger'] = record.name
-        log_record['module'] = record.module
-        log_record['function'] = record.funcName
-        log_record['line'] = record.lineno
-
-
-class ConsoleFormatter(logging.Formatter):
-    """Human-readable colored console formatter."""
-
-    COLORS = {
-        "DEBUG": "\033[36m",     # Cyan
-        "INFO": "\033[32m",      # Green
-        "WARNING": "\033[33m",   # Yellow
-        "ERROR": "\033[31m",     # Red
-        "CRITICAL": "\033[1;31m",  # Bold Red
-    }
-    RESET = "\033[0m"
-
-    def format(self, record: logging.LogRecord) -> str:
-        color = self.COLORS.get(record.levelname, self.RESET)
-        timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
-        msg = record.getMessage()
-        base = f"{timestamp} │ {color}{record.levelname:<7}{self.RESET} │ {record.name:<28} │ {msg}"
-
-        if record.exc_info and record.exc_info[0]:
-            base += "\n" + self.formatException(record.exc_info)
-        return base
-
+def inject_correlation_id(logger, log_method, event_dict):
+    event_dict["correlation_id"] = get_correlation_id()
+    return event_dict
 
 def setup_structured_logging(level: str = "INFO", log_dir: str = "data/logs"):
     """
-    Configure logging with both console and JSON file handlers.
+    Configure logging with both console and JSON file handlers using structlog.
 
     Args:
         level: Log level string (DEBUG, INFO, WARNING, ERROR)
@@ -89,30 +44,55 @@ def setup_structured_logging(level: str = "INFO", log_dir: str = "data/logs"):
     """
     root = logging.getLogger()
     root.setLevel(getattr(logging, level.upper(), logging.INFO))
-
-    # Clear existing handlers to prevent duplicates on re-init
     root.handlers.clear()
 
-    # Console handler — human-readable or JSON
-    import os
-    console = logging.StreamHandler(sys.stdout)
-    if os.getenv("EUROSCOPE_JSON_CONSOLE", "0") == "1":
-        console.setFormatter(CustomJsonFormatter('%(timestamp)s %(level)s %(name)s %(message)s'))
-    else:
-        console.setFormatter(ConsoleFormatter())
-    console.setLevel(getattr(logging, level.upper(), logging.INFO))
-    console.addFilter(CorrelationIdFilter())
-    root.addHandler(console)
+    # structlog configuration
+    timestamper = structlog.processors.TimeStamper(fmt="iso", utc=True)
+    shared_processors = [
+        structlog.stdlib.add_logger_name,
+        structlog.stdlib.add_log_level,
+        structlog.stdlib.PositionalArgumentsFormatter(),
+        structlog.stdlib.ExtraAdder(),
+        structlog.processors.StackInfoRenderer(),
+        structlog.processors.format_exc_info,
+        timestamper,
+        inject_correlation_id,
+    ]
 
-    # File handler — JSON structured
+    structlog.configure(
+        processors=shared_processors + [
+            structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
+        ],
+        logger_factory=structlog.stdlib.LoggerFactory(),
+        wrapper_class=structlog.stdlib.BoundLogger,
+        cache_logger_on_first_use=True,
+    )
+
     log_path = Path(log_dir)
     log_path.mkdir(parents=True, exist_ok=True)
     log_file = log_path / f"euroscope_{datetime.now(timezone.utc).strftime('%Y%m%d')}.jsonl"
 
+    formatter_console = structlog.stdlib.ProcessorFormatter(
+        foreign_pre_chain=shared_processors,
+        processors=[
+            structlog.stdlib.ProcessorFormatter.remove_processors_meta,
+            structlog.dev.ConsoleRenderer(colors=True) if os.getenv("EUROSCOPE_JSON_CONSOLE", "0") != "1" else structlog.processors.JSONRenderer(),
+        ],
+    )
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setFormatter(formatter_console)
+    root.addHandler(console_handler)
+
+    formatter_file = structlog.stdlib.ProcessorFormatter(
+        foreign_pre_chain=shared_processors,
+        processors=[
+            structlog.stdlib.ProcessorFormatter.remove_processors_meta,
+            structlog.processors.JSONRenderer(),
+        ],
+    )
     file_handler = logging.FileHandler(str(log_file), encoding="utf-8")
-    file_handler.setFormatter(CustomJsonFormatter('%(timestamp)s %(level)s %(correlation_id)s %(name)s %(message)s'))
+    file_handler.setFormatter(formatter_file)
     file_handler.setLevel(logging.DEBUG)  # Always capture everything in file
-    file_handler.addFilter(CorrelationIdFilter())
     root.addHandler(file_handler)
 
     # Suppress noisy third-party loggers
@@ -131,13 +111,11 @@ def setup_structured_logging(level: str = "INFO", log_dir: str = "data/logs"):
         f"Structured logging initialized (console={level}, file={log_file})"
     )
 
-
 def get_logger(name: str) -> logging.Logger:
     """Get a named logger under the euroscope namespace."""
     if not name.startswith("euroscope"):
         name = f"euroscope.{name}"
     return logging.getLogger(name)
-
 
 @contextmanager
 def log_duration(operation: str, logger: logging.Logger = None):
