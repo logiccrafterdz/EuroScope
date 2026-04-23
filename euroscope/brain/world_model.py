@@ -462,7 +462,8 @@ class WorldModel:
         This is what the Agent Core feeds to the LLM when reasoning.
         """
         delta = self.get_delta()
-        if self._cached_summary and not delta and not delta.get("initial"):
+        # Return cached summary only when delta is truly empty (no changes)
+        if self._cached_summary and isinstance(delta, dict) and len(delta) == 0:
             return self._cached_summary
 
         age = time.time() - self._last_full_update if self._last_full_update else 999
@@ -501,6 +502,11 @@ class WorldModel:
             "💧 LIQUIDITY",
             f"  Sweep: {'⚡ DETECTED' if self.liquidity.sweep_detected else 'None'}",
             f"  Bias: {self.liquidity.liquidity_bias}",
+            "",
+            "💬 SENTIMENT",
+            f"  News: {self.sentiment.news_sentiment.upper()} (score: {self.sentiment.news_score:.2f})",
+            f"  Market Mood: {self.sentiment.market_mood.upper()}",
+            f"  COT Net: {self.sentiment.cot_net_position:.0f} | Bias: {self.sentiment.cot_bias}",
             "",
             "🛡️ RISK",
             f"  Open Trades: {self.risk.open_trade_count} | Daily P&L: {self.risk.daily_pnl_pips:+.1f} pips",

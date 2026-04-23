@@ -361,6 +361,15 @@ class ConvictionTracker:
                         
                     logger.debug(f"Evidence TTL expired in [{conv.id}]: '{ev.text[:30]}...' ({ev.direction})")
 
+            # 1b. Prune evidence older than 12 hours entirely
+            before_for = len(conv.evidence_for)
+            before_against = len(conv.evidence_against)
+            conv.evidence_for = [e for e in conv.evidence_for if e.age_minutes() <= 720]
+            conv.evidence_against = [e for e in conv.evidence_against if e.age_minutes() <= 720]
+            pruned = (before_for - len(conv.evidence_for)) + (before_against - len(conv.evidence_against))
+            if pruned:
+                logger.info(f"Pruned {pruned} stale evidence (>12h) from conviction [{conv.id}]")
+
             # 2. General conviction decay rate scales with age (older convictions decay faster)
             age_factor = min(2.0, 1.0 + conv.age_hours() / 24)
             decay = self.CONFIDENCE_DECAY_RATE * hours_since_decay * age_factor
