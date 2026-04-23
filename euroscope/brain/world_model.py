@@ -157,6 +157,7 @@ class WorldModel:
         self._created_at: float = time.time()
         self._last_full_update: float = 0.0
         self._cached_summary: Optional[str] = None
+        self.stats_cache_hits: int = 0  # Task 5.4 refinement
 
     # ── Update Methods ────────────────────────────────────────
 
@@ -464,6 +465,7 @@ class WorldModel:
         delta = self.get_delta()
         # Return cached summary only when delta is truly empty (no changes)
         if self._cached_summary and isinstance(delta, dict) and len(delta) == 0:
+            self.stats_cache_hits += 1
             return self._cached_summary
 
         age = time.time() - self._last_full_update if self._last_full_update else 999
@@ -571,6 +573,15 @@ class WorldModel:
                                 val = str(val)
                             elif expected_type == bool:
                                 val = bool(val)
+                                
+                            # Range validation (Task 6.2 refinement)
+                            if key == "rsi" and not (0.0 <= val <= 100.0):
+                                logger.warning(f"Restoring {dc.__class__.__name__}.{key} failed: {val} out of range (0-100)")
+                                continue
+                            if key in ("price", "bid", "ask", "adx", "atr", "volume") and val < 0:
+                                logger.warning(f"Restoring {dc.__class__.__name__}.{key} failed: cannot be negative ({val})")
+                                continue
+                                
                         except (ValueError, TypeError):
                             logger.warning(f"Type mismatch restoring {key} in {dc.__class__.__name__}: expected {expected_type}, got {type(val)}")
                             continue  # Skip corrupted field
