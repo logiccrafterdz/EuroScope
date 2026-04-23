@@ -227,11 +227,25 @@ class ExecutionSimulator:
         # Add small randomness
         spread += random.uniform(-0.2, 0.3)
         
-        # Widen spread during Asian session (22:00 - 07:00 UTC)
-        # Low liquidity = wider spreads
-        current_hour = datetime.datetime.now(datetime.UTC).hour
-        if current_hour >= 22 or current_hour < 7:
-            spread *= 1.5  # 50% wider spread during Asian session
+        # Determine session spread multiplier based on UTC hour
+        now_utc = datetime.datetime.now(datetime.UTC)
+        current_hour = now_utc.hour
+        
+        # Weekend / Friday close check (Spread blow-out)
+        if now_utc.weekday() == 5 or (now_utc.weekday() == 4 and current_hour >= 21) or (now_utc.weekday() == 6 and current_hour < 21):
+            session_multiplier = 3.0  # Off-hours / Weekend
+        elif current_hour >= 22 or current_hour < 7:
+            session_multiplier = 2.5  # Asian Session (Low Liquidity)
+        elif 7 <= current_hour < 12:
+            session_multiplier = 1.0  # London Session (High Liquidity)
+        elif 12 <= current_hour < 16:
+            session_multiplier = 0.9  # London/NY Overlap (Peak Liquidity)
+        elif 16 <= current_hour < 21:
+            session_multiplier = 1.1  # NY Session
+        else:
+            session_multiplier = 3.0  # 21:00 - 22:00 Daily Rollover (Dead zone)
+            
+        spread *= session_multiplier
             
         return max(0.5, min(spread, self.config.max_spread_pips))
 
