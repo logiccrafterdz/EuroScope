@@ -127,6 +127,14 @@ class FundamentalAnalysisSkill(BaseSkill):
             data = {"sentiment": sentiment, "score": round(avg, 3), "article_count": len(articles)}
             context.analysis["sentiment_summary"] = data
             
+            # Inject sentiment_data into metadata for WorldModel consumption
+            context.metadata["sentiment_data"] = {
+                "label": sentiment,
+                "score": round(avg, 3),
+                "mood": sentiment,
+                "cot_net": 0  # COT not available in news data
+            }
+            
             formatted = f"📊 *Sentiment:* {sentiment.capitalize()} (Score: {avg:.2f})"
             return SkillResult(success=True, data=data, metadata={"formatted": formatted})
         except Exception as e:

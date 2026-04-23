@@ -271,6 +271,7 @@ class Orchestrator:
             ("market_data", "get_correlation"),
             ("liquidity_awareness", "analyze"),
             ("fundamental_analysis", "get_macro"),
+            ("fundamental_analysis", "get_sentiment"),
             ("technical_analysis", "full"),
             ("uncertainty_assessment", "assess"),
             ("trading_strategy", "detect_signal"),  # Discover direction FIRST
