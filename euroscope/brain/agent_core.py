@@ -90,6 +90,7 @@ class EuroScopeAgent:
     CONVICTION_REVIEW_INTERVAL = 180 # Review convictions every 3 min
     MONITORING_INTERVAL = 30         # Monitor open trades every 30s
     IDLE_CHECK_INTERVAL = 120        # Check if should wake up every 2 min
+    MAX_TICK_DURATION = 45.0         # Max execution time for a single tick
 
     def __init__(
         self,
@@ -195,6 +196,14 @@ class EuroScopeAgent:
             await asyncio.sleep(sleep_time)
 
     async def _tick(self) -> AgentCycleStats:
+        """Wrapper for _tick_inner with a hard timeout to prevent cascade hangs."""
+        try:
+            return await asyncio.wait_for(self._tick_inner(), timeout=self.MAX_TICK_DURATION)
+        except asyncio.TimeoutError:
+            logger.warning(f"Agent tick exceeded {self.MAX_TICK_DURATION}s — timeout enforced. Yielding.")
+            return AgentCycleStats(duration_seconds=self.MAX_TICK_DURATION, error="tick_timeout")
+
+    async def _tick_inner(self) -> AgentCycleStats:
         """
         One cycle of the agent's reasoning.
 
@@ -212,12 +221,6 @@ class EuroScopeAgent:
             new_state = self._determine_next_state()
             if new_state != self.state:
                 self._transition_to(new_state, stats)
-
-            # Max tick duration check
-            if time.time() - cycle_start > 45.0:
-                logger.warning(f"Tick taking too long (>45s) before state handling. Yielding.")
-                stats.duration_seconds = time.time() - cycle_start
-                return stats
 
             match self.state:
                 case AgentState.IDLE:
