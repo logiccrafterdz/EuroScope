@@ -31,7 +31,7 @@ class Evidence:
     weight: float = 1.0           # Importance multiplier (0.5 = minor, 2.0 = major)
     direction: str = "for"        # "for" or "against"
     timestamp: float = field(default_factory=time.time)
-    expired: bool = False         # True if age > 4 hours
+    decayed: bool = False         # True if age > 4 hours and weight has been halved
 
     def age_minutes(self) -> float:
         return (time.time() - self.timestamp) / 60
@@ -344,14 +344,16 @@ class ConvictionTracker:
             if not conv.is_active():
                 continue
 
-            # 1. Expire stale evidence (TTL = 4 hours)
+            # 1. Decay stale evidence weight (TTL = 4 hours)
             for ev in conv.evidence_for + conv.evidence_against:
-                if getattr(ev, "expired", False):
+                if getattr(ev, "decayed", False):
                     continue
                     
                 if ev.age_minutes() > 240:
-                    ev.expired = True
-                    # Revert a portion of the evidence's initial impact
+                    ev.decayed = True
+                    ev.weight *= 0.5  # Halve weight of stale evidence
+                    
+                    # Revert a portion of the evidence's initial impact based on new weight
                     if ev.direction == "for":
                         penalty = ev.weight * 0.05
                         conv.confidence = max(0.05, conv.confidence - penalty)
@@ -359,7 +361,7 @@ class ConvictionTracker:
                         boost = ev.weight * 0.05
                         conv.confidence = min(0.95, conv.confidence + boost)
                         
-                    logger.debug(f"Evidence TTL expired in [{conv.id}]: '{ev.text[:30]}...' ({ev.direction})")
+                    logger.debug(f"Evidence weight decayed (4h) in [{conv.id}]: '{ev.text[:30]}...' ({ev.direction})")
 
             # 1b. Prune evidence older than 12 hours entirely
             before_for = len(conv.evidence_for)
@@ -446,7 +448,7 @@ class ConvictionTracker:
                 f"\n{icon} [{conv.id}] {conv.direction.upper()} — {conv.thesis}"
             )
             lines.append(f"  Status: {conv.status} | Confidence: {conv.confidence:.0%} (peak: {conv.peak_confidence:.0%})")
-            lines.append(f"  Age: {conv.age_hours():.1f}h | Evidence: {len([e for e in conv.evidence_for if not getattr(e, 'expired', False)])} active for, {len([e for e in conv.evidence_against if not getattr(e, 'expired', False)])} active against")
+            lines.append(f"  Age: {conv.age_hours():.1f}h | Evidence: {len(conv.evidence_for)} active for, {len(conv.evidence_against)} active against")
             if conv.invalidation_level:
                 lines.append(f"  Invalidation: {conv.invalidation_reason} @ {conv.invalidation_level:.5f}")
             if conv.target_level:
