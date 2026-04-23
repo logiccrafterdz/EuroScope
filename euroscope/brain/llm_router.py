@@ -104,13 +104,14 @@ class LLMRouter:
 
     # ─── Shared retry logic ──────────────────────────────────
 
-    async def _retry_with_fallback(self, call_fn, fail_result):
+    async def _retry_with_fallback(self, call_fn, fail_result, force_provider: str = None):
         """
         Shared retry + fallback logic for all provider call methods.
 
         Args:
             call_fn: async callable(provider) -> result
             fail_result: value to return when all providers fail
+            force_provider: explicitly route to 'primary' or 'fallback'
         """
         if not self._warned_identical_keys and len(self.providers) >= 2:
             if self.providers[0].api_key and self.providers[0].api_key == self.providers[1].api_key:
@@ -118,8 +119,15 @@ class LLMRouter:
                 self._warned_identical_keys = True
 
         last_error = None
+        
+        target_providers = self.providers
+        if force_provider:
+            target_providers = [p for p in self.providers if p.name == force_provider]
+            if not target_providers:
+                logger.warning(f"Forced provider '{force_provider}' not found, using default routing")
+                target_providers = self.providers
 
-        for provider in self.providers:
+        for provider in target_providers:
             for attempt in range(self.max_retries + 1):
                 try:
                     result = await self.breaker.call(call_fn, provider)
@@ -193,13 +201,19 @@ class LLMRouter:
 
     # ─── Public API ──────────────────────────────────────────
 
-    async def chat(self, messages: list[dict], temperature: float = None) -> str:
+    async def chat(
+        self,
+        messages: list[dict],
+        temperature: float = None,
+        force_provider: str = None,
+    ) -> str:
         """
         Send chat completion request, trying providers in order.
 
         Args:
             messages: list of {"role": ..., "content": ...}
             temperature: override provider default
+            force_provider: override provider (e.g., 'fallback')
 
         Returns:
             LLM response text
@@ -215,6 +229,7 @@ class LLMRouter:
         return await self._retry_with_fallback(
             call_fn,
             lambda err: f"❌ AI unavailable — all providers failed: {err}",
+            force_provider=force_provider
         )
 
     async def chat_json(

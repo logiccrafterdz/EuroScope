@@ -61,8 +61,9 @@ class DeliberationCommittee:
             f"{context_str}\n"
             "State your concerns in 2-3 sentences."
         )
-        # Risk Manager must be deterministic and cold
-        return await self.llm.chat([{"role": "user", "content": prompt}], temperature=0.1)
+        # Risk Manager must be deterministic and cold.
+        # We route it through the fallback provider (e.g. OpenAI instead of DeepSeek) for true model diversity
+        return await self.llm.chat([{"role": "user", "content": prompt}], temperature=0.1, force_provider="fallback")
 
     async def deliberate(self, context: SkillContext) -> Dict[str, Any]:
         """
