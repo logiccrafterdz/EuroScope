@@ -127,12 +127,12 @@ class FundamentalAnalysisSkill(BaseSkill):
             data = {"sentiment": sentiment, "score": round(avg, 3), "article_count": len(articles)}
             context.analysis["sentiment_summary"] = data
             
-            # Inject sentiment_data into metadata for WorldModel consumption
+            # Inject into metadata for the WorldModel to consume (Fixes Gap #1)
             context.metadata["sentiment_data"] = {
                 "label": sentiment,
                 "score": round(avg, 3),
-                "mood": sentiment,
-                "cot_net": 0  # COT not available in news data
+                "mood": sentiment,  # For now, market mood matches news sentiment
+                "cot_net": 0  # Placeholder since COT is not fetched here
             }
             
             formatted = f"📊 *Sentiment:* {sentiment.capitalize()} (Score: {avg:.2f})"
