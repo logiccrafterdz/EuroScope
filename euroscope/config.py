@@ -58,6 +58,7 @@ class Config(BaseSettings):
     
     log_level: str = "INFO"
     data_dir: str = "data"
+    database_url: Optional[str] = None  # Added for Postgres Migration (Task 6.1)
     rate_limit_requests: int = 5
     rate_limit_window_minutes: int = 1
     admin_chat_ids: List[str] = Field(default_factory=list)
