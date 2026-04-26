@@ -111,6 +111,13 @@ class DeviationMonitorSkill(BaseSkill):
         context.metadata["emergency_until"] = now + emergency_seconds
         context.metadata["deviation_monitor_last_activation"] = now
         context.metadata["deviation_monitor_last_trigger"] = result
+        
+        if self._storage:
+            await self._storage.save_json("emergency_mode_state", {
+                "active": True,
+                "until": now + emergency_seconds,
+                "trigger": result
+            })
 
         await self._emit_event(result)
         await self._log_deviation(result, candles, timeframe)

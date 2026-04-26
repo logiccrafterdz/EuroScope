@@ -120,7 +120,7 @@ class VectorMemory:
         if not self._available:
             return []
 
-        if collection not in ("analyses", "insights", "market_events"):
+        if collection not in ("analyses", "insights", "market_events", "regimes"):
             return []
 
         try:

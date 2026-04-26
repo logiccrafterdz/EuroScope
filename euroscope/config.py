@@ -17,7 +17,7 @@ logger = logging.getLogger("euroscope.config")
 
 
 class LLMConfig(BaseModel):
-    api_key: str = "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"
+    api_key: str = ""
     api_base: str = "https://integrate.api.nvidia.com/v1"
     model: str = "deepseek-ai/deepseek-v4-flash"
     max_tokens: int = 4096
@@ -73,6 +73,8 @@ class Config(BaseSettings):
     safety_news_block_minutes: int = 30
     safety_asian_min_confidence: float = 0.75
     safety_volatility_stop_min: int = 25
+    safety_max_daily_drawdown_pips: float = 50.0
+    safety_spread_kill_threshold: float = 8.0  # Halt trading if spread exceeds this (pips)
     safety_max_weekly_drawdown_pct: float = 6.0
     safety_max_monthly_drawdown_pct: float = 10.0
     safety_max_spread_pips: float = 8.0

@@ -222,6 +222,15 @@ class SignalExecutor:
             logger.warning(f"Exec blocked: SPREAD BLOWOUT {spread:.1f} > {max_spread}")
             await self.storage.update_transaction_status(tx_id, "failed")
             return -1
+            
+        kill_threshold = 8.0
+        if hasattr(self, 'risk_manager') and hasattr(self.risk_manager, 'config'):
+            kill_threshold = getattr(self.risk_manager.config, 'safety_spread_kill_threshold', 8.0)
+            
+        if spread > kill_threshold:
+            logger.error(f"🛑 SPREAD KILL SWITCH TRIPPED: Spread {spread:.1f} exceeds absolute max {kill_threshold}")
+            await self.storage.update_transaction_status(tx_id, "failed")
+            return -1
 
         # 1. Simulate execution for paper trading or get real fill
         if self.paper_trading:

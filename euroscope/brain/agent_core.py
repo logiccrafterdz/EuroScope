@@ -866,6 +866,13 @@ class EuroScopeAgent:
 
     def _should_evaluate_trade(self) -> bool:
         """Check if conditions warrant trade evaluation."""
+        spread = getattr(self.world_model.price, 'spread_pips', 0.0)
+        kill_threshold = getattr(self.config, 'safety_spread_kill_threshold', 8.0)
+        
+        if spread > kill_threshold:
+            logger.warning(f"🛑 SPREAD KILL SWITCH ACTIVE: {spread:.1f} > {kill_threshold} pips. Trading halted.")
+            return False
+            
         strongest = self.conviction_tracker.get_strongest()
         if not strongest:
             return False
@@ -951,6 +958,16 @@ class EuroScopeAgent:
             # Restore emergency mode
             em_mode = state.get("emergency_mode", False)
             em_until = state.get("emergency_until", 0.0)
+            
+            # Check for crash-persisted emergency state
+            emergency_state = await self.storage.load_json("emergency_mode_state", {})
+            if emergency_state and emergency_state.get("active"):
+                disk_until = emergency_state.get("until", 0.0)
+                if disk_until > em_until:
+                    em_mode = True
+                    em_until = disk_until
+                    logger.warning("Restored Emergency Mode from crash-persisted state")
+
             self.orchestrator.global_context.metadata["emergency_mode"] = em_mode
             self.orchestrator.global_context.metadata["emergency_until"] = em_until
             
