@@ -17,9 +17,9 @@ logger = logging.getLogger("euroscope.config")
 
 
 class LLMConfig(BaseModel):
-    api_key: str = ""
-    api_base: str = "https://api.deepseek.com"
-    model: str = "deepseek-chat"
+    api_key: str = "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"
+    api_base: str = "https://integrate.api.nvidia.com/v1"
+    model: str = "deepseek-ai/deepseek-v4-flash"
     max_tokens: int = 4096
     temperature: float = 0.4
     fallback_api_key: str = ""
