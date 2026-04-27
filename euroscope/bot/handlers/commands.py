@@ -52,12 +52,12 @@ class CommandHandlers:
         await self.bot._reply(update, help_text, parse_mode="Markdown")
 
     async def cmd_health(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle /health — system health and runtime stats."""
+        """Handle /health — comprehensive system health and components check."""
         if not await self.bot._check_auth(update):
             return
             
-        result = await self.bot.orchestrator.run_skill("monitoring", "runtime_stats")
-        text = result.metadata.get("formatted", "⚠️ Could not fetch health stats.")
+        result = await self.bot.orchestrator.run_skill("monitoring", "format_dashboard")
+        text = result.metadata.get("formatted", "⚠️ Could not fetch comprehensive health stats.")
         await self.bot._reply(update, safe_markdown(text), parse_mode="Markdown")
 
     async def cmd_data_health(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
