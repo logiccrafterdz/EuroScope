@@ -12,6 +12,7 @@ import asyncio
 import inspect
 import logging
 import os
+import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
@@ -98,10 +99,12 @@ class BaseSkill(ABC):
     category: SkillCategory = SkillCategory.SYSTEM
     version: str = "1.0.0"
     capabilities: list[str] = []
+    dependencies: list[str] = []  # Skills that should run before this one
     execution_timeout: int = 30  # Default timeout in seconds
 
     def __init__(self):
         self._skill_md: Optional[str] = None
+        self._frontmatter: Optional[dict] = None
 
     # ── Core API ─────────────────────────────────────────────
 
@@ -133,10 +136,13 @@ class BaseSkill(ABC):
         Includes name, description, capabilities, and SKILL.md content.
         """
         caps = "\n".join(f"  - {c}" for c in self.capabilities)
+        deps = ", ".join(self.dependencies) if self.dependencies else "none"
+        trigger_desc = self.get_trigger_description()
         card = (
             f"{self.emoji} **{self.name}** (v{self.version})\n"
             f"Category: {self.category.value}\n"
-            f"Description: {self.description}\n"
+            f"Description: {trigger_desc}\n"
+            f"Dependencies: {deps}\n"
             f"Capabilities:\n{caps}"
         )
 
@@ -151,13 +157,39 @@ class BaseSkill(ABC):
         """One-line summary for menus and lists."""
         return f"{self.emoji} {self.name}: {self.description}"
 
+    def get_trigger_description(self) -> str:
+        """
+        Return the rich description optimized for LLM triggering.
+
+        Prefers the SKILL.md frontmatter description (which is longer
+        and trigger-oriented per Anthropic's standard) over the terse
+        Python class attribute.
+        """
+        self._ensure_frontmatter()
+        if self._frontmatter and self._frontmatter.get("description"):
+            return self._frontmatter["description"]
+        return self.description
+
+    def health_contract(self) -> dict:
+        """
+        Return a dict describing what this skill needs to be healthy.
+
+        Override in subclasses to declare runtime dependencies.
+        The monitoring skill uses this to proactively check all skills.
+        """
+        return {
+            "requires_provider": False,
+            "requires_storage": False,
+            "requires_config": False,
+            "requires_event_bus": False,
+        }
+
     def _read_skill_md(self) -> Optional[str]:
         """Read SKILL.md from the skill's directory."""
         if self._skill_md is not None:
             return self._skill_md
 
         try:
-            import inspect
             skill_file = Path(inspect.getfile(self.__class__)).parent / "SKILL.md"
 
             if skill_file.exists():
@@ -169,6 +201,38 @@ class BaseSkill(ABC):
             self._skill_md = ""
 
         return self._skill_md
+
+    def _ensure_frontmatter(self):
+        """Parse YAML frontmatter from SKILL.md if not already done."""
+        if self._frontmatter is not None:
+            return
+
+        content = self._read_skill_md()
+        if not content or not content.strip().startswith("---"):
+            self._frontmatter = {}
+            return
+
+        try:
+            # Extract YAML between first two --- delimiters
+            match = re.match(r"^---\s*\n(.*?)\n---", content, re.DOTALL)
+            if not match:
+                self._frontmatter = {}
+                return
+
+            yaml_block = match.group(1)
+            parsed = {}
+            for line in yaml_block.split("\n"):
+                line = line.strip()
+                if ":" in line and not line.startswith("#"):
+                    key, _, value = line.partition(":")
+                    key = key.strip()
+                    value = value.strip().strip('"').strip("'")
+                    if value:  # Only set non-empty values
+                        parsed[key] = value
+            self._frontmatter = parsed
+        except Exception as e:
+            logger.debug(f"[{self.name}] Failed to parse SKILL.md frontmatter: {e}")
+            self._frontmatter = {}
 
     # ── Utilities ────────────────────────────────────────────
 

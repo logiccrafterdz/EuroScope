@@ -119,6 +119,39 @@ class SkillsRegistry:
         """List all registered skill names."""
         return list(self._skills.keys())
 
+    def get_skill_by_capability(self, action: str) -> Optional[BaseSkill]:
+        """Find which skill handles a specific action/capability."""
+        for skill in self.list_all():
+            if action in skill.capabilities:
+                return skill
+        return None
+
+    def get_execution_order(self, target_skill: str) -> list[str]:
+        """
+        Return topological order of skills needed before the target.
+
+        Resolves the dependency DAG so the OODA loop can auto-chain
+        prerequisite skills before executing the target.
+        """
+        if not self._discovered:
+            self.discover()
+
+        visited = set()
+        order = []
+
+        def _visit(name: str):
+            if name in visited:
+                return
+            visited.add(name)
+            skill = self._skills.get(name)
+            if skill:
+                for dep in skill.dependencies:
+                    _visit(dep)
+            order.append(name)
+
+        _visit(target_skill)
+        return order
+
     # ── Registration API ─────────────────────────────────────
 
     def register(self, skill: BaseSkill):
@@ -137,7 +170,8 @@ class SkillsRegistry:
         Generate a prompt section describing all available skills.
 
         This is injected into the LLM system prompt so it understands
-        what tools/skills are available.
+        what tools/skills are available. Uses the rich trigger descriptions
+        from SKILL.md frontmatter when available (Anthropic pattern).
         """
         if not self._discovered:
             self.discover()
@@ -156,9 +190,12 @@ class SkillsRegistry:
             lines.append(f"\n## {cat.title()}")
             for skill in skills:
                 caps = ", ".join(skill.capabilities)
+                trigger_desc = skill.get_trigger_description()
+                deps = ", ".join(skill.dependencies) if skill.dependencies else ""
+                dep_note = f" [depends: {deps}]" if deps else ""
                 lines.append(
-                    f"- {skill.emoji} **{skill.name}** — {skill.description} "
-                    f"[actions: {caps}]"
+                    f"- {skill.emoji} **{skill.name}** — {trigger_desc} "
+                    f"[actions: {caps}]{dep_note}"
                 )
 
         return "\n".join(lines)
