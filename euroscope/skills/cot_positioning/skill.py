@@ -1,7 +1,7 @@
 import logging
 
-from ..data.cot import COTProvider
-from .base import BaseSkill, SkillCategory, SkillContext, SkillResult
+from ...data.cot import COTProvider
+from ..base import BaseSkill, SkillCategory, SkillContext, SkillResult
 
 logger = logging.getLogger("euroscope.skills.cot_positioning")
 
@@ -9,7 +9,7 @@ class COTPositioningSkill(BaseSkill):
     name = "cot_positioning"
     description = "Retrieves CFTC Net Positioning to evaluate long-term institutional bias for the Euro"
     emoji = "🏦"
-    category = SkillCategory.FUNDAMENTAL
+    category = SkillCategory.ANALYSIS
     version = "1.0.0"
     capabilities = ["get_net_positioning"]
 
