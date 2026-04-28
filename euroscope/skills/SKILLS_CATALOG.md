@@ -44,12 +44,13 @@ deviation_monitor (auto) → emergency_mode → signal_executor (blocked)
 
 ## Skills by Category
 
-### 📊 Data (2 skills)
+### 📊 Data (3 skills)
 
 | Skill | Actions | Dependencies | Description |
 |:------|:--------|:-------------|:------------|
 | [market_data](market_data/SKILL.md) | `get_price`, `get_candles`, `check_market_status`, `get_correlation` | PriceProvider | Real-time and historical EUR/USD data gateway |
 | [correlation_monitor](correlation_monitor/SKILL.md) | `check_correlations`, `detect_divergence` | yfinance | DXY, US10Y, Gold correlation tracking |
+| [macro_calendar](macro_calendar/SKILL.md) | `get_upcoming`, `check_impact`, `time_to_event` | EconomicCalendar | Advanced macro event tracking and countdowns |
 
 ### 📈 Analysis (7 skills)
 
@@ -71,7 +72,7 @@ deviation_monitor (auto) → emergency_mode → signal_executor (blocked)
 | [risk_management](risk_management/SKILL.md) | `assess_trade`, `position_size`, `stop_loss`, `take_profit` | Config | Adaptive stops + dynamic sizing |
 | [signal_executor](signal_executor/SKILL.md) | `open_trade`, `close_trade`, `list_trades`, `trade_history`, `update_trade` | Storage, Config, SafetyGuardrail | Trade execution with 6 guardrails |
 
-### 📊 Analytics (4 skills)
+### 📊 Analytics (5 skills)
 
 | Skill | Actions | Dependencies | Description |
 |:------|:--------|:-------------|:------------|
@@ -79,13 +80,15 @@ deviation_monitor (auto) → emergency_mode → signal_executor (blocked)
 | [prediction_tracker](prediction_tracker/SKILL.md) | `record`, `evaluate`, `accuracy_report`, `get_learning_context` | Memory, Storage | Self-improving accuracy tracking |
 | [trade_journal](trade_journal/SKILL.md) | `log_trade`, `close_trade`, `get_journal`, `get_stats` | Storage | Full-context trade logging + learning |
 | [backtesting](backtesting/SKILL.md) | `run`, `compare`, `walk_forward`, `format_result` | BacktestEngine, PriceProvider | Historical strategy validation |
+| [briefing_generator](briefing_generator/SKILL.md) | `generate_morning_briefing`, `generate_weekly_review` | tech, fund, macro, perf | Synthesizes multiple analyses into reports |
 
-### 🏥 System (2 skills)
+### 🏥 System (3 skills)
 
 | Skill | Actions | Dependencies | Description |
 |:------|:--------|:-------------|:------------|
 | [monitoring](monitoring/SKILL.md) | `check_health`, `track_error`, `get_status`, `format_dashboard`, `runtime_stats` | HealthMonitor, psutil | System health + resource monitoring |
 | [deviation_monitor](deviation_monitor/SKILL.md) | `start` | EventBus, MarketDataSkill | Anomaly detection + emergency halt |
+| [portfolio_context](portfolio_context/SKILL.md) | `assess_health`, `get_exposure` | Storage, Config | Account balance, drawdown, net exposure |
 
 ---
 
@@ -127,4 +130,4 @@ using topological sort, ensuring prerequisites run first.
 
 ---
 
-## Total: 18 Skills | 50+ Actions | 5 Categories
+## Total: 21 Skills | 55+ Actions | 5 Categories
