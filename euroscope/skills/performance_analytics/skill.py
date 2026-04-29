@@ -45,7 +45,7 @@ class PerformanceAnalyticsSkill(BaseSkill):
                 "total_pnl": snap.total_pnl,
                 "sharpe_ratio": snap.sharpe_ratio,
                 "sortino_ratio": snap.sortino_ratio,
-                "max_drawdown_pips": snap.max_drawdown_pips,
+                "max_drawdown_pips": snap.max_drawdown,
                 "profit_factor": snap.profit_factor,
                 "expectancy": snap.expectancy,
             }

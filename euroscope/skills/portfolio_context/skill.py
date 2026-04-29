@@ -37,7 +37,7 @@ class PortfolioContextSkill(BaseSkill):
             
         try:
             # Get daily stats
-            stats = await self.storage.get_trade_journal_stats(period="today")
+            stats = await self.storage.get_trade_journal_stats()
             daily_pnl = stats.get("total_pnl", 0.0)
             
             # Fetch max daily drawdown limit from config (default to -50 pips if not set)

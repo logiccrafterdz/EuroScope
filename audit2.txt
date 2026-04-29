@@ -1,0 +1,440 @@
+﻿============================= test session starts =============================
+platform win32 -- Python 3.14.0, pytest-9.0.1, pluggy-1.6.0 -- C:\Python314\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\Hp\Desktop\EuroScope
+configfile: pytest.ini (WARNING: ignoring pytest config in pyproject.toml!)
+plugins: anyio-4.11.0, asyncio-1.3.0, cov-7.0.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=function, asyncio_default_test_loop_scope=function
+collecting ... collected 64 items
+
+tests/test_full_system_audit.py::TestSkillDiscovery::test_all_21_skills PASSED [  1%]
+tests/test_full_system_audit.py::TestSkillDiscovery::test_skills_have_capabilities PASSED [  3%]
+tests/test_full_system_audit.py::TestSkillDiscovery::test_skills_have_skill_md PASSED [  4%]
+tests/test_full_system_audit.py::TestSkillDiscovery::test_valid_categories PASSED [  6%]
+tests/test_full_system_audit.py::TestSkillDiscovery::test_no_dependency_cycles PASSED [  7%]
+tests/test_full_system_audit.py::TestSkillDiscovery::test_capability_lookup PASSED [  9%]
+tests/test_full_system_audit.py::TestSkillDiscovery::test_tools_prompt PASSED [ 10%]
+tests/test_full_system_audit.py::TestAllSkills::test_market_data_status PASSED [ 12%]
+tests/test_full_system_audit.py::TestAllSkills::test_invalid_action_rejected PASSED [ 14%]
+tests/test_full_system_audit.py::TestAllSkills::test_session_context PASSED [ 15%]
+tests/test_full_system_audit.py::TestAllSkills::test_technical_analysis PASSED [ 17%]
+tests/test_full_system_audit.py::TestAllSkills::test_liquidity PASSED    [ 18%]
+tests/test_full_system_audit.py::TestAllSkills::test_fundamental_macro PASSED [ 20%]
+tests/test_full_system_audit.py::TestAllSkills::test_risk_management PASSED [ 21%]
+tests/test_full_system_audit.py::TestAllSkills::test_trading_strategy PASSED [ 23%]
+tests/test_full_system_audit.py::TestAllSkills::test_prediction_tracker FAILED [ 25%]
+tests/test_full_system_audit.py::TestAllSkills::test_performance_analytics FAILED [ 26%]
+tests/test_full_system_audit.py::TestAllSkills::test_monitoring PASSED   [ 28%]
+tests/test_full_system_audit.py::TestAllSkills::test_trade_journal FAILED [ 29%]
+tests/test_full_system_audit.py::TestAllSkills::test_uncertainty PASSED  [ 31%]
+tests/test_full_system_audit.py::TestAllSkills::test_deviation_monitor PASSED [ 32%]
+tests/test_full_system_audit.py::TestAllSkills::test_correlation_monitor PASSED [ 34%]
+tests/test_full_system_audit.py::TestAllSkills::test_mtf_confluence FAILED [ 35%]
+tests/test_full_system_audit.py::TestAllSkills::test_backtesting FAILED  [ 37%]
+tests/test_full_system_audit.py::TestAllSkills::test_cot_positioning PASSED [ 39%]
+tests/test_full_system_audit.py::TestAllSkills::test_macro_calendar PASSED [ 40%]
+tests/test_full_system_audit.py::TestAllSkills::test_portfolio_context FAILED [ 42%]
+tests/test_full_system_audit.py::TestAllSkills::test_briefing_generator PASSED [ 43%]
+tests/test_full_system_audit.py::TestOrchestrator::test_skill_not_found PASSED [ 45%]
+tests/test_full_system_audit.py::TestOrchestrator::test_chain_continues_on_failure PASSED [ 46%]
+tests/test_full_system_audit.py::TestOrchestrator::test_conflict_resolution PASSED [ 48%]
+tests/test_full_system_audit.py::TestOrchestrator::test_confidence_penalty PASSED [ 50%]
+tests/test_full_system_audit.py::TestStorage::test_prediction_lifecycle FAILED [ 51%]
+tests/test_full_system_audit.py::TestStorage::test_signal_lifecycle FAILED [ 53%]
+tests/test_full_system_audit.py::TestStorage::test_trade_journal FAILED  [ 54%]
+tests/test_full_system_audit.py::TestStorage::test_alerts FAILED         [ 56%]
+tests/test_full_system_audit.py::TestStorage::test_transaction_wal FAILED [ 57%]
+tests/test_full_system_audit.py::TestStorage::test_memory_kv FAILED      [ 59%]
+tests/test_full_system_audit.py::TestStorage::test_json_roundtrip FAILED [ 60%]
+tests/test_full_system_audit.py::TestStorage::test_news FAILED           [ 62%]
+tests/test_full_system_audit.py::TestStorage::test_metrics FAILED        [ 64%]
+tests/test_full_system_audit.py::TestStorage::test_preferences FAILED    [ 65%]
+tests/test_full_system_audit.py::TestStorage::test_concurrent_writes FAILED [ 67%]
+tests/test_full_system_audit.py::TestTradingEngine::test_risk_position_sizing FAILED [ 68%]
+tests/test_full_system_audit.py::TestTradingEngine::test_risk_trade_result FAILED [ 70%]
+tests/test_full_system_audit.py::TestTradingEngine::test_safety_guardrail_block FAILED [ 71%]
+tests/test_full_system_audit.py::TestTradingEngine::test_trailing_stop FAILED [ 73%]
+tests/test_full_system_audit.py::TestTradingEngine::test_strategy_engine FAILED [ 75%]
+tests/test_full_system_audit.py::TestBrain::test_vector_memory FAILED    [ 76%]
+tests/test_full_system_audit.py::TestBrain::test_memory FAILED           [ 78%]
+tests/test_full_system_audit.py::TestBrain::test_llm_router PASSED       [ 79%]
+tests/test_full_system_audit.py::TestBrain::test_conviction PASSED       [ 81%]
+tests/test_full_system_audit.py::TestAutomation::test_event_bus FAILED   [ 82%]
+tests/test_full_system_audit.py::TestAutomation::test_smart_alerts PASSED [ 84%]
+tests/test_full_system_audit.py::TestAutomation::test_heartbeat FAILED   [ 85%]
+tests/test_full_system_audit.py::TestLearning::test_pattern_tracker FAILED [ 87%]
+tests/test_full_system_audit.py::TestLearning::test_adaptive_tuner FAILED [ 89%]
+tests/test_full_system_audit.py::TestLearning::test_evolution_tracker FAILED [ 90%]
+tests/test_full_system_audit.py::TestInfrastructure::test_config PASSED  [ 92%]
+tests/test_full_system_audit.py::TestInfrastructure::test_container FAILED [ 93%]
+tests/test_full_system_audit.py::TestE2E::test_normal_trade_flow PASSED  [ 95%]
+tests/test_full_system_audit.py::TestE2E::test_emergency_blocks_trading PASSED [ 96%]
+tests/test_full_system_audit.py::TestE2E::test_pipeline_risk_without_direction_skipped PASSED [ 98%]
+tests/test_full_system_audit.py::TestE2E::test_concurrent_storage FAILED [100%]
+
+================================== FAILURES ===================================
+____________________ TestAllSkills.test_prediction_tracker ____________________
+tests\test_full_system_audit.py:130: in test_prediction_tracker
+    assert r.success
+E   assert False
+E    +  where False = SkillResult(success=False, data=None, error="'pred_id'", status='success', metadata={}, next_skill=None).success
+__________________ TestAllSkills.test_performance_analytics ___________________
+tests\test_full_system_audit.py:136: in test_performance_analytics
+    assert r.success
+E   assert False
+E    +  where False = SkillResult(success=False, data=None, error="'PerformanceSnapshot' object has no attribute 'max_drawdown_pips'", status='success', metadata={}, next_skill=None).success
+______________________ TestAllSkills.test_trade_journal _______________________
+tests\test_full_system_audit.py:146: in test_trade_journal
+    assert r.success
+E   AssertionError: assert False
+E    +  where False = SkillResult(success=False, data=None, error='no such table: trade_journal', status='success', metadata={}, next_skill=None).success
+______________________ TestAllSkills.test_mtf_confluence ______________________
+tests\test_full_system_audit.py:166: in test_mtf_confluence
+    assert r.success
+E   AssertionError: assert False
+E    +  where False = SkillResult(success=False, data=None, error='No price provider configured', status='success', metadata={}, next_skill=None).success
+_______________________ TestAllSkills.test_backtesting ________________________
+tests\test_full_system_audit.py:170: in test_backtesting
+    skill.set_provider(MagicMock())
+    ^^^^^^^^^^^^^^^^^^
+E   AttributeError: 'BacktestingSkill' object has no attribute 'set_provider'
+____________________ TestAllSkills.test_portfolio_context _____________________
+tests\test_full_system_audit.py:186: in test_portfolio_context
+    assert r.success
+E   assert False
+E    +  where False = SkillResult(success=False, data=None, error="Storage.get_trade_journal_stats() got an unexpected keyword argument 'period'", status='success', metadata={}, next_skill=None).success
+------------------------------ Captured log call ------------------------------
+ERROR    euroscope.skills.portfolio_context:skill.py:70 Failed to assess portfolio health: Storage.get_trade_journal_stats() got an unexpected keyword argument 'period'
+____________________ TestStorage.test_prediction_lifecycle ____________________
+tests\test_full_system_audit.py:231: in test_prediction_lifecycle
+    pid = await storage.save_prediction("H1", "BUY", 0.85, "reason")
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+euroscope\data\storage.py:303: in save_prediction
+    async with db.execute(
+..\..\AppData\Roaming\Python\Python314\site-packages\aiosqlite\context.py:41: in __aenter__
+    self._obj = await self._coro
+                ^^^^^^^^^^^^^^^^
+..\..\AppData\Roaming\Python\Python314\site-packages\aiosqlite\core.py:223: in execute
+    cursor = await self._execute(self._conn.execute, sql, parameters)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\AppData\Roaming\Python\Python314\site-packages\aiosqlite\core.py:160: in _execute
+    return await future
+           ^^^^^^^^^^^^
+..\..\AppData\Roaming\Python\Python314\site-packages\aiosqlite\core.py:63: in _connection_worker_thread
+    result = function()
+             ^^^^^^^^^^
+E   sqlite3.OperationalError: no such table: predictions
+______________________ TestStorage.test_signal_lifecycle ______________________
+tests\test_full_system_audit.py:237: in test_signal_lifecycle
+    sid = await storage.save_signal("BUY", 1.085, 1.082, 1.091, 0.8, "H1")
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+euroscope\data\storage.py:483: in save_signal
+    async with db.execute(
+..\..\AppData\Roaming\Python\Python314\site-packages\aiosqlite\context.py:41: in __aenter__
+    self._obj = await self._coro
+                ^^^^^^^^^^^^^^^^
+..\..\AppData\Roaming\Python\Python314\site-packages\aiosqlite\core.py:223: in execute
+    cursor = await self._execute(self._conn.execute, sql, parameters)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\AppData\Roaming\Python\Python314\site-packages\aiosqlite\core.py:160: in _execute
+    return await future
+           ^^^^^^^^^^^^
+..\..\AppData\Roaming\Python\Python314\site-packages\aiosqlite\core.py:63: in _connection_worker_thread
+    result = function()
+             ^^^^^^^^^^
+E   sqlite3.OperationalError: no such table: trading_signals
+_______________________ TestStorage.test_trade_journal ________________________
+tests\test_full_system_audit.py:242: in test_trade_journal
+    tid = await storage.save_trade_journal("BUY", 1.085, 1.082, 1.091, strategy="breakout")
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+euroscope\data\storage.py:653: in save_trade_journal
+    async with db.execute(
+..\..\AppData\Roaming\Python\Python314\site-packages\aiosqlite\context.py:41: in __aenter__
+    self._obj = await self._coro
+                ^^^^^^^^^^^^^^^^
+..\..\AppData\Roaming\Python\Python314\site-packages\aiosqlite\core.py:223: in execute
+    cursor = await self._execute(self._conn.execute, sql, parameters)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\AppData\Roaming\Python\Python314\site-packages\aiosqlite\core.py:160: in _execute
+    return await future
+           ^^^^^^^^^^^^
+..\..\AppData\Roaming\Python\Python314\site-packages\aiosqlite\core.py:63: in _connection_worker_thread
+    result = function()
+             ^^^^^^^^^^
+E   sqlite3.OperationalError: no such table: trade_journal
+___________________________ TestStorage.test_alerts ___________________________
+tests\test_full_system_audit.py:247: in test_alerts
+    aid = await storage.add_alert("price_above", 1.10, 12345)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+euroscope\data\storage.py:362: in add_alert
+    async with db.execute(
+..\..\AppData\Roaming\Python\Python314\site-packages\aiosqlite\context.py:41: in __aenter__
+    self._obj = await self._coro
+                ^^^^^^^^^^^^^^^^
+..\..\AppData\Roaming\Python\Python314\site-packages\aiosqlite\core.py:223: in execute
+    cursor = await self._execute(self._conn.execute, sql, parameters)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\AppData\Roaming\Python\Python314\site-packages\aiosqlite\core.py:160: in _execute
+    return await future
+           ^^^^^^^^^^^^
+..\..\AppData\Roaming\Python\Python314\site-packages\aiosqlite\core.py:63: in _connection_worker_thread
+    result = function()
+             ^^^^^^^^^^
+E   sqlite3.OperationalError: no such table: alerts
+______________________ TestStorage.test_transaction_wal _______________________
+tests\test_full_system_audit.py:252: in test_transaction_wal
+    tid = await storage.log_transaction("open", {"d": "BUY"})
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+euroscope\data\storage.py:452: in log_transaction
+    async with db.execute(
+..\..\AppData\Roaming\Python\Python314\site-packages\aiosqlite\context.py:41: in __aenter__
+    self._obj = await self._coro
+                ^^^^^^^^^^^^^^^^
+..\..\AppData\Roaming\Python\Python314\site-packages\aiosqlite\core.py:223: in execute
+    cursor = await self._execute(self._conn.execute, sql, parameters)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\AppData\Roaming\Python\Python314\site-packages\aiosqlite\core.py:160: in _execute
+    return await future
+           ^^^^^^^^^^^^
+..\..\AppData\Roaming\Python\Python314\site-packages\aiosqlite\core.py:63: in _connection_worker_thread
+    result = function()
+             ^^^^^^^^^^
+E   sqlite3.OperationalError: no such table: transaction_logs
+_________________________ TestStorage.test_memory_kv __________________________
+tests\test_full_system_audit.py:257: in test_memory_kv
+    await storage.set_memory("k", "v")
+euroscope\data\storage.py:398: in set_memory
+    await db.execute(
+..\..\AppData\Roaming\Python\Python314\site-packages\aiosqlite\core.py:223: in execute
+    cursor = await self._execute(self._conn.execute, sql, parameters)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\AppData\Roaming\Python\Python314\site-packages\aiosqlite\core.py:160: in _execute
+    return await future
+           ^^^^^^^^^^^^
+..\..\AppData\Roaming\Python\Python314\site-packages\aiosqlite\core.py:63: in _connection_worker_thread
+    result = function()
+             ^^^^^^^^^^
+E   sqlite3.OperationalError: no such table: memory
+_______________________ TestStorage.test_json_roundtrip _______________________
+tests\test_full_system_audit.py:262: in test_json_roundtrip
+    await storage.save_json("j", d)
+euroscope\data\storage.py:412: in save_json
+    await self.set_memory(key, json.dumps(value))
+euroscope\data\storage.py:398: in set_memory
+    await db.execute(
+..\..\AppData\Roaming\Python\Python314\site-packages\aiosqlite\core.py:223: in execute
+    cursor = await self._execute(self._conn.execute, sql, parameters)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\AppData\Roaming\Python\Python314\site-packages\aiosqlite\core.py:160: in _execute
+    return await future
+           ^^^^^^^^^^^^
+..\..\AppData\Roaming\Python\Python314\site-packages\aiosqlite\core.py:63: in _connection_worker_thread
+    result = function()
+             ^^^^^^^^^^
+E   sqlite3.OperationalError: no such table: memory
+____________________________ TestStorage.test_news ____________________________
+tests\test_full_system_audit.py:266: in test_news
+    await storage.save_news_event("ECB", "reuters", impact_score=9.5)
+euroscope\data\storage.py:525: in save_news_event
+    async with db.execute(
+..\..\AppData\Roaming\Python\Python314\site-packages\aiosqlite\context.py:41: in __aenter__
+    self._obj = await self._coro
+                ^^^^^^^^^^^^^^^^
+..\..\AppData\Roaming\Python\Python314\site-packages\aiosqlite\core.py:223: in execute
+    cursor = await self._execute(self._conn.execute, sql, parameters)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\AppData\Roaming\Python\Python314\site-packages\aiosqlite\core.py:160: in _execute
+    return await future
+           ^^^^^^^^^^^^
+..\..\AppData\Roaming\Python\Python314\site-packages\aiosqlite\core.py:63: in _connection_worker_thread
+    result = function()
+             ^^^^^^^^^^
+E   sqlite3.OperationalError: no such table: news_events
+__________________________ TestStorage.test_metrics ___________________________
+tests\test_full_system_audit.py:270: in test_metrics
+    await storage.save_performance_metric("daily", total_signals=10, win_rate=0.7)
+euroscope\data\storage.py:558: in save_performance_metric
+    async with db.execute(
+..\..\AppData\Roaming\Python\Python314\site-packages\aiosqlite\context.py:41: in __aenter__
+    self._obj = await self._coro
+                ^^^^^^^^^^^^^^^^
+..\..\AppData\Roaming\Python\Python314\site-packages\aiosqlite\core.py:223: in execute
+    cursor = await self._execute(self._conn.execute, sql, parameters)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\AppData\Roaming\Python\Python314\site-packages\aiosqlite\core.py:160: in _execute
+    return await future
+           ^^^^^^^^^^^^
+..\..\AppData\Roaming\Python\Python314\site-packages\aiosqlite\core.py:63: in _connection_worker_thread
+    result = function()
+             ^^^^^^^^^^
+E   sqlite3.OperationalError: no such table: performance_metrics
+________________________ TestStorage.test_preferences _________________________
+tests\test_full_system_audit.py:274: in test_preferences
+    await storage.save_user_preferences(123, risk_tolerance="low")
+euroscope\data\storage.py:601: in save_user_preferences
+    async with db.execute(
+..\..\AppData\Roaming\Python\Python314\site-packages\aiosqlite\context.py:41: in __aenter__
+    self._obj = await self._coro
+                ^^^^^^^^^^^^^^^^
+..\..\AppData\Roaming\Python\Python314\site-packages\aiosqlite\core.py:223: in execute
+    cursor = await self._execute(self._conn.execute, sql, parameters)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\AppData\Roaming\Python\Python314\site-packages\aiosqlite\core.py:160: in _execute
+    return await future
+           ^^^^^^^^^^^^
+..\..\AppData\Roaming\Python\Python314\site-packages\aiosqlite\core.py:63: in _connection_worker_thread
+    result = function()
+             ^^^^^^^^^^
+E   sqlite3.OperationalError: no such table: user_preferences
+_____________________ TestStorage.test_concurrent_writes ______________________
+tests\test_full_system_audit.py:278: in test_concurrent_writes
+    results = await asyncio.gather(*[storage.save_prediction("H1", "BUY", 0.5+i*0.01, f"T{i}") for i in range(20)])
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+euroscope\data\storage.py:303: in save_prediction
+    async with db.execute(
+..\..\AppData\Roaming\Python\Python314\site-packages\aiosqlite\context.py:41: in __aenter__
+    self._obj = await self._coro
+                ^^^^^^^^^^^^^^^^
+..\..\AppData\Roaming\Python\Python314\site-packages\aiosqlite\core.py:223: in execute
+    cursor = await self._execute(self._conn.execute, sql, parameters)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\AppData\Roaming\Python\Python314\site-packages\aiosqlite\core.py:160: in _execute
+    return await future
+           ^^^^^^^^^^^^
+..\..\AppData\Roaming\Python\Python314\site-packages\aiosqlite\core.py:63: in _connection_worker_thread
+    result = function()
+             ^^^^^^^^^^
+E   sqlite3.OperationalError: no such table: predictions
+_________________ TestTradingEngine.test_risk_position_sizing _________________
+tests\test_full_system_audit.py:291: in test_risk_position_sizing
+    size = rm.calculate_position_size(1.085, 1.082, balance=10000)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   TypeError: RiskManager.calculate_position_size() got an unexpected keyword argument 'balance'
+__________________ TestTradingEngine.test_risk_trade_result ___________________
+tests\test_full_system_audit.py:299: in test_risk_trade_result
+    assert rm.daily_pnl < 0
+           ^^^^^^^^^^^^
+E   AttributeError: 'RiskManager' object has no attribute 'daily_pnl'
+________________ TestTradingEngine.test_safety_guardrail_block ________________
+tests\test_full_system_audit.py:303: in test_safety_guardrail_block
+    sg = SafetyGuardrail(storage=storage)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   TypeError: SafetyGuardrail.__init__() missing 1 required positional argument: 'config'
+____________________ TestTradingEngine.test_trailing_stop _____________________
+tests\test_full_system_audit.py:311: in test_trailing_stop
+    state = tse.activate("t1", "BUY", entry=1.085, initial_sl=1.082, atr=0.0015)
+            ^^^^^^^^^^^^
+E   AttributeError: 'TrailingStopEngine' object has no attribute 'activate'
+___________________ TestTradingEngine.test_strategy_engine ____________________
+tests\test_full_system_audit.py:318: in test_strategy_engine
+    assert "direction" in result
+           ^^^^^^^^^^^^^^^^^^^^^
+E   TypeError: argument of type 'StrategySignal' is not a container or iterable
+________________________ TestBrain.test_vector_memory _________________________
+tests\test_full_system_audit.py:330: in test_vector_memory
+    assert len(vm.search_similar("bullish breakout", limit=5)) >= 1
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   TypeError: VectorMemory.search_similar() got an unexpected keyword argument 'limit'
+____________________________ TestBrain.test_memory ____________________________
+tests\test_full_system_audit.py:335: in test_memory
+    await m.remember("test", "EUR strong")
+          ^^^^^^^^^^
+E   AttributeError: 'Memory' object has no attribute 'remember'
+________________________ TestAutomation.test_event_bus ________________________
+tests\test_full_system_audit.py:358: in test_event_bus
+    await bus.emit("t.e", {"k": "v"})
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   TypeError: EventBus.emit() takes 2 positional arguments but 3 were given
+________________________ TestAutomation.test_heartbeat ________________________
+tests\test_full_system_audit.py:371: in test_heartbeat
+    hb.add_check("t", check)
+    ^^^^^^^^^^^^
+E   AttributeError: 'HeartbeatService' object has no attribute 'add_check'
+______________________ TestLearning.test_pattern_tracker ______________________
+tests\test_full_system_audit.py:384: in test_pattern_tracker
+    pid = await pt.track_pattern("double_bottom", "H1", "BUY", 1.085)
+                ^^^^^^^^^^^^^^^^
+E   AttributeError: 'PatternTracker' object has no attribute 'track_pattern'. Did you mean: 'save_pattern'?
+______________________ TestLearning.test_adaptive_tuner _______________________
+tests\test_full_system_audit.py:390: in test_adaptive_tuner
+    report = await AdaptiveTuner(storage=storage, config=Config()).run_tuning_cycle()
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   AttributeError: 'AdaptiveTuner' object has no attribute 'run_tuning_cycle'
+_____________________ TestLearning.test_evolution_tracker _____________________
+tests\test_full_system_audit.py:396: in test_evolution_tracker
+    await et.record_snapshot({"win_rate": 0.65})
+          ^^^^^^^^^^^^^^^^^^
+E   AttributeError: 'EvolutionTracker' object has no attribute 'record_snapshot'
+______________________ TestInfrastructure.test_container ______________________
+tests\test_full_system_audit.py:414: in test_container
+    assert c.storage and c.bus and c.registry and c.orchestrator and c.risk_manager
+E   assert (<euroscope.data.storage.Storage object at 0x0000019450A67B60> and <euroscope.automation.events.EventBus object at 0x0000019450A26E90> and <SkillsRegistry: 0 skills>)
+E    +  where <euroscope.data.storage.Storage object at 0x0000019450A67B60> = <euroscope.container.ServiceContainer object at 0x000001944F87F620>.storage
+E    +  and   <euroscope.automation.events.EventBus object at 0x0000019450A26E90> = <euroscope.container.ServiceContainer object at 0x000001944F87F620>.bus
+E    +  and   <SkillsRegistry: 0 skills> = <euroscope.container.ServiceContainer object at 0x000001944F87F620>.registry
+_______________________ TestE2E.test_concurrent_storage _______________________
+tests\test_full_system_audit.py:445: in test_concurrent_storage
+    results = await asyncio.gather(*[storage.save_prediction("H1", "BUY", 0.5+i*0.01, f"T{i}") for i in range(20)])
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+euroscope\data\storage.py:303: in save_prediction
+    async with db.execute(
+..\..\AppData\Roaming\Python\Python314\site-packages\aiosqlite\context.py:41: in __aenter__
+    self._obj = await self._coro
+                ^^^^^^^^^^^^^^^^
+..\..\AppData\Roaming\Python\Python314\site-packages\aiosqlite\core.py:223: in execute
+    cursor = await self._execute(self._conn.execute, sql, parameters)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\AppData\Roaming\Python\Python314\site-packages\aiosqlite\core.py:160: in _execute
+    return await future
+           ^^^^^^^^^^^^
+..\..\AppData\Roaming\Python\Python314\site-packages\aiosqlite\core.py:63: in _connection_worker_thread
+    result = function()
+             ^^^^^^^^^^
+E   sqlite3.OperationalError: no such table: predictions
+============================== warnings summary ===============================
+tests/test_full_system_audit.py::TestTradingEngine::test_risk_trade_result
+  C:\Users\Hp\Desktop\EuroScope\tests\test_full_system_audit.py:297: RuntimeWarning: coroutine 'RiskManager.record_trade_result' was never awaited
+    rm.record_trade_result(-50.0)
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/test_full_system_audit.py::TestTradingEngine::test_risk_trade_result
+  C:\Users\Hp\Desktop\EuroScope\tests\test_full_system_audit.py:298: RuntimeWarning: coroutine 'RiskManager.record_trade_result' was never awaited
+    rm.record_trade_result(-30.0)
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED tests/test_full_system_audit.py::TestAllSkills::test_prediction_tracker
+FAILED tests/test_full_system_audit.py::TestAllSkills::test_performance_analytics
+FAILED tests/test_full_system_audit.py::TestAllSkills::test_trade_journal - A...
+FAILED tests/test_full_system_audit.py::TestAllSkills::test_mtf_confluence - ...
+FAILED tests/test_full_system_audit.py::TestAllSkills::test_backtesting - Att...
+FAILED tests/test_full_system_audit.py::TestAllSkills::test_portfolio_context
+FAILED tests/test_full_system_audit.py::TestStorage::test_prediction_lifecycle
+FAILED tests/test_full_system_audit.py::TestStorage::test_signal_lifecycle - ...
+FAILED tests/test_full_system_audit.py::TestStorage::test_trade_journal - sql...
+FAILED tests/test_full_system_audit.py::TestStorage::test_alerts - sqlite3.Op...
+FAILED tests/test_full_system_audit.py::TestStorage::test_transaction_wal - s...
+FAILED tests/test_full_system_audit.py::TestStorage::test_memory_kv - sqlite3...
+FAILED tests/test_full_system_audit.py::TestStorage::test_json_roundtrip - sq...
+FAILED tests/test_full_system_audit.py::TestStorage::test_news - sqlite3.Oper...
+FAILED tests/test_full_system_audit.py::TestStorage::test_metrics - sqlite3.O...
+FAILED tests/test_full_system_audit.py::TestStorage::test_preferences - sqlit...
+FAILED tests/test_full_system_audit.py::TestStorage::test_concurrent_writes
+FAILED tests/test_full_system_audit.py::TestTradingEngine::test_risk_position_sizing
+FAILED tests/test_full_system_audit.py::TestTradingEngine::test_risk_trade_result
+FAILED tests/test_full_system_audit.py::TestTradingEngine::test_safety_guardrail_block
+FAILED tests/test_full_system_audit.py::TestTradingEngine::test_trailing_stop
+FAILED tests/test_full_system_audit.py::TestTradingEngine::test_strategy_engine
+FAILED tests/test_full_system_audit.py::TestBrain::test_vector_memory - TypeE...
+FAILED tests/test_full_system_audit.py::TestBrain::test_memory - AttributeErr...
+FAILED tests/test_full_system_audit.py::TestAutomation::test_event_bus - Type...
+FAILED tests/test_full_system_audit.py::TestAutomation::test_heartbeat - Attr...
+FAILED tests/test_full_system_audit.py::TestLearning::test_pattern_tracker - ...
+FAILED tests/test_full_system_audit.py::TestLearning::test_adaptive_tuner - A...
+FAILED tests/test_full_system_audit.py::TestLearning::test_evolution_tracker
+FAILED tests/test_full_system_audit.py::TestInfrastructure::test_container - ...
+FAILED tests/test_full_system_audit.py::TestE2E::test_concurrent_storage - sq...
+================= 31 failed, 33 passed, 2 warnings in 28.17s ==================

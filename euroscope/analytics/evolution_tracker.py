@@ -29,8 +29,8 @@ class EvolutionTracker:
         acc_7d = await self.storage.get_accuracy_stats(days=7)
         
         # 2. Strategy metrics
-        stats_30d = await self.storage.get_trade_journal_stats(days=30)
-        stats_7d = await self.storage.get_trade_journal_stats(days=7)
+        stats_30d = await self.storage.get_trade_journal_stats()
+        stats_7d = await self.storage.get_trade_journal_stats()
         
         # 3. Insights adoption rate
         insights = await self.storage.get_recent_learning_insights(limit=100)
