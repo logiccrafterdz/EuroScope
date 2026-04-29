@@ -1,5 +1,5 @@
-# Use Python 3.11 official slim build
-FROM python:3.11-slim as builder
+# Python version pinned to 3.11 — ensure local dev matches (see pyproject.toml)
+FROM python:3.11-slim AS builder
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1 \

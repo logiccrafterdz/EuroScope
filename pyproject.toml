@@ -9,7 +9,7 @@ description = "EUR/USD Expert Bot"
 authors = [
     { name = "EuroScope Team", email = "team@euroscope.bot" }
 ]
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dynamic = ["dependencies"]
 
 [tool.setuptools.dynamic]

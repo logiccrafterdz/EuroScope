@@ -278,14 +278,6 @@ class Storage:
         finally:
             pool.put_nowait(conn)
 
-    async def close(self):
-        """Close all async database connections in the pool."""
-        pool = self._pool
-        if pool is not None:
-            while not pool.empty():
-                conn = await pool.get()
-                await conn.close()
-            self._pool = None
 
     async def _query_rows(self, sql: str, params: tuple = ()) -> list[dict]:
         """Execute a SELECT query and return results as a list of dicts."""
@@ -295,7 +287,6 @@ class Storage:
                 if rows:
                     return [dict(r) for r in rows]
                 return []
-        return []
 
     async def _query_one(self, sql: str, params: tuple = ()) -> Optional[dict]:
         """Execute a SELECT query and return one result as dict or None."""
@@ -316,7 +307,6 @@ class Storage:
             ) as cursor:
                 await db.commit()
                 return cursor.lastrowid or 0
-        return 0
 
     async def resolve_prediction(self, pred_id: int, outcome: str, accuracy: float):
         async with self._get_db() as db:
@@ -375,7 +365,6 @@ class Storage:
             ) as cursor:
                 await db.commit()
                 return cursor.lastrowid or 0
-        return 0
 
     async def get_active_alerts(self) -> list[dict]:
         return await self._query_rows("SELECT * FROM alerts WHERE triggered = 0")
@@ -467,7 +456,6 @@ class Storage:
             ) as cursor:
                 await db.commit()
                 return cursor.lastrowid
-        return -1
 
     async def update_transaction_status(self, tx_id: int, status: str):
         """Update the status of an in-flight transaction (e.g., to 'completed' or 'failed')."""
@@ -502,7 +490,6 @@ class Storage:
             ) as cursor:
                 await db.commit()
                 return cursor.lastrowid or 0
-        return 0
 
     async def update_signal_status(self, signal_id: int, status: str, pnl_pips: float = 0.0):
         """Update a signal's status (active, closed, cancelled)."""
@@ -546,7 +533,6 @@ class Storage:
             ) as cursor:
                 await db.commit()
                 return cursor.lastrowid or 0
-        return 0
 
     async def get_recent_news(self, limit: int = 20, min_impact: float = 0.0) -> list[dict]:
         """Get recent news events, optionally filtered by minimum impact."""
@@ -583,7 +569,6 @@ class Storage:
             ) as cursor:
                 await db.commit()
                 return cursor.lastrowid or 0
-        return 0
 
     async def get_latest_metrics(self, period: str = "daily") -> Optional[dict]:
         """Get the most recent performance metrics for a period."""
@@ -642,7 +627,6 @@ class Storage:
             ) as cursor:
                 await db.commit()
                 return cursor.lastrowid or 0
-        return 0
 
     async def get_user_preferences(self, chat_id: int) -> Optional[dict]:
         """Get preferences for a specific user."""
@@ -682,7 +666,6 @@ class Storage:
             ) as cursor:
                 await db.commit()
                 return cursor.lastrowid or 0
-        return 0
 
     async def close_trade_journal(self, trade_id: int, exit_price: float,
                              pnl_pips: float, is_win: bool):
@@ -866,7 +849,6 @@ class Storage:
             ) as cursor:
                 await db.commit()
                 return cursor.lastrowid or 0
-        return 0
 
     async def resolve_pattern(self, pattern_id: int, actual_outcome: str,
                         price_at_resolution: float, is_success: bool):
@@ -962,7 +944,6 @@ class Storage:
             ) as cursor:
                 await db.commit()
                 return cursor.lastrowid or 0
-        return 0
 
     async def get_recent_learning_insights(self, limit: int = 20) -> list[dict]:
         """Get the most recent learning insights."""
