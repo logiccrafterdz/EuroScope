@@ -3,6 +3,9 @@ Technical Analysis Skill — Wraps TechnicalAnalyzer, PatternDetector, LevelAnal
 """
 
 from datetime import datetime, UTC
+import logging
+
+logger = logging.getLogger("euroscope.skills.technical_analysis")
 
 from ...analysis.technical import TechnicalAnalyzer
 from ...analysis.patterns import PatternDetector

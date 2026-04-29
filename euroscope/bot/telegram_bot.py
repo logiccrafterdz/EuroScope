@@ -11,7 +11,7 @@ from datetime import datetime
 from typing import Optional
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo, MenuButtonWebApp
 from telegram.ext import Application, CommandHandler, ContextTypes
-from telegram import BotCommand
+from telegram import BotCommand, Bot
 from telegram.error import Conflict
 from ..config import Config
 from ..container import ServiceContainer
