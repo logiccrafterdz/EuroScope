@@ -176,6 +176,12 @@ class SignalExecutorSkill(BaseSkill):
         timeframe = context.market_data.get("timeframe", "H1")
         confidence = signal.get("confidence", 50.0)
         reasoning = signal.get("reasoning", "")
+        
+        # Link DecisionLog decision to this trade
+        decision_id = context.metadata.get("decision_id")
+        if decision_id:
+            reasoning = f"{reasoning} [DECISION:{decision_id}]"
+            
         atr = context.analysis.get("indicators", {}).get("atr")
         spread = float(context.metadata.get("spread_pips", 0.0))
         position_size = float(risk.get("position_size", 0.01))
@@ -364,12 +370,14 @@ class SignalExecutorSkill(BaseSkill):
 
         result = await self._executor.close_signal(signal_id, exit_price, reason="manual")
         if result:
-            # Fire webhook
+            # Fire webhook and event
             try:
                 if not hasattr(self, '_webhooks'):
                     from ...bot.webhooks import WebhookDispatcher
                     self._webhooks = WebhookDispatcher(self._config)
                 await self._webhooks.dispatch("trade_closed", result)
+                if self._bus:
+                    await self._bus.emit(Event("trade.closed", "signal_executor", {"trade": result}))
             except Exception as e:
                 logger.warning(f"Failed to dispatch trade_closed webhook: {e}")
                 

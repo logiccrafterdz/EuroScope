@@ -78,10 +78,6 @@ class ServiceContainer:
         )
         
         # 2. Core Brain Components
-        self.memory = Memory(self.storage)
-        self.vector_memory = VectorMemory(storage=self.storage)
-        self.orchestrator = Orchestrator(storage=self.storage, registry=self.registry)
-        
         self.router = LLMRouter.from_config(
             primary_key=config.llm.api_key, 
             primary_base=config.llm.api_base, 
@@ -89,6 +85,15 @@ class ServiceContainer:
             fallback_key=config.llm.fallback_api_key, 
             fallback_base=config.llm.fallback_api_base, 
             fallback_model=config.llm.fallback_model
+        )
+
+        self.memory = Memory(self.storage)
+        self.vector_memory = VectorMemory(storage=self.storage)
+        self.orchestrator = Orchestrator(
+            storage=self.storage, 
+            registry=self.registry,
+            config=self.config,
+            llm_router=self.router
         )
         
         # 3. Intelligence Layers
@@ -146,3 +151,24 @@ class ServiceContainer:
         self.notifications.set_orchestrator(self.orchestrator)
         
         self.workspace = WorkspaceManager()
+
+        # 7. Event Listeners
+        self.bus.subscribe("trade.closed", self._on_trade_closed)
+
+    async def _on_trade_closed(self, event):
+        """Handle trade closed event to resolve debate decisions."""
+        import re
+        try:
+            trade = event.data.get("trade", {})
+            reasoning = trade.get("reasoning", "")
+            match = re.search(r"\[DECISION:([^\]]+)\]", reasoning)
+            
+            if match and self.orchestrator and self.orchestrator.decision_log:
+                decision_id = match.group(1)
+                pnl_pips = float(trade.get("pnl_pips", 0.0))
+                is_win = pnl_pips > 0
+                logger.info(f"Resolving decision {decision_id} with outcome: {pnl_pips} pips")
+                await self.orchestrator.decision_log.resolve_with_outcome(decision_id, pnl_pips, is_win)
+        except Exception as e:
+            logger.error(f"Error handling trade closed event for reflection: {e}")
+

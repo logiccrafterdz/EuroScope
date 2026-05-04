@@ -16,6 +16,10 @@ from ..skills.registry import SkillsRegistry
 from .llm_router import LLMRouter
 from .vector_memory import VectorMemory
 from .conflict_arbiter import ConflictArbiter
+from .debate_engine import DebateEngine
+from .risk_debate import RiskDebate
+from .decision_log import DecisionLog
+from .reflector import Reflector
 
 logger = logging.getLogger("euroscope.brain.orchestrator")
 
@@ -66,10 +70,11 @@ class Orchestrator:
     for pipeline execution. Purely skills-based.
     """
 
-    def __init__(self, storage=None, registry=None):
+    def __init__(self, storage=None, registry=None, config=None, llm_router=None):
         # V2: Skills system
         self.registry = registry or SkillsRegistry()
         self.storage = storage
+        self.config = config
         if not registry:
              self.registry.discover()
         self.chain = SkillChain(self.registry)
@@ -77,6 +82,13 @@ class Orchestrator:
         self.vector_memory: Optional[VectorMemory] = None
         self.global_context = SkillContext()
         self.alerts = None
+        
+        # Debate Engine components
+        self.llm_router = llm_router
+        self.debate_engine = DebateEngine(self.llm_router) if self.llm_router else None
+        self.risk_debate = RiskDebate(self.llm_router) if self.llm_router else None
+        self.reflector = Reflector(self.llm_router) if self.llm_router else None
+        self.decision_log = DecisionLog(storage=self.storage, reflector=self.reflector)
 
     def set_alerts(self, alerts):
         self.alerts = alerts
@@ -275,10 +287,66 @@ class Orchestrator:
             ("technical_analysis", "full"),
             ("uncertainty_assessment", "assess"),
             ("trading_strategy", "detect_signal"),  # Discover direction FIRST
-            ("risk_management", "assess_trade"),    # Calculate risk BASED ON direction
         ]
         
         ctx = await self._execute_pipeline(pipeline, context, params)
+
+        # 3. Multi-Agent Debate Layer
+        if self.config and self.config.debate_enabled and self.debate_engine and self.risk_debate:
+            signal_confidence = ctx.signals.get("confidence", 0)
+            signal_direction = ctx.signals.get("direction", "NEUTRAL")
+            
+            # Use threshold from config, convert from float to percentage (e.g., 0.55 -> 55.0)
+            min_conf = self.config.debate_min_confidence * 100 if self.config.debate_min_confidence < 1 else self.config.debate_min_confidence
+            
+            if signal_direction in ["BUY", "SELL"] and signal_confidence >= min_conf:
+                logger.info(f"Triggering Multi-Agent Debate for {signal_direction} signal (Confidence: {signal_confidence}%)")
+                
+                # Fetch past reflections
+                past = await self.decision_log.get_past_context(n_recent=5)
+                ctx.metadata["past_reflections"] = past
+                
+                # Investment Debate
+                debate_result = await self.debate_engine.run_investment_debate(ctx, signal_direction)
+                ctx.metadata["investment_debate"] = debate_result
+                
+                judgment = debate_result.get("judgment", {})
+                new_direction = judgment.get("final_direction", "HOLD")
+                new_confidence = judgment.get("confidence", 0)
+                
+                # Update signals if debate changed them
+                if new_direction != signal_direction:
+                    logger.info(f"Debate engine overruled strategy: {signal_direction} -> {new_direction}")
+                
+                ctx.signals["direction"] = new_direction
+                ctx.signals["verdict"] = new_direction
+                ctx.signals["confidence"] = new_confidence
+                
+                # Risk Debate
+                if new_direction in ["BUY", "SELL"]:
+                    risk_result = await self.risk_debate.run_risk_debate(ctx, judgment)
+                    ctx.metadata["risk_debate"] = risk_result
+                    ctx.metadata["debate_risk_profile"] = risk_result.get("final_profile", {})
+
+                # Store Decision in Log
+                decision_id = await self.decision_log.store_decision(
+                    context=ctx,
+                    decision=judgment,
+                    debate_transcript=debate_result
+                )
+                ctx.metadata["decision_id"] = decision_id
+
+        # 4. Standard Risk Management (Base Guardrails)
+        ctx = await self._execute_pipeline([("risk_management", "assess_trade")], ctx, params)
+        
+        # Override basic risk params with Debate consensus (if available)
+        if ctx.metadata.get("debate_risk_profile") and ctx.risk:
+            debate_risk = ctx.metadata["debate_risk_profile"]
+            ctx.risk["lots"] = debate_risk.get("position_size_lots", ctx.risk.get("lots"))
+            ctx.risk["stop_loss"] = debate_risk.get("stop_loss_pips", ctx.risk.get("stop_loss"))
+            ctx.risk["take_profit"] = debate_risk.get("take_profit_pips", ctx.risk.get("take_profit"))
+            ctx.risk["reasoning"] = f"DEBATE CONSENSUS: {debate_risk.get('reasoning', '')}"
+
 
         market_state = self._infer_market_state(ctx) or {}
         if market_state:
