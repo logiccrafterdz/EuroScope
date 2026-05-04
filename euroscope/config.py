@@ -79,6 +79,12 @@ class Config(BaseSettings):
     safety_max_monthly_drawdown_pct: float = 10.0
     safety_max_spread_pips: float = 8.0
 
+    # Debate Engine
+    debate_enabled: bool = True
+    debate_min_confidence: float = 0.55
+    max_debate_rounds: int = 1
+    max_risk_debate_rounds: int = 1
+
     @classmethod
     def _validate_env_syntax(cls, filepath=".env"):
         """Check for common syntax errors in .env file."""
@@ -174,6 +180,10 @@ class Config(BaseSettings):
             safety_max_weekly_drawdown_pct=float(os.getenv("EUROSCOPE_MAX_WEEKLY_DRAWDOWN", "6.0")),
             safety_max_monthly_drawdown_pct=float(os.getenv("EUROSCOPE_MAX_MONTHLY_DRAWDOWN", "10.0")),
             safety_max_spread_pips=float(os.getenv("EUROSCOPE_SAFETY_MAX_SPREAD_PIPS", "8.0")),
+            debate_enabled=os.getenv("EUROSCOPE_DEBATE_ENABLED", "1") != "0",
+            debate_min_confidence=float(os.getenv("EUROSCOPE_DEBATE_MIN_CONFIDENCE", "0.55")),
+            max_debate_rounds=int(os.getenv("EUROSCOPE_MAX_DEBATE_ROUNDS", "1")),
+            max_risk_debate_rounds=int(os.getenv("EUROSCOPE_MAX_RISK_DEBATE_ROUNDS", "1")),
         )
         return cls(**config_data)
 
