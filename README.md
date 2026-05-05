@@ -4,6 +4,10 @@
 
 # EuroScope
 
+![Python](https://img.shields.io/badge/Python-3.11%2B-blue)
+![Tests](https://img.shields.io/badge/Tests-567%20Passed-brightgreen)
+![License](https://img.shields.io/badge/License-MIT-yellow)
+
 **Autonomous AI Agent specialized exclusively in the EUR/USD forex pair.**
 
 EuroScope is an always-on trading intelligence agent that continuously monitors EUR/USD, forms market theses, and makes autonomous decisions. It combines a skills-based multi-agent architecture with an OODA-loop cognitive framework, institutional-grade analysis, adaptive learning, and real-time Telegram control.
