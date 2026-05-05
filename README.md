@@ -11,7 +11,8 @@ EuroScope is an always-on trading intelligence agent that continuously monitors 
 **System Status: 🟢 PRODUCTION-READY**
 Fully operational as an autonomous agent with a **100% Test Pass Rate (567/567 tests)**. The system runs a 30-second heartbeat loop, maintains a structured world model, tracks trading convictions with evidence-based confidence decay, and generates session-aware game plans.
 
-**Recent Upgrades (Phase 7):**
+**Recent Upgrades:**
+- **Debate Engine & Self-Learning**: Integrated a Multi-Agent Debate framework (Bull vs. Bear vs. Risk) and an autonomous `Reflector` for continuous post-trade learning.
 - Migrated to **PostgreSQL** via SQLAlchemy 2.0 for enterprise-grade state persistence.
 - Integrated **NVIDIA NIM (DeepSeek V4 Flash)** as the primary intelligence engine.
 - Implemented dual-layer **Spread Kill Switches** and disk-persisted **Emergency Modes** to survive extreme market volatility and server crashes.
@@ -68,34 +69,39 @@ The Agent Core runs a state machine that follows the **Observe -> Orient -> Deci
 
 ## Intelligence & Core Components
 
-### 1. Multi-Agent Deliberation Committee (`brain/multi_agent.py`)
+### 1. Debate Engine (`brain/multi_agent.py`, `brain/conflict_arbiter.py`)
 Resolves high-ambiguity market conditions using an adversarial committee framework.
 - Consists of specialized LLM agents: Bull Advocate, Bear Advocate, and Risk Manager.
-- A Chief Judge (Conflict Arbiter) synthesizes the arguments and establishes a consensus direction and confidence score.
+- A Chief Judge (Conflict Arbiter) synthesizes the arguments and establishes a consensus direction, confidence score, and unified game plan.
 - Implements strict LLM fallback routing via `brain/llm_router.py`, parallel asynchronous execution, and time-bound deliberation (20-second timeout) to guarantee system stability during volatile macro events.
-- Employs a cooldown mechanism to prevent token saturation.
+- Seamlessly integrated with the `Orchestrator` and `Signal Executor`.
 
-### 2. Sentiment Network Graph (`data/sentiment_graph.py`)
+### 2. Self-Reflection & Decision Logging (`brain/reflector.py`, `brain/decision_log.py`)
+A continuous learning loop that evaluates the outcomes of past trades.
+- **Decision Log**: Persists every agent debate, logic thesis, and trading decision to the database.
+- **Reflector**: Autonomously reviews closed trades against their initial thesis, generating feedback and lessons learned to improve future performance.
+
+### 3. Sentiment Network Graph (`data/sentiment_graph.py`)
 Utilizes a directed acyclic graph (implemented as a Singleton via NetworkX) to track macroeconomic narrative linkages from real-time news engines.
 - Extracts causal relationships using LLMs (e.g., NFP -> forces_hike -> FED).
 - Persists data with automated exponential temporal decay (0.95x modifier) on edge weights, naturally obsoleting stale structural hypotheses over time.
 
-### 3. Market Regime Memory Bank (`brain/vector_memory.py`)
+### 4. Market Regime Memory Bank (`brain/vector_memory.py`)
 Records the state of the market (ADX, RSI, MACD, Trend, ATR Volatility, Macro Bias) alongside realized post-trade outcomes mapping to profit constraints.
 - Prior to discrete trade initialization, the system performs an internal nearest-neighbor query to the SQLite FTS5 vector memory framework to index historically similar market regimes.
 - Dynamically scales signal confidence thresholds proportional to the historic win rate of the matched regime matrices.
 
-### 4. Counterfactual Engine (`learning/counterfactual.py`)
+### 5. Counterfactual Engine (`learning/counterfactual.py`)
 An asynchronous background analysis pipeline that digests closed trading iterations to isolate mathematical counter-scenarios.
 - Computes trajectory variances: tests whether expanding standard deviation on stop losses mitigates slippage/stop hunts, or if trailing constraints prematurely truncate PnL duration.
 - Extracted theorems are embedded into the central insight registry, enabling dynamic, unsupervised parameter retuning per the `adaptive_tuner.py`.
 
-### 5. Conviction System & World Model (`brain/conviction.py`, `brain/world_model.py`)
+### 6. Conviction System & World Model (`brain/conviction.py`, `brain/world_model.py`)
 A rigorously structured, sub-millisecond representation of the active EUR/USD market state mapping Price, Technicals, Fundamentals, Sentiment, Regimes, Risk matrices, Liquidity levels (PDH/PDL), and Session demarcations.
 - Implements strict delta threshold detection logic restricting agent reasoning cycles purely to explicit state transitions.
 - Logical convictions maintain decay gradients and absolute invalidation thresholds mapped to physical price boundaries.
 
-### 6. Event Architecture & Scheduling (`automation/events.py`, `automation/heartbeat.py`)
+### 7. Event Architecture & Scheduling (`automation/events.py`, `automation/heartbeat.py`)
 - Event Bus architecture for pub-sub inter-process communication bounding all execution parameters.
 - Asynchronous periodic task scheduler mapping data fetches independently, segregating discrete I/O boundaries from execution logic.
 
