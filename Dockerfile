@@ -48,4 +48,4 @@ USER euroscope
 EXPOSE 8080
 
 # Run EuroScope
-CMD ["python", "main.py"]
+CMD ["python", "-m", "euroscope.main"]
