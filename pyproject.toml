@@ -7,7 +7,7 @@ name = "euroscope"
 version = "5.0.0"
 description = "EUR/USD Expert Bot"
 authors = [
-    { name = "EuroScope Team", email = "team@euroscope.bot" }
+    { name = "logiccrafterdz", email = "logiccrafterdz@gmail.com" }
 ]
 requires-python = ">=3.11"
 dynamic = ["dependencies"]
