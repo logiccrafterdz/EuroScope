@@ -254,4 +254,4 @@ Guarantees systemic operation during specific constraints such as the ECB quanti
 ---
 
 ## Deployment Scope
-Private intelligence engine build. All licensing protocols restricted.
+Open-source intelligence engine. Released under the MIT License.
