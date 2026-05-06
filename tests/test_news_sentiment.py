@@ -6,10 +6,14 @@ import os
 import tempfile
 
 import pytest
-
+from unittest.mock import patch
 from euroscope.data.news import analyze_sentiment, NewsEngine
 from euroscope.data.storage import Storage
 
+@pytest.fixture(autouse=True)
+def mock_onnx():
+    with patch("euroscope.data.sentiment.analyze_sentiment_onnx", return_value={"sentiment": "neutral", "score": 0.0, "provider": "none"}) as mock:
+        yield mock
 
 class TestAnalyzeSentiment:
     """Test the sentiment analysis function."""
