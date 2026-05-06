@@ -12,8 +12,8 @@ authors = [
 requires-python = ">=3.11"
 dynamic = ["dependencies"]
 
-[tool.setuptools]
-packages = ["euroscope"]
+[tool.setuptools.packages.find]
+include = ["euroscope*"]
 
 [tool.setuptools.dynamic]
 dependencies = {file = ["requirements.txt"]}
