@@ -33,7 +33,6 @@ logger = logging.getLogger('euroscope.container')
 _global_container = None
 
 def get_container():
-    global _global_container
     return _global_container
 
 def set_container(container):

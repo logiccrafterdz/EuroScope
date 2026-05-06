@@ -9,7 +9,10 @@ import asyncio
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, UTC
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from euroscope.data.storage import Storage
 
 logger = logging.getLogger("euroscope.trading.risk_manager")
 
