@@ -335,6 +335,10 @@ class EuroScopeBot:
     async def post_init(self, application: Application):
         """Called after bot is initialized, before polling starts."""
         self.application = application
+        
+        if self.config.telegram.allowed_users:
+            await self.notifications.schedule_daily_reports(application.job_queue, self.config.telegram.allowed_users)
+            
         self.cron.set_bot(self)
         if self.config.telegram.web_app_url:
             try:
@@ -429,8 +433,6 @@ class EuroScopeBot:
         logger.info('🌐 EuroScope Zenith starting...')
         app = self.build_app()
         self.notifications.set_bot(app.bot)
-        if self.config.telegram.allowed_users:
-            self.notifications.schedule_daily_reports(app.job_queue, self.config.telegram.allowed_users)
         try:
             app.run_polling(drop_pending_updates=True)
         except Conflict as e:
