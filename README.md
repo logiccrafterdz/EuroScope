@@ -47,34 +47,24 @@ EuroScope operates as an **autonomous agent** rather than a traditional chatbot.
 
 The agent runs a state machine that follows the **Observe -> Orient -> Decide -> Act** cycle every 30 seconds:
 
-```text
-+---------------------------------------------------------+
-|                    CRON HEARTBEAT (30s)                 |
-|                         |                               |
-|                    +----v----+                          |
-|                    |  IDLE   |<------------------+      |
-|                    +----+----+                   |      |
-|                         | tick()                 |      |
-|                    +----v----+                   |      |
-|                    |OBSERVING| <- run_scan()     |      |
-|                    +----+----+                   |      |
-|                         | deltas?                |      |
-|                    +----v----+                   |      |
-|                    |ORIENTING| <- World Model    |      |
-|                    |         |   update          |      |
-|                    +----+----+                   |      |
-|                         |                        |      |
-|                    +----v----+                   |      |
-|                    |DECIDING | <- LLM reasoning  |      |
-|                    +----+----+                   |      |
-|                    +----v----+                   |      |
-|                    | ACTING  | <- Execute/Alert  |      |
-|                    +----+----+                   |      |
-|                         |                        |      |
-|                    +----v----+                   |      |
-|                    |REVIEWING| <- Track outcomes -+      |
-|                    +---------+                          |
-+---------------------------------------------------------+
+```mermaid
+graph TD
+    A[IDLE] -->|30s Heartbeat| B[OBSERVE]
+    B -->|run_scan| C{State Change?}
+    C -->|No| A
+    C -->|Yes| D[ORIENT]
+    D -->|Update World Model| E[DECIDE]
+    E -->|LLM Reasoning| F[ACT]
+    F -->|Execute / Alert| G[REVIEW]
+    G -->|Log Outcomes| A
+
+    style A fill:#f9f9f9,stroke:#333,stroke-width:2px
+    style B fill:#fff,stroke:#333,stroke-width:1px
+    style D fill:#fff,stroke:#333,stroke-width:1px
+    style E fill:#fff,stroke:#333,stroke-width:1px
+    style F fill:#fff,stroke:#333,stroke-width:1px
+    style G fill:#fff,stroke:#333,stroke-width:1px
+    style C fill:#fff,stroke:#333,stroke-width:1px
 ```
 
 ---
