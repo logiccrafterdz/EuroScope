@@ -317,8 +317,20 @@ class Orchestrator:
             signal_confidence = ctx.signals.get("confidence", 0)
             signal_direction = ctx.signals.get("direction", "NEUTRAL")
             
-            # Use threshold from config, convert from float to percentage (e.g., 0.55 -> 55.0)
+            # Context-conditional debate threshold
+            # Base from config, adjusted by regime and session
             min_conf = self.config.debate_min_confidence * 100 if self.config.debate_min_confidence < 1 else self.config.debate_min_confidence
+            regime = ctx.metadata.get("regime", "ranging")
+            session = ctx.metadata.get("session_regime", "unknown")
+            
+            # Higher bar to trigger debate in volatile/uncertain conditions
+            if regime == "volatile":
+                min_conf *= 1.15  # 15% higher threshold
+            if session == "asian":
+                min_conf *= 1.10  # 10% higher in Asian
+            # Lower bar during overlap (high liquidity = more reliable signals)
+            if session == "overlap":
+                min_conf *= 0.90  # 10% lower threshold
             
             if signal_direction in ["BUY", "SELL"] and signal_confidence >= min_conf:
                 logger.info(f"Triggering Multi-Agent Debate for {signal_direction} signal (Confidence: {signal_confidence}%)")

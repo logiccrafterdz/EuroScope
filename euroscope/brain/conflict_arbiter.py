@@ -148,6 +148,10 @@ class ConflictArbiter:
                 "evidence_diversity": 0.0,
             }
 
+        # Extract session/regime for context-conditional thresholds
+        session = context.metadata.get("session_regime", "unknown").lower()
+        regime = context.metadata.get("regime", "unknown").lower()
+
         votes = {"BUY": 0.0, "SELL": 0.0, "NEUTRAL": 0.0}
         for tool, weight in weighted_signals.items():
             raw = signals.get(tool, "NEUTRAL")
@@ -220,7 +224,17 @@ class ConflictArbiter:
                 else:
                     logger.warning("Could not instantiate Multi-Agent Committee: No LLM router.")
 
-        if confidence < 0.35:
+        # Context-conditional neutralization threshold
+        # Higher in volatile/uncertain conditions (Asian, volatile regime, near events)
+        neutralize_threshold = 0.35
+        if session == "asian":
+            neutralize_threshold = 0.40  # Asian: be more cautious
+        if regime == "volatile":
+            neutralize_threshold = 0.45  # Volatile: be much more cautious
+        if regime == "ranging":
+            neutralize_threshold = 0.38  # Ranging: slightly more cautious
+
+        if confidence < neutralize_threshold:
             final_direction = "NEUTRAL"
             
         primary_evidence = self._explain_decision(final_direction, weighted_signals, context)

@@ -865,7 +865,13 @@ class EuroScopeAgent:
         return False
 
     def _should_evaluate_trade(self) -> bool:
-        """Check if conditions warrant trade evaluation."""
+        """Check if conditions warrant trade evaluation.
+        
+        Uses context-conditional thresholds:
+        - Higher confidence required in volatile regimes
+        - Higher confidence required near macro events
+        - Lower confidence allowed during high-liquidity overlap
+        """
         spread = getattr(self.world_model.price, 'spread_pips', 0.0)
         kill_threshold = getattr(self.config, 'safety_spread_kill_threshold', 8.0)
         
@@ -876,7 +882,18 @@ class EuroScopeAgent:
         strongest = self.conviction_tracker.get_strongest()
         if not strongest:
             return False
-        if strongest.confidence < ConvictionTracker.MIN_CONFIDENCE_TO_ACT:
+
+        # Context-conditional confidence threshold
+        min_confidence = ConvictionTracker.MIN_CONFIDENCE_TO_ACT
+        regime = getattr(self.world_model.regime, 'regime', 'ranging')
+        if regime == "volatile":
+            min_confidence = 0.65  # Higher bar in volatile markets
+        if self.world_model.is_near_event(minutes_threshold=30):
+            min_confidence = 0.70  # Higher bar near macro events
+        if self.world_model.session.active_session == "overlap":
+            min_confidence = 0.50  # Slightly lower bar during high-liquidity overlap
+
+        if strongest.confidence < min_confidence:
             return False
         if not self.world_model.session.is_high_liquidity:
             return False

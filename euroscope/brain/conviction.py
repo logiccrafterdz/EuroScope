@@ -93,6 +93,7 @@ class ConvictionTracker:
     CONFIDENCE_DECAY_RATE = 0.02     # Per hour
     MIN_CONFIDENCE_TO_ACT = 0.55     # Below this, conviction is too weak to trade
     ACTIVATION_CONFIDENCE = 0.60     # Minimum confidence to move from forming → active
+    DEACTIVATION_CONFIDENCE = 0.45   # Hysteresis: only deactivate below this (not at 0.55)
     MAX_AGE_HOURS = 48               # Convictions expire after 48h without reinforcement
 
     def __init__(self):
@@ -318,8 +319,23 @@ class ConvictionTracker:
                 logger.info(f"⏰ Conviction [{conv.id}] expired after {conv.age_hours():.1f}h")
                 continue
 
-            # 5. Low confidence warning
-            if conv.status == "active" and conv.confidence < self.MIN_CONFIDENCE_TO_ACT:
+            # 5. Low confidence — hysteresis deactivation
+            # Only deactivate below DEACTIVATION_CONFIDENCE (0.45), not at MIN_CONFIDENCE_TO_ACT (0.55)
+            # This prevents oscillation around the threshold
+            if conv.status == "active" and conv.confidence < self.DEACTIVATION_CONFIDENCE:
+                conv.status = "expired"
+                events.append({
+                    "type": "confidence_deactivated",
+                    "conviction_id": conv.id,
+                    "thesis": conv.thesis,
+                    "confidence": conv.confidence,
+                    "threshold": self.DEACTIVATION_CONFIDENCE,
+                })
+                logger.info(
+                    f"⬇️ Conviction [{conv.id}] deactivated: confidence {conv.confidence:.2f} "
+                    f"< hysteresis threshold {self.DEACTIVATION_CONFIDENCE}"
+                )
+            elif conv.status == "active" and conv.confidence < self.MIN_CONFIDENCE_TO_ACT:
                 events.append({
                     "type": "confidence_warning",
                     "conviction_id": conv.id,
