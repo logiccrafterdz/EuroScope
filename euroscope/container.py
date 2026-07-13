@@ -29,6 +29,7 @@ from .skills.registry import SkillsRegistry
 from .workspace import WorkspaceManager
 from .automation import EventBus, SmartAlerts, setup_default_alerts
 from .automation.daily_tracker import DailyTracker
+from .evaluation import EvalHarness
 
 logger = logging.getLogger('euroscope.container')
 
@@ -160,6 +161,11 @@ class ServiceContainer:
         self.notifications.set_orchestrator(self.orchestrator)
         
         self.workspace = WorkspaceManager()
+        self.eval_harness = EvalHarness(
+            storage=self.storage,
+            orchestrator=self.orchestrator,
+            price_provider=self.price_provider,
+        )
 
         # 7. Event Listeners
         self.bus.subscribe("trade.closed", self._on_trade_closed)
