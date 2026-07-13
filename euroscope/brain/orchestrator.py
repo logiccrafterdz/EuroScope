@@ -70,7 +70,8 @@ class Orchestrator:
     for pipeline execution. Purely skills-based.
     """
 
-    def __init__(self, storage=None, registry=None, config=None, llm_router=None):
+    def __init__(self, storage=None, registry=None, config=None, llm_router=None,
+                 forecast_tracker=None, regime_engine=None, adaptive_tuner=None):
         # V2: Skills system
         self.registry = registry or SkillsRegistry()
         self.storage = storage
@@ -78,7 +79,11 @@ class Orchestrator:
         if not registry:
              self.registry.discover()
         self.chain = SkillChain(self.registry)
-        self.conflict_arbiter = ConflictArbiter()
+        self.conflict_arbiter = ConflictArbiter(
+            forecast_tracker=forecast_tracker,
+            regime_engine=regime_engine
+        )
+        self.adaptive_tuner = adaptive_tuner
         self.vector_memory: Optional[VectorMemory] = None
         self.global_context = SkillContext()
         self.alerts = None
@@ -104,6 +109,19 @@ class Orchestrator:
                 setter = getattr(skill, f"set_{key}", None)
                 if setter:
                     setter(val)
+
+    def _inject_tuned_params(self, context: SkillContext):
+        """
+        Load tuned parameters from AdaptiveTuner and inject into context.
+        Downstream skills (trading_strategy, risk_management) can read
+        context.metadata["tuned_params"] to override defaults.
+        """
+        if not self.adaptive_tuner:
+            return
+        tuned = self.adaptive_tuner.load_tuned_params()
+        if tuned:
+            context.metadata["tuned_params"] = tuned
+            logger.debug(f"Injected tuned params: {list(tuned.keys())}")
 
     # ── V2 Skills API ────────────────────────────────────────
 
@@ -232,6 +250,9 @@ class Orchestrator:
 
         # 1. Detect session context first (needed by all safety checks)
         await self.run_skill("session_context", "detect", context=context)
+
+        # 1b. Inject adaptive-tuned parameters (if any exist)
+        self._inject_tuned_params(context)
 
         now_val = context.metadata.get("now")
         if isinstance(now_val, datetime):

@@ -9,6 +9,7 @@ from .brain.llm_router import LLMRouter
 from .brain.vector_memory import VectorMemory
 from .learning.pattern_tracker import PatternTracker
 from .learning.adaptive_tuner import AdaptiveTuner
+from .learning.forecast_tracker import ForecastTracker
 from .data.multi_provider import MultiSourceProvider
 from .data.news import NewsEngine
 from .data.calendar import EconomicCalendar
@@ -18,6 +19,7 @@ from .forecast.engine import Forecaster
 from .trading.risk_manager import RiskManager
 from .trading.capital_provider import CapitalProvider
 from .trading.capital_ws import CapitalWebsocketClient
+from .trading.regime_adaptive import RegimeAdaptiveEngine
 from .bot.rate_limiter import RateLimiter
 from .bot.user_settings import UserSettings
 from .bot.notification_manager import NotificationManager
@@ -95,7 +97,10 @@ class ServiceContainer:
             storage=self.storage, 
             registry=self.registry,
             config=self.config,
-            llm_router=self.router
+            llm_router=self.router,
+            forecast_tracker=self.forecast_tracker,
+            regime_engine=self.regime_engine,
+            adaptive_tuner=self.adaptive_tuner
         )
         
         # 3. Intelligence Layers
@@ -135,10 +140,12 @@ class ServiceContainer:
         self.calendar = EconomicCalendar()
         self.macro_provider = FundamentalDataProvider(config.data.fred_api_key)
         self.risk_manager = RiskManager(storage=self.storage)
+        self.regime_engine = RegimeAdaptiveEngine()
         
         # 5. Tracking & Analytics
         self.pattern_tracker = PatternTracker(storage=self.storage)
         self.adaptive_tuner = AdaptiveTuner(storage=self.storage, config=self.config)
+        self.forecast_tracker = ForecastTracker(storage=self.storage)
         self.evolution_tracker = EvolutionTracker(storage=self.storage)
         self.daily_tracker = DailyTracker(storage=self.storage)
         self.briefing_engine = BriefingEngine(self.config, storage=self.storage, orchestrator=self.orchestrator)

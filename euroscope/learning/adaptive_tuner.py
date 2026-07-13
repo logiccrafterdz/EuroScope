@@ -231,7 +231,7 @@ class AdaptiveTuner:
         result = await self.analyze(strategy)
 
         if not result["ready"]:
-            return f"⚙️ *Adaptive Tuner*\n\n{result['message']}"
+            return f"⚙️ *Adaptive Tuner Report*\n\n{result['message']}"
 
         lines = [
             "⚙️ *Adaptive Tuner Report*\n",
@@ -252,3 +252,28 @@ class AdaptiveTuner:
             lines.append("✅ All parameters look optimal — no changes recommended.")
 
         return "\n".join(lines)
+
+    def load_tuned_params(self) -> dict:
+        """
+        Load current tuned parameters from tuning.json.
+        Returns empty dict if file doesn't exist or can't be read.
+        These parameters should be injected into the pipeline context
+        so downstream skills (strategy, risk) use them.
+        """
+        import json
+        import os
+
+        data_dir = getattr(self.config, "data_dir", "data") if getattr(self, "config", None) else "data"
+        tuning_file = os.path.join(data_dir, "tuning.json")
+
+        if not os.path.exists(tuning_file):
+            return {}
+
+        try:
+            with open(tuning_file, "r") as f:
+                params = json.load(f)
+            logger.debug(f"Loaded tuned params: {list(params.keys())}")
+            return params
+        except Exception as e:
+            logger.warning(f"Failed to load tuning params: {e}")
+            return {}
