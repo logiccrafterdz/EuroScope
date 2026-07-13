@@ -17,14 +17,28 @@ logger = logging.getLogger("euroscope.config")
 
 
 class LLMConfig(BaseModel):
+    """LLM Provider Configuration - 3-tier failover chain.
+    
+    Primary: FreeTheAI (GLM 5.2)
+    Fallback: NVIDIA NIM (DeepSeek)
+    Tertiary: OpenAI (GPT-4o-mini)
+    """
+    # Primary Provider - FreeTheAI (GLM 5.2)
     api_key: str = ""
-    api_base: str = "https://integrate.api.nvidia.com/v1"
-    model: str = "deepseek-ai/deepseek-v4-flash"
+    api_base: str = "https://api.freetheai.xyz/v1"
+    model: str = "glm/glm-5.2"
     max_tokens: int = 4096
     temperature: float = 0.4
+    
+    # Fallback Provider - NVIDIA NIM (DeepSeek)
     fallback_api_key: str = ""
-    fallback_api_base: str = "https://api.openai.com/v1"
-    fallback_model: str = "gpt-4o-mini"
+    fallback_api_base: str = "https://integrate.api.nvidia.com/v1"
+    fallback_model: str = "deepseek-ai/deepseek-v4-flash"
+    
+    # Tertiary Provider - OpenAI (GPT-4o-mini)
+    tertiary_api_key: str = ""
+    tertiary_api_base: str = "https://api.openai.com/v1"
+    tertiary_model: str = "gpt-4o-mini"
 
 
 class TelegramConfig(BaseModel):
@@ -119,6 +133,7 @@ class Config(BaseSettings):
         
         primary_key = os.getenv("EUROSCOPE_LLM_API_KEY", "")
         fallback_key = os.getenv("EUROSCOPE_LLM_FALLBACK_API_KEY", "")
+        tertiary_key = os.getenv("EUROSCOPE_LLM_TERTIARY_API_KEY", "")
         
         proactive_chat_raw = os.getenv("EUROSCOPE_PROACTIVE_CHAT_IDS", "")
         proactive_chat_ids = [int(cid.strip()) for cid in proactive_chat_raw.split(",") if cid.strip() and cid.strip().lstrip('-').isdigit()]
@@ -137,13 +152,16 @@ class Config(BaseSettings):
             api_secret_key=os.getenv("EUROSCOPE_API_SECRET", "euroscope-zenith-v5"),
             llm=LLMConfig(
                 api_key=primary_key,
-                api_base=os.getenv("EUROSCOPE_LLM_API_BASE", "https://api.deepseek.com"),
-                model=os.getenv("EUROSCOPE_LLM_MODEL", "deepseek-chat"),
+                api_base=os.getenv("EUROSCOPE_LLM_API_BASE", "https://api.freetheai.xyz/v1"),
+                model=os.getenv("EUROSCOPE_LLM_MODEL", "glm/glm-5.2"),
                 max_tokens=int(os.getenv("EUROSCOPE_LLM_MAX_TOKENS", "4096")),
                 temperature=float(os.getenv("EUROSCOPE_LLM_TEMPERATURE", "0.4")),
                 fallback_api_key=fallback_key,
-                fallback_api_base=os.getenv("EUROSCOPE_LLM_FALLBACK_API_BASE", "https://api.openai.com/v1"),
-                fallback_model=os.getenv("EUROSCOPE_LLM_FALLBACK_MODEL", "gpt-4o-mini"),
+                fallback_api_base=os.getenv("EUROSCOPE_LLM_FALLBACK_API_BASE", "https://integrate.api.nvidia.com/v1"),
+                fallback_model=os.getenv("EUROSCOPE_LLM_FALLBACK_MODEL", "deepseek-ai/deepseek-v4-flash"),
+                tertiary_api_key=tertiary_key,
+                tertiary_api_base=os.getenv("EUROSCOPE_LLM_TERTIARY_API_BASE", "https://api.openai.com/v1"),
+                tertiary_model=os.getenv("EUROSCOPE_LLM_TERTIARY_MODEL", "gpt-4o-mini"),
             ),
             telegram=TelegramConfig(
                 token=os.getenv("EUROSCOPE_TELEGRAM_TOKEN", ""),
@@ -192,6 +210,10 @@ class Config(BaseSettings):
         warnings = []
         if not self.llm.api_key:
             warnings.append("⚠️  EUROSCOPE_LLM_API_KEY not set — AI features disabled")
+        if not self.llm.fallback_api_key:
+            warnings.append("⚠️  EUROSCOPE_LLM_FALLBACK_API_KEY not set — No fallback provider")
+        if not self.llm.tertiary_api_key:
+            warnings.append("⚠️  EUROSCOPE_LLM_TERTIARY_API_KEY not set — No tertiary provider")
         if not self.telegram.token:
             warnings.append("⚠️  EUROSCOPE_TELEGRAM_TOKEN not set — Telegram bot disabled")
         if not self.data.alphavantage_key:
@@ -211,7 +233,9 @@ class Config(BaseSettings):
         results = {}
 
         checks = [
-            ("LLM API", self.llm.api_base),
+            ("LLM API (Primary)", self.llm.api_base),
+            ("LLM API (Fallback)", self.llm.fallback_api_base),
+            ("LLM API (Tertiary)", self.llm.tertiary_api_base),
             ("Telegram", "https://api.telegram.org"),
         ]
 
@@ -233,7 +257,7 @@ class Config(BaseSettings):
     def print_startup_summary(self):
         """Print a concise startup summary to the console."""
         warnings = self.validate()
-        total = 5  # LLM, Telegram, AlphaVantage, Tiingo, FRED
+        total = 7  # LLM Primary, LLM Fallback, LLM Tertiary, Telegram, AlphaVantage, Tiingo, FRED
         configured = total - len(warnings)
 
         print(f"  ✅ {configured}/{total} API keys configured")

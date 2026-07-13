@@ -83,7 +83,10 @@ class ServiceContainer:
             primary_model=config.llm.model, 
             fallback_key=config.llm.fallback_api_key, 
             fallback_base=config.llm.fallback_api_base, 
-            fallback_model=config.llm.fallback_model
+            fallback_model=config.llm.fallback_model,
+            tertiary_key=config.llm.tertiary_api_key,
+            tertiary_base=config.llm.tertiary_api_base,
+            tertiary_model=config.llm.tertiary_model
         )
 
         self.memory = Memory(self.storage)

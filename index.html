@@ -9,30 +9,36 @@
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
     <link
-        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@300;400;500;600&display=swap"
+        href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
         rel="stylesheet">
     <style>
         :root {
-            --bg-color: #020305;
-            --surface-color: rgba(10, 14, 23, 0.45);
-            --surface-solid: #06090e;
-            --surface-accent: rgba(255, 255, 255, 0.05);
-            --accent-primary: #00D4AA;
-            --accent-glow: rgba(0, 212, 170, 0.25);
-            --text-main: #FFFFFF;
-            --text-muted: #94A3B8;
-            --text-dim: #475569;
-            --border-color: rgba(255, 255, 255, 0.06);
-            --up-color: #10B981;
-            --up-glow: rgba(16, 185, 129, 0.25);
-            --down-color: #EF4444;
-            --down-glow: rgba(239, 68, 68, 0.25);
+            --bg-color: #F5F0E8;
+            --surface-color: #FFFFFF;
+            --surface-solid: #FFFFFF;
+            --surface-accent: #FDE047;
+            --accent-primary: #3B82F6;
+            --accent-glow: #3B82F6;
+            --text-main: #1A1A1A;
+            --text-muted: #555555;
+            --text-dim: #888888;
+            --border-color: #1A1A1A;
+            --up-color: #16A34A;
+            --up-glow: #16A34A;
+            --down-color: #DC2626;
+            --down-glow: #DC2626;
             --warn-color: #F59E0B;
             --safe-bottom: env(safe-area-inset-bottom, 24px);
+            --nb-shadow: 4px 4px 0 #1A1A1A;
+            --nb-shadow-sm: 2px 2px 0 #1A1A1A;
+            --nb-yellow: #FDE047;
+            --nb-pink: #F472B6;
+            --nb-green: #4ADE80;
+            --nb-blue: #3B82F6;
 
             /* Typography System */
             --font-data: 'JetBrains Mono', monospace;
-            --font-ui: 'Inter', sans-serif;
+            --font-ui: 'Space Grotesk', sans-serif;
             --text-price-hero: clamp(2.5rem, 8vw, 3.5rem);
         }
 
@@ -47,47 +53,33 @@
             padding: 0;
             box-sizing: border-box;
             -webkit-tap-highlight-color: transparent;
-            user-select: none; /* Crucial for native TMA feel */
+            user-select: none;
             -webkit-user-select: none;
         }
 
         body {
             font-family: var(--font-ui);
             background-color: var(--bg-color);
-            background-image:
-                radial-gradient(ellipse at 50% -20%, rgba(0, 212, 170, 0.08), transparent 60%),
-                linear-gradient(rgba(255, 255, 255, 0.012) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(255, 255, 255, 0.012) 1px, transparent 1px);
-            background-size: 100% 100%, 24px 24px, 24px 24px;
-            background-position: center top, center center, center center;
             color: var(--text-main);
             overflow-x: hidden;
             padding: max(16px, env(safe-area-inset-top)) 16px calc(100px + var(--safe-bottom)) 16px;
             min-height: var(--tg-viewport-stable-height, 100vh);
             font-variant-numeric: tabular-nums;
             font-feature-settings: "tnum" 1, "ss01" 1;
-            letter-spacing: -0.01em; /* Sleeker typography */
+            letter-spacing: -0.01em;
         }
 
-        /* Essential Scrollbar Customization */
         ::-webkit-scrollbar {
-            width: 4px;
-            height: 4px;
+            width: 6px;
+            height: 6px;
         }
 
         ::-webkit-scrollbar-track {
-            background: rgba(0, 0, 0, 0.2);
-            border-radius: 4px;
+            background: #E5E0D8;
         }
 
         ::-webkit-scrollbar-thumb {
-            background: rgba(255, 255, 255, 0.15);
-            border-radius: 4px;
-            transition: background 0.3s ease;
-        }
-
-        ::-webkit-scrollbar-thumb:hover {
-            background: rgba(255, 255, 255, 0.3);
+            background: #1A1A1A;
         }
 
         .container {
@@ -97,28 +89,21 @@
 
         /* Debug Console */
         #debug-console {
-            background: rgba(0, 0, 0, 0.8);
-            backdrop-filter: blur(10px);
-            border: 1px solid var(--border-color);
-            border-radius: 16px;
+            background: #1A1A1A;
+            border: 3px solid #1A1A1A;
+            border-radius: 0;
             font-family: var(--font-data);
-            font-size: 0.55rem;
+            font-size: 0.6rem;
             padding: 12px;
             margin-bottom: 20px;
             display: none;
             max-height: 150px;
             overflow-y: auto;
-            color: #888;
-            border-left: 3px solid var(--accent-primary);
+            color: #4ADE80;
         }
 
-        .log-error {
-            color: var(--down-color);
-        }
-
-        .log-warn {
-            color: var(--warn-color);
-        }
+        .log-error { color: var(--down-color); }
+        .log-warn { color: var(--warn-color); }
 
         header {
             margin-bottom: 24px;
@@ -135,49 +120,29 @@
 
         .logo {
             font-weight: 700;
-            font-size: 0.85rem;
+            font-size: 0.9rem;
             letter-spacing: 1px;
             color: var(--text-main);
             font-family: var(--font-data);
             text-transform: uppercase;
             cursor: pointer;
             user-select: none;
-            text-shadow: 0 0 10px rgba(255, 255, 255, 0.2);
             display: flex;
             align-items: center;
             gap: 8px;
         }
 
         .logo-dot {
-            width: 8px;
-            height: 8px;
+            width: 10px;
+            height: 10px;
             background: var(--accent-primary);
-            border-radius: 4px;
-            box-shadow: 0 0 12px var(--accent-primary);
-            animation: pulse 2s infinite;
-        }
-
-        @keyframes pulse {
-            0% {
-                transform: scale(0.95);
-                box-shadow: 0 0 0 0 rgba(0, 255, 157, 0.7);
-            }
-
-            70% {
-                transform: scale(1);
-                box-shadow: 0 0 0 6px rgba(0, 255, 157, 0);
-            }
-
-            100% {
-                transform: scale(0.95);
-                box-shadow: 0 0 0 0 rgba(0, 255, 157, 0);
-            }
+            border: 2px solid #1A1A1A;
         }
 
         .session-info {
-            font-size: 0.65rem;
+            font-size: 0.6rem;
             color: var(--text-muted);
-            font-weight: 500;
+            font-weight: 600;
             text-transform: uppercase;
             letter-spacing: 1.5px;
         }
@@ -185,34 +150,33 @@
         .market-badge {
             font-size: 0.6rem;
             padding: 6px 12px;
-            border-radius: 20px;
+            border-radius: 0;
             font-weight: 700;
             letter-spacing: 1px;
             text-transform: uppercase;
-            backdrop-filter: blur(10px);
+            border: 3px solid #1A1A1A;
+            box-shadow: var(--nb-shadow-sm);
             display: flex;
             align-items: center;
             gap: 6px;
         }
 
         .status-open {
-            color: var(--up-color);
-            background: rgba(0, 255, 157, 0.1);
-            border: 1px solid rgba(0, 255, 157, 0.2);
+            color: #1A1A1A;
+            background: var(--nb-green);
         }
 
         .status-closed {
             color: var(--text-muted);
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid var(--border-color);
+            background: #E5E0D8;
         }
 
-        /* Glassmorphism Bento Grid */
+        /* Neo-Brutalist Bento Grid */
         .bento {
             display: grid;
             grid-template-columns: repeat(2, 1fr);
-            gap: 16px;
-            margin-bottom: 16px;
+            gap: 12px;
+            margin-bottom: 12px;
         }
 
         .bento-full {
@@ -221,31 +185,18 @@
 
         .glass-card {
             background: var(--surface-color);
-            backdrop-filter: blur(24px) saturate(150%);
-            -webkit-backdrop-filter: blur(24px) saturate(150%);
-            border: 1px solid var(--border-color);
-            border-radius: 24px;
-            padding: 20px;
+            border: 3px solid #1A1A1A;
+            border-radius: 0;
+            padding: 16px;
             position: relative;
             overflow: hidden;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.05);
-            transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.3s ease;
-        }
-
-        .glass-card::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: -100%;
-            width: 50%;
-            height: 100%;
-            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.02), transparent);
-            transform: skewX(-20deg);
-            transition: left 0.7s ease;
+            box-shadow: var(--nb-shadow);
+            transition: transform 0.15s ease, box-shadow 0.15s ease;
         }
 
         .glass-card:active {
-            transform: scale(0.97);
+            transform: translate(2px, 2px);
+            box-shadow: none;
         }
 
         /* --- System Menu Overlay CSS (consolidated) --- */
@@ -254,25 +205,28 @@
             position: absolute;
             top: 24px;
             right: 24px;
-            background: rgba(255, 255, 255, 0.1);
-            border: none;
-            color: #fff;
+            background: #E5E0D8;
+            border: 3px solid #1A1A1A;
+            color: #1A1A1A;
             width: 40px;
             height: 40px;
-            border-radius: 20px;
+            border-radius: 0;
             font-size: 1.2rem;
+            font-weight: 800;
             cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: center;
+            box-shadow: var(--nb-shadow-sm);
         }
 
         .sys-group {
-            background: rgba(255, 255, 255, 0.03);
-            border: 1px solid var(--border-color);
-            border-radius: 20px;
+            background: var(--surface-color);
+            border: 3px solid #1A1A1A;
+            border-radius: 0;
             padding: 16px;
             margin-bottom: 16px;
+            box-shadow: var(--nb-shadow);
         }
 
         .sys-row {
@@ -280,39 +234,31 @@
             justify-content: space-between;
             align-items: center;
             padding: 12px 0;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            border-bottom: 2px solid #E5E0D8;
         }
 
-        .sys-row:last-child {
-            border-bottom: none;
-            padding-bottom: 0;
-        }
-
-        .sys-row:first-child {
-            padding-top: 0;
-        }
+        .sys-row:last-child { border-bottom: none; padding-bottom: 0; }
+        .sys-row:first-child { padding-top: 0; }
 
         .kill-switch {
-            background: rgba(239, 68, 68, 0.1);
-            border: 1px solid var(--down-color);
-            color: var(--down-color);
+            background: var(--down-color);
+            border: 3px solid #1A1A1A;
+            color: #FFFFFF;
             padding: 20px;
-            border-radius: 20px;
+            border-radius: 0;
             text-align: center;
             font-weight: 800;
             letter-spacing: 2px;
             margin-top: 24px;
-            text-shadow: 0 0 10px rgba(239, 68, 68, 0.5);
-            box-shadow: inset 0 0 30px rgba(239, 68, 68, 0.1);
-            transition: all 0.3s;
+            box-shadow: var(--nb-shadow);
+            transition: all 0.15s;
             width: 100%;
             cursor: pointer;
         }
 
         .kill-switch:active {
-            background: var(--down-color);
-            color: #fff;
-            transform: scale(0.95);
+            transform: translate(2px, 2px);
+            box-shadow: none;
         }
 
         .toggle-switch {
@@ -321,43 +267,35 @@
             height: 28px;
         }
 
-        .toggle-switch input {
-            opacity: 0;
-            width: 0;
-            height: 0;
-        }
+        .toggle-switch input { opacity: 0; width: 0; height: 0; }
 
         .slider {
             position: absolute;
             cursor: pointer;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background-color: rgba(255, 255, 255, 0.1);
-            transition: .4s;
-            border-radius: 34px;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: #E5E0D8;
+            border: 3px solid #1A1A1A;
+            transition: .2s;
         }
 
         .slider:before {
             position: absolute;
             content: "";
-            height: 20px;
-            width: 20px;
-            left: 4px;
-            bottom: 4px;
-            background-color: white;
-            transition: .4s cubic-bezier(0.16, 1, 0.3, 1);
-            border-radius: 50%;
+            height: 16px;
+            width: 16px;
+            left: 3px;
+            bottom: 3px;
+            background-color: #1A1A1A;
+            transition: .2s;
         }
 
         input:checked+.slider {
             background-color: var(--accent-primary);
-            box-shadow: 0 0 10px var(--accent-glow);
         }
 
         input:checked+.slider:before {
             transform: translateX(22px);
+            background-color: #FFFFFF;
         }
 
 
@@ -369,14 +307,11 @@
             left: 50%;
             transform: translateX(-50%);
             display: flex;
-            gap: 6px;
-            padding: 8px 10px;
-            background: rgba(10, 13, 20, 0.85);
-            backdrop-filter: blur(24px);
-            -webkit-backdrop-filter: blur(24px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 40px;
-            box-shadow: 0 -1px 0 rgba(255, 255, 255, 0.05), 0 10px 40px rgba(0, 0, 0, 0.6);
+            gap: 4px;
+            padding: 6px 8px;
+            background: var(--surface-color);
+            border: 3px solid #1A1A1A;
+            box-shadow: var(--nb-shadow);
             z-index: 1000;
             width: max-content;
             max-width: calc(100% - 32px);
@@ -384,48 +319,47 @@
             scrollbar-width: none;
         }
 
-        .dock::-webkit-scrollbar {
-            display: none;
-        }
+        .dock::-webkit-scrollbar { display: none; }
 
         .dock-btn {
             background: transparent;
-            border: none;
+            border: 2px solid transparent;
             color: var(--text-muted);
             width: 44px;
             height: 44px;
-            border-radius: 22px;
+            border-radius: 0;
             display: flex;
             align-items: center;
             justify-content: center;
             cursor: pointer;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            transition: all 0.15s ease;
             flex-shrink: 0;
         }
 
         .dock-btn svg {
             width: 22px;
             height: 22px;
-            transition: transform 0.3s ease;
+            transition: transform 0.15s ease;
         }
 
         .dock-btn.active {
-            color: var(--accent-primary);
-            background: rgba(0, 212, 170, 0.08);
-            box-shadow: inset 0 0 0 1px rgba(0, 212, 170, 0.2), 0 0 20px rgba(0, 212, 170, 0.1);
+            color: #FFFFFF;
+            background: var(--accent-primary);
+            border-color: #1A1A1A;
+            box-shadow: var(--nb-shadow-sm);
         }
 
         .dock-btn.active svg {
             transform: scale(1.1);
-            stroke: var(--accent-primary);
+            stroke: #FFFFFF;
         }
 
         /* Typography & Data (Scaled for Mobile Legibility) */
         .label-sm {
-            font-size: 0.75rem;
+            font-size: 0.7rem;
             color: var(--text-muted);
             text-transform: uppercase;
-            letter-spacing: 2.5px;
+            letter-spacing: 2px;
             font-weight: 700;
             margin-bottom: 8px;
             display: flex;
@@ -436,129 +370,64 @@
         .label-sm svg {
             width: 16px;
             height: 16px;
-            stroke-width: 1.8;
+            stroke-width: 2;
             color: var(--text-dim);
             flex-shrink: 0;
-            transform: translateY(-0.5px); /* Optical vertical alignment */
+            transform: translateY(-0.5px);
         }
 
         .num-hero {
             font-family: var(--font-data);
             font-size: var(--text-price-hero);
-            font-weight: 200;
+            font-weight: 700;
             letter-spacing: -1.5px;
         }
 
-        .num-lg {
-            font-size: 1.4rem;
-            font-weight: 300;
-            letter-spacing: -0.5px;
-        }
+        .num-lg { font-size: 1.4rem; font-weight: 700; letter-spacing: -0.5px; }
+        .num-md { font-size: 1.05rem; font-weight: 600; letter-spacing: 0px; }
+        .num-sm { font-size: 0.95rem; font-weight: 600; letter-spacing: 0px; }
+        .num-xs { font-size: 0.85rem; font-weight: 500; letter-spacing: 0px; }
 
-        .num-md {
-            font-size: 1.05rem;
-            font-weight: 400;
-            letter-spacing: 0px;
-        }
-
-        .num-sm {
-            font-size: 0.95rem;
-            font-weight: 400;
-            letter-spacing: 0px;
-        }
-
-        .num-xs {
-            font-size: 0.85rem;
-            font-weight: 300;
-            letter-spacing: 0px;
-        }
-
-        p {
-            line-height: 1.7;
-        }
+        p { line-height: 1.7; }
 
         .unit-suffix {
             font-family: var(--font-ui);
             font-size: 0.65em;
-            font-weight: 400;
-            opacity: 0.45;
+            font-weight: 500;
+            opacity: 0.5;
             margin-left: 0.35em;
             letter-spacing: 0.05em;
         }
 
-        .text-glow {
-            text-shadow: 0 0 20px var(--accent-glow);
-        }
+        .text-glow { text-shadow: none; }
 
         .tab-content {
             display: none;
-            animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+            animation: fadeIn 0.3s ease;
         }
 
-        .tab-content.active {
-            display: block;
-        }
+        .tab-content.active { display: block; }
 
         @keyframes fadeIn {
-            from {
-                opacity: 0;
-                transform: translateY(10px) scale(0.98);
-            }
-
-            to {
-                opacity: 1;
-                transform: translateY(0) scale(1);
-            }
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
         }
 
-        /* Hero Price Animations */
-        @keyframes pulseGlow {
-            0% {
-                filter: blur(60px) opacity(0.8);
-                transform: translateX(-50%) scale(1);
-            }
-
-            50% {
-                filter: blur(80px) opacity(1);
-                transform: translateX(-50%) scale(1.1);
-            }
-
-            100% {
-                filter: blur(60px) opacity(0.8);
-                transform: translateX(-50%) scale(1);
-            }
-        }
-
-        .hero-glow {
-            position: absolute;
-            top: -60px;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 140px;
-            height: 140px;
-            background: var(--accent-glow);
-            filter: blur(60px);
-            border-radius: 50%;
-            pointer-events: none;
-            animation: pulseGlow 4s ease-in-out infinite;
-        }
+        .hero-glow { display: none; }
 
         /* Chart */
         #chart-wrap {
             position: relative;
             width: 100%;
-            border-radius: 24px;
+            border-radius: 0;
             overflow: hidden;
             background: var(--surface-solid);
-            border: 1px solid var(--border-color);
-            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.05);
-            margin-bottom: 20px;
+            border: 3px solid #1A1A1A;
+            box-shadow: var(--nb-shadow);
+            margin-bottom: 16px;
         }
 
-        #chart-container {
-            width: 100%;
-            height: 300px;
-        }
+        #chart-container { width: 100%; height: 300px; }
 
         #chart-status {
             position: absolute;
@@ -566,8 +435,7 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            background: rgba(0, 0, 0, 0.8);
-            backdrop-filter: blur(4px);
+            background: #F5F0E8;
             color: var(--text-dim);
             font-size: 0.65rem;
             font-weight: 700;
@@ -583,84 +451,64 @@
             display: flex;
             gap: 4px;
             z-index: 10;
-            background: rgba(10, 13, 20, 0.6);
-            backdrop-filter: blur(12px);
+            background: var(--surface-color);
             padding: 4px;
-            border-radius: 12px;
-            border: 1px solid var(--border-color);
+            border-radius: 0;
+            border: 3px solid #1A1A1A;
+            box-shadow: var(--nb-shadow-sm);
         }
 
         .tf-btn {
             background: transparent;
             border: none;
             color: var(--text-muted);
-            font-size: 0.75rem;
+            font-size: 0.7rem;
             padding: 6px 10px;
-            border-radius: 8px;
+            border-radius: 0;
             font-weight: 700;
             cursor: pointer;
-            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-            font-family: 'Inter';
-            position: relative;
-            overflow: hidden;
+            transition: 0.15s;
+            font-family: var(--font-ui);
         }
 
-        .tf-btn:active {
-            transform: scale(0.92);
-        }
+        .tf-btn:active { transform: scale(0.92); }
 
         .tf-btn.active {
-            color: #000;
+            color: #FFFFFF;
             background: var(--accent-primary);
-            box-shadow: 0 4px 15px var(--accent-glow);
+            border: 2px solid #1A1A1A;
         }
 
         .info-row {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 12px 10px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.03);
-            border-radius: 8px;
-            transition: background 0.2s ease, transform 0.2s ease;
+            padding: 10px 10px;
+            border-bottom: 2px solid #E5E0D8;
+            transition: background 0.15s ease;
         }
 
         @media (hover: hover) {
-            .info-row:hover {
-                background: rgba(255, 255, 255, 0.03);
-                transform: translateX(2px);
-            }
+            .info-row:hover { background: #F5F0E8; }
         }
 
-        .info-row:last-child {
-            border-bottom: none;
-            padding-bottom: 0;
-        }
-
-        .info-row .label {
-            font-size: 0.8rem;
-            color: var(--text-muted);
-            font-weight: 500;
-        }
-
-        .info-row .val {
-            font-size: 0.85rem;
-            font-weight: 600;
-        }
+        .info-row:last-child { border-bottom: none; padding-bottom: 0; }
+        .info-row .label { font-size: 0.8rem; color: var(--text-muted); font-weight: 600; }
+        .info-row .val { font-size: 0.85rem; font-weight: 700; }
 
         .glow-bar-container {
-            height: 4px;
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 2px;
-            margin: 16px 0;
+            height: 8px;
+            background: #E5E0D8;
+            border: 2px solid #1A1A1A;
+            margin: 12px 0;
             overflow: hidden;
         }
 
         .glow-bar {
             height: 100%;
             width: 0%;
-            transition: width 1s cubic-bezier(0.4, 0, 0.2, 1);
-            box-shadow: 0 0 10px currentColor;
+            transition: width 1s ease;
+            box-shadow: none;
         }
 
         /* System Menu Overlay */
@@ -668,13 +516,11 @@
             display: none;
             position: fixed;
             inset: 0;
-            background: rgba(4, 5, 7, 0.95);
-            backdrop-filter: blur(30px);
-            -webkit-backdrop-filter: blur(30px);
+            background: var(--bg-color);
             z-index: 9999;
             padding: 20px;
             overflow-y: auto;
-            animation: fadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            animation: fadeIn 0.3s ease;
         }
 
         #system-overlay.active {
@@ -684,75 +530,43 @@
 
         button.action-btn {
             background: var(--text-main);
-            color: #000;
+            color: #FFFFFF;
             width: 100%;
-            border: none;
-            padding: 16px;
-            border-radius: 16px;
-            font-weight: 600;
-            font-size: 0.85rem;
+            border: 3px solid #1A1A1A;
+            padding: 14px;
+            border-radius: 0;
+            font-weight: 700;
+            font-size: 0.8rem;
             letter-spacing: 1px;
             margin-top: 12px;
             cursor: pointer;
-            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            transition: all 0.15s ease;
             position: relative;
             overflow: hidden;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            box-shadow: var(--nb-shadow);
             display: flex;
             align-items: center;
             justify-content: center;
             gap: 8px;
-        }
-
-        button.action-btn::after {
-            content: '';
-            position: absolute;
-            top: -50%;
-            left: -50%;
-            width: 200%;
-            height: 200%;
-            background: linear-gradient(45deg, transparent, rgba(255, 255, 255, 0.1), transparent);
-            transform: rotate(45deg);
-            transition: all 0.5s;
-            pointer-events: none;
-        }
-
-        @media (hover: hover) {
-            button.action-btn:hover {
-                transform: translateY(-1px);
-                box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
-            }
-
-            button.action-btn:hover::after {
-                left: 100%;
-                top: 100%;
-            }
+            font-family: var(--font-ui);
         }
 
         button.action-btn:active {
-            transform: scale(0.95);
-            box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.3);
+            transform: translate(2px, 2px);
+            box-shadow: none;
         }
 
         button.action-outline {
-            background: transparent;
-            border: 1px solid var(--border-color);
-            color: var(--text-muted);
-            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-        }
-
-        @media (hover: hover) {
-            button.action-outline:hover {
-                border-color: var(--accent-primary);
-                color: var(--accent-primary);
-                background: rgba(0, 212, 170, 0.03);
-                box-shadow: 0 0 15px var(--accent-glow);
-            }
+            background: var(--surface-color);
+            border: 3px solid #1A1A1A;
+            color: var(--text-main);
+            box-shadow: var(--nb-shadow-sm);
+            transition: all 0.15s ease;
         }
 
         button.action-outline:active {
-            transform: scale(0.97);
-            background: rgba(0, 212, 170, 0.08);
+            transform: translate(2px, 2px);
+            box-shadow: none;
         }
 
         button.bt-filter-btn {
@@ -765,48 +579,40 @@
 
         button.bt-filter-btn.active {
             background: var(--accent-primary);
-            color: #000;
-            border-color: var(--accent-primary);
-            box-shadow: 0 4px 12px var(--accent-glow);
+            color: #FFFFFF;
+            border-color: #1A1A1A;
         }
 
         .loading-spinner {
             display: inline-block;
             width: 14px;
             height: 14px;
-            border: 2px solid rgba(255, 255, 255, 0.2);
-            border-radius: 50%;
+            border: 3px solid #E5E0D8;
+            border-radius: 0;
             border-top-color: var(--accent-primary);
             animation: spin 1s ease-in-out infinite;
             vertical-align: middle;
             margin-left: 8px;
         }
 
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
         @keyframes shimmer {
-            0% {
-                transform: translateX(-100%) rotate(45deg);
-            }
-
-            100% {
-                transform: translateX(100%) rotate(45deg);
-            }
+            0% { transform: translateX(-100%) rotate(45deg); }
+            100% { transform: translateX(100%) rotate(45deg); }
         }
 
         input.action-in {
             width: 100%;
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid var(--border-color);
-            color: #fff;
-            padding: 16px;
-            border-radius: 16px;
+            background: var(--surface-color);
+            border: 3px solid #1A1A1A;
+            color: var(--text-main);
+            padding: 14px;
+            border-radius: 0;
             font-size: 0.75rem;
             margin-bottom: 12px;
             font-family: var(--font-data);
+            box-shadow: var(--nb-shadow-sm);
         }
 
         /* Analysis Tab Visuals */
@@ -814,18 +620,18 @@
             display: flex;
             align-items: center;
             justify-content: space-between;
-            background: rgba(255, 255, 255, 0.02);
-            border: 1px solid var(--border-color);
-            border-radius: 12px;
+            background: var(--surface-color);
+            border: 3px solid #1A1A1A;
+            border-radius: 0;
             padding: 12px 16px;
             margin-bottom: 8px;
+            box-shadow: var(--nb-shadow-sm);
         }
 
         .gauge-bar-bg {
             flex-grow: 1;
-            height: 4px;
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 2px;
+            height: 6px;
+            background: #E5E0D8;
             margin: 0 16px;
             overflow: hidden;
             position: relative;
@@ -833,42 +639,39 @@
 
         .gauge-fill {
             height: 100%;
-            border-radius: 2px;
-            transition: width 1s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.5s;
+            transition: width 1s ease, background-color 0.5s;
         }
 
         .radar-node {
             display: flex;
             align-items: center;
             padding: 12px;
-            border-radius: 12px;
-            background: linear-gradient(135deg, rgba(255, 255, 255, 0.03), transparent);
-            border: 1px solid var(--border-color);
+            background: var(--surface-color);
+            border: 3px solid #1A1A1A;
             margin-bottom: 8px;
+            box-shadow: var(--nb-shadow-sm);
         }
 
         .radar-dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
+            width: 10px;
+            height: 10px;
+            border: 2px solid #1A1A1A;
             margin-right: 12px;
-            box-shadow: 0 0 10px currentColor;
         }
 
         .empty-state {
             text-align: center;
             padding: 30px 20px;
             color: var(--text-dim);
-            font-size: 0.72rem;
-            font-weight: 500;
+            font-size: 0.7rem;
+            font-weight: 600;
             letter-spacing: 1px;
             text-transform: uppercase;
-            opacity: 0.5;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            gap: 16px;
+            gap: 12px;
         }
 
         .empty-state svg {
@@ -876,7 +679,6 @@
             height: 24px;
             opacity: 0.4;
             stroke-width: 1.5;
-            animation: pulse 3s infinite ease-in-out;
         }
 
         @keyframes slideInUp {
@@ -885,7 +687,13 @@
         }
 
         .animate-in {
-            animation: slideInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+            animation: slideInUp 0.4s ease forwards;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
         }
     </style>
 </head>
@@ -903,7 +711,7 @@
             </div>
             <div id="mkt-status" class="market-badge status-closed">OFFLINE</div>
             <div id="ws-link" class="market-badge"
-                style="background:rgba(0,0,0,0.3); color:var(--text-dim); border:1px solid var(--border-color); margin-left:8px;">
+                style="background:#E5E0D8; color:var(--text-dim); margin-left:8px;">
                 WS: LINKING...</div>
         </header>
 
@@ -911,10 +719,9 @@
         <div id="terminal-view" class="tab-content active">
             <!-- Hero Price -->
             <div class="glass-card bento-full"
-                style="text-align: center; padding: 40px 20px; border-color: rgba(255,255,255,0.1); margin-bottom: 16px;">
-                <div class="hero-glow"></div>
+                style="text-align: center; padding: 32px 20px; border-color: #1A1A1A; margin-bottom: 12px; background: var(--surface-accent);">
                 <div class="label-sm" style="color:var(--text-main); font-weight:800; opacity:0.8;">EUR/USD LIVE</div>
-                <div id="price" class="num-hero text-glow" style="margin-bottom:4px; margin-top:8px; color:#fff;">
+                <div id="price" class="num-hero" style="margin-bottom:4px; margin-top:8px; color:#1A1A1A;">
                     -.-----</div>
                 <div id="price-change" class="num-sm">--.--- (---%)</div>
             </div>
@@ -932,7 +739,7 @@
                         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
                         Account Equity
                     </div>
-                    <div id="stat-equity" class="num-md" style="color:var(--accent-primary); white-space:nowrap;">--.--
+                    <div id="stat-equity" class="num-md" style="color:var(--accent-primary); white-space:nowrap; font-weight:700;">--.--
                     </div>
                 </div>
             </div>
@@ -981,14 +788,14 @@
 
             <!-- Committee Agent Verdict Banner (Merges Forecast & Briefing Headers) -->
             <div class="glass-card bento-full" style="text-align: center; margin-bottom: 12px; position: relative; overflow: hidden;">
-                <div style="position:absolute; top:-30px; right:-30px; width:140px; height:140px; border-radius:50%; background:radial-gradient(circle, rgba(0,255,157,0.06) 0%, transparent 70%);"></div>
+                <div style="position:absolute; top:-30px; right:-30px; width:140px; height:140px; border-radius:50%; background:radial-gradient(circle, rgba(0,200,150,0.06) 0%, transparent 70%);"></div>
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
                     <div style="display:flex; align-items:center; gap:8px;">
                         <div class="label-sm" style="margin:0; font-size:0.55rem; letter-spacing:2.5px; opacity:0.5;">
                             <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
                             COMMITTEE VERDICT
                         </div>
-                        <div id="briefing-urgency" style="font-size:0.45rem; font-weight:800; letter-spacing:2px; padding:2px 6px; border-radius:3px; background:rgba(0,255,157,0.1); color:var(--accent-primary); border:1px solid rgba(0,255,157,0.15);">NORMAL</div>
+                        <div id="briefing-urgency" style="font-size:0.5rem; font-weight:800; letter-spacing:2px; padding:3px 8px; background:var(--nb-green); color:#1A1A1A; border:2px solid #1A1A1A;">NORMAL</div>
                     </div>
                 </div>
 
@@ -1027,7 +834,7 @@
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
                     Multi-Agent Deliberation Log
                 </div>
-                <div id="committee-log" style="font-size: 0.75rem; color: var(--text-muted); line-height: 1.6; max-height: 150px; overflow-y: auto; padding: 10px; background: rgba(0,0,0,0.2) ; border-radius: 8px; border: 1px solid var(--border-color);">
+                <div id="committee-log" style="font-size: 0.75rem; color: var(--text-muted); line-height: 1.6; max-height: 150px; overflow-y: auto; padding: 10px; background: #F5F0E8; border: 3px solid #1A1A1A;">
                     <div class="empty-state"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg><span>NO DELIBERATION TRIGGERED YET</span></div>
                 </div>
             </div>
@@ -1074,9 +881,9 @@
                         AUTO-TRADING
                     </div>
                     <div id="auto-trade-toggle" onclick="toggleAutoTrading()"
-                        style="width:44px; height:24px; border-radius:12px; background:rgba(255,255,255,0.1); border:1px solid var(--border-color); cursor:pointer; position:relative; transition:all 0.3s ease;">
+                        style="width:44px; height:24px; background:#E5E0D8; border:3px solid #1A1A1A; cursor:pointer; position:relative; transition:all 0.2s ease;">
                         <div id="auto-trade-knob"
-                            style="width:18px; height:18px; border-radius:50%; background:var(--text-dim); position:absolute; top:2px; left:2px; transition:all 0.3s ease;">
+                            style="width:14px; height:14px; background:#1A1A1A; position:absolute; top:2px; left:2px; transition:all 0.2s ease;">
                         </div>
                     </div>
                 </div>
@@ -1154,32 +961,32 @@
                 <div id="bt-results">
                     <!-- Metrics Grid 2x1 -> 2x2 on small screens -->
                     <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-bottom: 20px;">
-                        <div class="glass-card" style="padding:16px; text-align:center; border:none; background:rgba(255,255,255,0.02);">
+                        <div class="glass-card" style="padding:16px; text-align:center; background:#F5F0E8;">
                             <div class="label-sm" style="margin:0 auto 8px; justify-content:center; font-size:0.6rem;">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
                                 WIN RATE
                             </div>
                             <div id="bt-wr" class="num-lg">--%</div>
                         </div>
-                        <div class="glass-card" style="padding:16px; text-align:center; border:none; background:rgba(255,255,255,0.02);">
+                        <div class="glass-card" style="padding:16px; text-align:center; background:#F5F0E8;">
                             <div class="label-sm" style="margin:0 auto 8px; justify-content:center; font-size:0.6rem;">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
                                 NET P/L
                             </div>
                             <div id="bt-pnl" class="num-lg">--</div>
                         </div>
-                        <div class="glass-card" style="padding:16px; text-align:center; border:none; background:rgba(255,255,255,0.02);">
+                        <div class="glass-card" style="padding:16px; text-align:center; background:#F5F0E8;">
                             <div class="label-sm" style="margin:0 auto 8px; justify-content:center; font-size:0.6rem;">TRADES (W/L)</div>
                             <div id="bt-trades" class="num-md" style="font-weight:600;">-- / --</div>
                         </div>
-                        <div class="glass-card" style="padding:16px; text-align:center; border:none; background:rgba(255,255,255,0.02);">
+                        <div class="glass-card" style="padding:16px; text-align:center; background:#F5F0E8;">
                             <div class="label-sm" style="margin:0 auto 8px; justify-content:center; font-size:0.6rem;">MAX DD</div>
                             <div id="bt-dd" class="num-md" style="font-weight:600;">--</div>
                         </div>
                     </div>
 
                     <!-- Advanced Specs -->
-                    <div class="glass-card" style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; padding:16px; border:none; background:rgba(0,0,0,0.2);">
+                    <div class="glass-card" style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; padding:16px; background:#F5F0E8;">
                         <div class="info-row" style="margin:0; border:none;"><span class="label">PROFIT FACTOR</span><span id="bt-pf" class="val">--</span></div>
                         <div class="info-row" style="margin:0; border:none;"><span class="label">SHARPE</span><span id="bt-sharpe" class="val">--</span></div>
                         <div class="info-row" style="margin:0; border:none;"><span class="label">BEST</span><span id="bt-best" class="val" style="color:var(--up-color)">--</span></div>
@@ -1198,7 +1005,7 @@
                                 style="font-size:0.55rem; color:var(--text-dim); font-family:var(--font-data);"></div>
                         </div>
                         <div id="bt-equity"
-                            style="height: 120px; width: 100%; border-radius:10px; overflow:hidden; background:rgba(0,0,0,0.2);">
+                            style="height: 120px; width: 100%; overflow:hidden; background:#F5F0E8; border:3px solid #1A1A1A;">
                         </div>
                     </div>
 
@@ -1221,12 +1028,12 @@
                 </div>
                 <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-bottom:12px;">
                     <div
-                        style="padding:12px; text-align:center; background:rgba(255,255,255,0.02); border-radius:12px; border:1px solid var(--border-color);">
+                        style="padding:12px; text-align:center; background:#F5F0E8; border:3px solid #1A1A1A;">
                         <div class="label-sm" style="margin-bottom:6px;">WIN RATE</div>
                         <div id="perf-wr" class="num-lg">--%</div>
                     </div>
                     <div
-                        style="padding:12px; text-align:center; background:rgba(255,255,255,0.02); border-radius:12px; border:1px solid var(--border-color);">
+                        style="padding:12px; text-align:center; background:#F5F0E8; border:3px solid #1A1A1A;">
                         <div class="label-sm" style="margin-bottom:6px;">TOTAL P/L</div>
                         <div id="perf-pnl" class="num-lg">--</div>
                     </div>
@@ -1234,20 +1041,20 @@
                 <!-- Risk Stats -->
                 <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-bottom:12px;">
                     <div
-                        style="padding:10px; text-align:center; background:rgba(255,255,255,0.02); border-radius:12px; border:1px solid var(--border-color); border-top:2px solid var(--accent-primary);">
+                        style="padding:10px; text-align:center; background:#F5F0E8; border:3px solid #1A1A1A; border-top:4px solid var(--accent-primary);">
                         <div class="label-sm" style="margin-bottom:4px; color:var(--accent-primary);">DAILY DRAWDOWN
                         </div>
                         <div id="risk-daily-pnl" class="num-md">--.--</div>
                     </div>
                     <div
-                        style="padding:10px; text-align:center; background:rgba(255,255,255,0.02); border-radius:12px; border:1px solid var(--border-color); border-top:2px solid var(--warn-color);">
+                        style="padding:10px; text-align:center; background:#F5F0E8; border:3px solid #1A1A1A; border-top:4px solid var(--warn-color);">
                         <div class="label-sm" style="margin-bottom:4px;">LOSS STREAK</div>
                         <div id="risk-streak" class="num-md">--</div>
                     </div>
                 </div>
                 <div class="label-sm" style="margin-bottom:8px;">AI TUNING RECOMMENDATIONS</div>
                 <div id="perf-recommendations"
-                    style="padding:10px; background:rgba(255,255,255,0.02); border-radius:12px; border:1px solid var(--border-color);">
+                    style="padding:10px; background:#F5F0E8; border:3px solid #1A1A1A;">
                     <div class="empty-state"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg><span>ANALYZING...</span></div>
                 </div>
             </div>
@@ -1256,14 +1063,14 @@
         <!-- SYSTEM TAB -->
         <div id="system-view" class="tab-content">
             <!-- Agent Core Status -->
-            <div class="glass-card bento-full" style="margin-bottom: 12px; border-left: 3px solid var(--accent-primary);">
+            <div class="glass-card bento-full" style="margin-bottom: 12px; border-left: 5px solid var(--accent-primary);">
                 <div class="label-sm">
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/></svg>
                     AGENT CORE STATE
                 </div>
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
                     <div>
-                        <div id="sys-mode" style="font-size:1.4rem; font-family:var(--font-data); font-weight:800; color:var(--accent-primary); letter-spacing:1px; text-shadow:0 0 10px rgba(0, 255, 157, 0.4);">AWAITING SYNC</div>
+                        <div id="sys-mode" style="font-size:1.4rem; font-family:var(--font-data); font-weight:800; color:var(--accent-primary); letter-spacing:1px;">AWAITING SYNC</div>
                     </div>
                     <div style="text-align:right;">
                         <div class="label-sm" style="margin-bottom:2px;">INTERNAL TICKS</div>
@@ -1288,11 +1095,11 @@
                     RESOURCE MONITOR
                 </div>
                 <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-bottom:12px; margin-top:12px;">
-                    <div style="background:rgba(255,255,255,0.02); padding:10px; border-radius:8px; border:1px solid var(--border-color);">
+                    <div style="background:#F5F0E8; padding:10px; border:3px solid #1A1A1A;">
                         <div class="label-sm" style="margin-bottom:4px;">LLM DAILY TOKENS</div>
                         <div id="sys-tokens" class="num-md" style="color: var(--text-main);">0</div>
                     </div>
-                    <div style="background:rgba(255,255,255,0.02); padding:10px; border-radius:8px; border:1px solid var(--border-color);">
+                    <div style="background:#F5F0E8; padding:10px; border:3px solid #1A1A1A;">
                         <div class="label-sm" style="margin-bottom:4px;">ESTIMATED COST</div>
                         <div id="sys-cost" class="num-md" style="color: var(--warn-color);">$0.00</div>
                     </div>
@@ -1353,7 +1160,7 @@
         <button class="close-btn" onclick="closeSystem()">✕</button>
         <div style="padding: 24px; padding-top: 80px; height: 100%; overflow-y: auto;">
             <h2
-                style="font-size:1.5rem; font-family:'Fira Code'; font-weight:800; margin-bottom:24px; color:var(--text-main);">
+                style="font-size:1.5rem; font-family:'JetBrains Mono'; font-weight:800; margin-bottom:24px; color:var(--text-main);">
                 SYSTEM CONTROLS</h2>
 
             <div class="sys-group">
@@ -1380,7 +1187,7 @@
                         <span style="font-size:0.9rem; font-weight:700; color:var(--text-dim);">Risk Per Trade</span>
                         <div style="display:flex; align-items:center;">
                             <input type="number" id="setting-risk" class="action-in" step="0.1" max="5.0" min="0.1"
-                                style="width: 70px; text-align: right; padding: 6px 12px; margin:0 8px 0 0; background:rgba(0,0,0,0.3);">
+                                style="width: 70px; text-align: right; padding: 6px 12px; margin:0 8px 0 0; background:#F5F0E8;">
                             <span style="font-size:1.1rem; font-weight:800; color:var(--text-main);">%</span>
                         </div>
                     </div>
@@ -1388,7 +1195,7 @@
                         <span style="font-size:0.9rem; font-weight:700; color:var(--text-dim);">Max Daily Loss</span>
                         <div style="display:flex; align-items:center;">
                             <input type="number" id="setting-maxloss" class="action-in" step="0.5" max="10.0" min="1.0"
-                                style="width: 70px; text-align: right; padding: 6px 12px; margin:0 8px 0 0; background:rgba(0,0,0,0.3);">
+                                style="width: 70px; text-align: right; padding: 6px 12px; margin:0 8px 0 0; background:#F5F0E8;">
                             <span style="font-size:1.1rem; font-weight:800; color:var(--text-main);">%</span>
                         </div>
                     </div>
@@ -1542,14 +1349,12 @@
 
                 if (isEmergency) {
                     btn.textContent = 'RESTORE SYSTEM OPERATIONS';
-                    btn.style.background = 'rgba(0, 255, 157, 0.1)';
-                    btn.style.color = 'var(--up-color)';
-                    btn.style.borderColor = 'var(--up-color)';
-                    btn.style.boxShadow = '0 0 15px rgba(0,255,157,0.2)';
+                    btn.style.background = 'var(--up-color)';
+                    btn.style.color = '#FFFFFF';
+                    btn.style.borderColor = '#1A1A1A';
 
                     document.getElementById('mkt-status').textContent = 'HALTED';
                     document.getElementById('mkt-status').className = 'market-badge status-closed';
-                    document.getElementById('mkt-status').style.boxShadow = '0 0 15px rgba(255, 51, 102, 0.6)';
                     document.getElementById('mkt-status').style.backgroundColor = 'var(--down-color)';
                     document.getElementById('mkt-status').style.color = '#fff';
 
@@ -1559,11 +1364,10 @@
                     try { window.Telegram.WebApp.HapticFeedback.notificationOccurred('error'); } catch (e) { }
                     log("EMERGENCY KILL SWITCH ACTIVATED.", "error");
                 } else {
-                    btn.textContent = '🚨 ACTIVATE KILL SWITCH';
-                    btn.style.background = 'rgba(255, 51, 102, 0.1)';
-                    btn.style.color = 'var(--down-color)';
-                    btn.style.borderColor = 'var(--down-color)';
-                    btn.style.boxShadow = '0 0 15px rgba(255,51,102,0.2)';
+                    btn.textContent = 'ACTIVATE KILL SWITCH';
+                    btn.style.background = 'var(--down-color)';
+                    btn.style.color = '#FFFFFF';
+                    btn.style.borderColor = '#1A1A1A';
 
                     try { window.Telegram.WebApp.HapticFeedback.notificationOccurred('success'); } catch (e) { }
                     log("SYSTEM RESTORED.", "success");
@@ -1608,14 +1412,14 @@
                 }
                 else if (line.match(/^<strong[^>]*>(Reasoning|Strategic Reasoning|Key Levels|Note):<\/strong>$/i)) {
                     let cleanHeader = line.replace(/<\/?strong[^>]*>/g, '');
-                    output.push(`<div style="margin-top:24px; margin-bottom:12px; font-weight:600; color:var(--text-main); letter-spacing:1px; text-transform:uppercase; font-size:0.85rem; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:6px;">${cleanHeader}</div>`);
+                    output.push(`<div style="margin-top:24px; margin-bottom:12px; font-weight:600; color:var(--text-main); letter-spacing:1px; text-transform:uppercase; font-size:0.85rem; border-bottom:2px solid #1A1A1A; padding-bottom:6px;">${cleanHeader}</div>`);
                 }
                 // Is it a Scenario Header?
                 else if (line.match(/<strong[^>]*>Scenario (A|B).*?<\/strong>/i)) {
                     let cleanScenario = line.replace(/<\/?strong[^>]*>/g, '').trim();
                     let isBull = cleanScenario.toLowerCase().includes('bullish') || cleanScenario.toLowerCase().includes('buy');
                     let color = isBull ? 'var(--up-color)' : 'var(--down-color)';
-                    let bg = isBull ? 'rgba(16, 185, 129, 0.05)' : 'rgba(239, 68, 68, 0.05)';
+                    let bg = isBull ? '#00C896' : '#FF4444';
                     output.push(`<div style="margin-top:20px; margin-bottom:12px; padding:12px 16px; font-weight:600; color:${color}; background:${bg}; border-left: 3px solid ${color}; border-radius:0 12px 12px 0; letter-spacing:1px; font-size:0.85rem; box-shadow: inset 0 0 20px ${bg};">${cleanScenario}</div>`);
                 }
                 // Regular paragraph
@@ -1676,12 +1480,12 @@
             try {
                 const container = document.getElementById('chart-container');
                 chart = LightweightCharts.createChart(container, {
-                    layout: { background: { type: 'solid', color: '#0A0D14' }, textColor: '#8b949e', fontSize: 10 },
-                    grid: { vertLines: { color: 'rgba(255,255,255,0.03)' }, horzLines: { color: 'rgba(255,255,255,0.03)' } },
-                    rightPriceScale: { borderColor: 'rgba(255,255,255,0.1)' },
-                    timeScale: { borderColor: 'rgba(255,255,255,0.1)' }
+                    layout: { background: { type: 'solid', color: '#FFFFFF' }, textColor: '#1A1A1A', fontSize: 10 },
+                    grid: { vertLines: { color: '#E5E0D8' }, horzLines: { color: '#E5E0D8' } },
+                    rightPriceScale: { borderColor: '#1A1A1A' },
+                    timeScale: { borderColor: '#1A1A1A' }
                 });
-                candleSeries = chart.addCandlestickSeries({ upColor: '#00ff9d', downColor: '#ff3366', borderVisible: false, wickUpColor: '#00ff9d', wickDownColor: '#ff3366' });
+                candleSeries = chart.addCandlestickSeries({ upColor: '#00C896', downColor: '#FF4444', borderVisible: false, wickUpColor: '#00C896', wickDownColor: '#FF4444' });
                 new ResizeObserver(() => chart.applyOptions({ width: container.clientWidth, height: container.clientHeight })).observe(container);
             } catch (e) { log("Chart init error: " + e.message, 'error'); }
         }
@@ -1763,16 +1567,16 @@
                     if (curve.length > 0) {
                         const eqChart = LightweightCharts.createChart(eqEl, {
                             width: eqEl.clientWidth, height: 120,
-                            layout: { background: { type: 'solid', color: 'transparent' }, textColor: '#8b949e' },
-                            grid: { vertLines: { visible: false }, horzLines: { color: 'rgba(255,255,255,0.03)' } },
+                            layout: { background: { type: 'solid', color: 'transparent' }, textColor: '#1A1A1A' },
+                            grid: { vertLines: { visible: false }, horzLines: { color: '#E5E0D8' } },
                             timeScale: { visible: false }, rightPriceScale: { borderVisible: false },
                             handleScroll: false, handleScale: false, crosshair: { mode: 0 }
                         });
                         const finalPnl = curve[curve.length - 1] || 0;
-                        const lineColor = finalPnl >= 0 ? '#00ff9d' : '#ff3366';
+                        const lineColor = finalPnl >= 0 ? '#00C896' : '#FF4444';
                         const lSeries = eqChart.addAreaSeries({
                             lineColor: lineColor, lineWidth: 2,
-                            topColor: finalPnl >= 0 ? 'rgba(0,255,157,0.15)' : 'rgba(255,51,102,0.15)',
+                            topColor: finalPnl >= 0 ? 'rgba(0,200,150,0.3)' : 'rgba(255,68,68,0.3)',
                             bottomColor: 'transparent',
                         });
                         const baseTime = Math.floor(Date.now() / 1000) - curve.length * 86400;
@@ -1792,7 +1596,7 @@
                             const dirColor = t.direction === 'BUY' ? 'var(--up-color)' : 'var(--down-color)';
                             const pnlColor = t.pnl >= 0 ? 'var(--up-color)' : 'var(--down-color)';
                             return `
-                                <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-bottom:1px solid rgba(255,255,255,0.03);">
+                                <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-bottom:2px solid #E5E0D8;">
                                     <div style="display:flex; align-items:center; gap:8px;">
                                         <span style="font-size:0.6rem; font-weight:800; color:${dirColor}; letter-spacing:1px; width:28px;">${t.direction}</span>
                                         <span style="font-size:0.65rem; color:var(--text-dim); font-family:var(--font-data);">${t.entry.toFixed(5)} <span style="opacity:0.4; margin:0 4px;">→</span> ${t.exit.toFixed(5)}</span>
@@ -1895,15 +1699,15 @@
             const toggle = document.getElementById('auto-trade-toggle');
             const knob = document.getElementById('auto-trade-knob');
             if (_autoTradingEnabled) {
-                toggle.style.background = 'rgba(0,255,157,0.25)';
-                toggle.style.borderColor = 'var(--accent-primary)';
+                toggle.style.background = 'var(--accent-primary)';
+                toggle.style.borderColor = '#1A1A1A';
                 knob.style.left = '22px';
-                knob.style.background = 'var(--accent-primary)';
+                knob.style.background = '#FFFFFF';
             } else {
-                toggle.style.background = 'rgba(255,255,255,0.1)';
-                toggle.style.borderColor = 'var(--border-color)';
+                toggle.style.background = '#E5E0D8';
+                toggle.style.borderColor = '#1A1A1A';
                 knob.style.left = '2px';
-                knob.style.background = 'var(--text-dim)';
+                knob.style.background = '#1A1A1A';
             }
             try {
                 await fetch(`${API}/settings_update`, {
@@ -1923,15 +1727,15 @@
             const knob = document.getElementById('auto-trade-knob');
             if (!toggle || !knob) return;
             if (_autoTradingEnabled) {
-                toggle.style.background = 'rgba(0,255,157,0.25)';
-                toggle.style.borderColor = 'var(--accent-primary)';
+                toggle.style.background = 'var(--accent-primary)';
+                toggle.style.borderColor = '#1A1A1A';
                 knob.style.left = '22px';
-                knob.style.background = 'var(--accent-primary)';
+                knob.style.background = '#FFFFFF';
             } else {
-                toggle.style.background = 'rgba(255,255,255,0.1)';
-                toggle.style.borderColor = 'var(--border-color)';
+                toggle.style.background = '#E5E0D8';
+                toggle.style.borderColor = '#1A1A1A';
                 knob.style.left = '2px';
-                knob.style.background = 'var(--text-dim)';
+                knob.style.background = '#1A1A1A';
             }
         }
 
@@ -1958,7 +1762,7 @@
 
                     // Build a signal card to inject into the recent-signals section
                     const signalCard = `
-                        <div style="padding:16px; background:rgba(255,255,255,0.03); border-radius:12px; border-left:4px solid ${dirColor}; margin-top:12px;">
+                        <div style="padding:16px; background:#F5F0E8; border:3px solid #1A1A1A; border-left:5px solid ${dirColor}; margin-top:12px; box-shadow:4px 4px 0 #1A1A1A;">
                             <div style="display:flex; justify-content:space-between; margin-bottom:12px;">
                                 <span style="font-weight:800; color:${dirColor}; font-size:0.85rem; letter-spacing:2px;">${s.direction} SIGNAL</span>
                                 <span style="font-size:0.75rem; color:var(--text-dim);">${f2(s.confidence)}% CONF</span>
@@ -2025,7 +1829,7 @@
                 if (res.success && res.data) {
                     const s = res.data; const mkt = document.getElementById('mkt-status');
                     mkt.textContent = s.status; mkt.className = `market-badge status-${s.status.toLowerCase()}`;
-                    if (s.status === 'OPEN') mkt.style.boxShadow = '0 0 15px rgba(0, 212, 170, 0.4)';
+                    if (s.status === 'OPEN') mkt.style.boxShadow = 'none';
                     else mkt.style.boxShadow = 'none';
 
                     let sessionName = (s.session || '').replace('NEWYORK', 'NEW YORK');
@@ -2034,12 +1838,14 @@
                     const ws = document.getElementById('ws-link');
                     if (s.ws_status === 'CONNECTED') {
                         ws.textContent = 'WS: LIVE';
-                        ws.style.color = 'var(--up-color)';
-                        ws.style.borderColor = 'rgba(0, 255, 157, 0.3)';
+                        ws.style.color = '#FFFFFF';
+                        ws.style.background = 'var(--up-color)';
+                        ws.style.borderColor = '#1A1A1A';
                     } else {
                         ws.textContent = 'WS: LINKING...';
                         ws.style.color = 'var(--text-dim)';
-                        ws.style.borderColor = 'var(--border-color)';
+                        ws.style.background = '#E5E0D8';
+                        ws.style.borderColor = '#1A1A1A';
                     }
                 }
             });
@@ -2304,7 +2110,7 @@
                 const listHist = document.getElementById('trade-history-list');
                 if (resHist.success && resHist.history?.length > 0) {
                     listHist.innerHTML = resHist.history.map(t => `
-                        <div style="padding: 12px 0; border-bottom: 1px solid rgba(255,255,255,0.03); display:flex; justify-content:space-between; align-items:center;">
+                        <div style="padding: 12px 0; border-bottom: 2px solid #E5E0D8; display:flex; justify-content:space-between; align-items:center;">
                             <div>
                                 <div style="font-weight:700; font-size:0.8rem; color:${t.direction === 'BUY' ? 'var(--up-color)' : 'var(--down-color)'};">${t.direction}</div>
                                 <div style="font-size:0.7rem; color:var(--text-dim);">${t.strategy}</div>
@@ -2344,7 +2150,7 @@
                 api('/counterfactual').then(res => {
                     const list = document.getElementById('counterfactual-list');
                     if (res.success && res.data && res.data.length > 0) {
-                        list.innerHTML = res.data.map(i => `<div style="padding:10px 0; border-bottom:1px solid rgba(255,255,255,0.05);"><strong style="color:var(--text-main);">${i.trade}</strong>: <span style="color:var(--text-muted);">${i.insight}</span></div>`).join('');
+                        list.innerHTML = res.data.map(i => `<div style="padding:10px 0; border-bottom:2px solid #E5E0D8;"><strong style="color:var(--text-main);">${i.trade}</strong>: <span style="color:var(--text-muted);">${i.insight}</span></div>`).join('');
                     } else {
                         list.innerHTML = `<div class="empty-state" style="padding: 10px 0;">NO INSIGHTS YET</div>`;
                     }

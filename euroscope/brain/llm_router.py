@@ -2,7 +2,7 @@
 LLM Router — Multi-Provider Failover
 
 Tries multiple LLM providers in order with retry logic.
-Chain: DeepSeek → OpenAI → Groq (configurable)
+Chain: FreeTheAI (GLM 5.2) → NVIDIA NIM (DeepSeek) → OpenAI (GPT-4o-mini)
 """
 
 import asyncio
@@ -48,6 +48,11 @@ class LLMRouter:
         self._failure_count: int = 0
         self._warned_identical_keys: bool = False
 
+        # Log provider chain
+        if self.providers:
+            chain = " → ".join([f"{p.name} ({p.model})" for p in self.providers])
+            logger.info(f"LLM Provider chain: {chain}")
+
         from euroscope.utils.resilience import AsyncCircuitBreaker
         self.breaker = AsyncCircuitBreaker(
             exceptions=(httpx.HTTPError, asyncio.TimeoutError),
@@ -64,24 +69,37 @@ class LLMRouter:
     @classmethod
     def from_config(cls, primary_key: str = "", primary_base: str = "",
                     primary_model: str = "", fallback_key: str = "",
-                    fallback_base: str = "", fallback_model: str = "") -> "LLMRouter":
-        """Create router from configuration values."""
+                    fallback_base: str = "", fallback_model: str = "",
+                    tertiary_key: str = "", tertiary_base: str = "",
+                    tertiary_model: str = "") -> "LLMRouter":
+        """Create router from configuration values.
+        
+        Provider chain: FreeTheAI (GLM 5.2) → NVIDIA NIM (DeepSeek) → OpenAI (GPT-4o-mini)
+        """
         providers = []
 
         if primary_key:
             providers.append(LLMProvider(
                 name="primary",
                 api_key=primary_key,
-                api_base=primary_base or "https://api.deepseek.com",
-                model=primary_model or "deepseek-chat",
+                api_base=primary_base or "https://api.freetheai.xyz/v1",
+                model=primary_model or "glm/glm-5.2",
             ))
 
         if fallback_key:
             providers.append(LLMProvider(
                 name="fallback",
                 api_key=fallback_key,
-                api_base=fallback_base or "https://api.openai.com/v1",
-                model=fallback_model or "gpt-4o-mini",
+                api_base=fallback_base or "https://integrate.api.nvidia.com/v1",
+                model=fallback_model or "deepseek-ai/deepseek-v4-flash",
+            ))
+
+        if tertiary_key:
+            providers.append(LLMProvider(
+                name="tertiary",
+                api_key=tertiary_key,
+                api_base=tertiary_base or "https://api.openai.com/v1",
+                model=tertiary_model or "gpt-4o-mini",
             ))
 
         return cls(providers)

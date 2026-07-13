@@ -13,18 +13,26 @@ from datetime import datetime, timezone
 
 logger = logging.getLogger("euroscope.brain.cost_tracker")
 
-# Approximate pricing per 1M tokens (USD) — OpenRouter / OpenAI
+# Approximate pricing per 1M tokens (USD) — OpenRouter / OpenAI / FreeTheAI
 MODEL_PRICING = {
     # Format: (prompt_cost_per_1M, completion_cost_per_1M)
     "default": (1.0, 2.0),
+    # GLM 5.2 (FreeTheAI)
+    "glm/glm-5.2": (0.5, 1.5),
+    "glm-5.2": (0.5, 1.5),
+    # OpenAI
     "gpt-4o": (2.5, 10.0),
     "gpt-4o-mini": (0.15, 0.60),
     "gpt-4-turbo": (10.0, 30.0),
     "gpt-3.5-turbo": (0.50, 1.50),
+    # Anthropic
     "claude-3-haiku": (0.25, 1.25),
     "claude-3-sonnet": (3.0, 15.0),
     "claude-3-opus": (15.0, 75.0),
+    # DeepSeek
     "deepseek-chat": (0.14, 0.28),
+    "deepseek-ai/deepseek-v4-flash": (0.14, 0.28),
+    # Mistral
     "mistral-large": (2.0, 6.0),
 }
 
