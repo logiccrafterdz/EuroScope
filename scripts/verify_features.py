@@ -5,7 +5,7 @@ import sys
 # Add root folder to path (the parent of euroscope folder)
 sys.path.insert(0, r"C:\Users\Hp\Desktop\EuroScope")
 
-from euroscope.bot.config import Config
+from euroscope.config import Config
 from euroscope.brain.orchestrator import Orchestrator
 from euroscope.skills.base import SkillContext
 

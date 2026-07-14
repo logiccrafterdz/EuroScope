@@ -145,6 +145,7 @@ class PromptCompressor:
     """
 
     def __init__(self, max_tokens: int = 12000, reserve_tokens: int = 2000):
+        self.max_tokens = max_tokens
         self.max_chars = max_tokens * CHARS_PER_TOKEN
         self.reserve_chars = reserve_tokens * CHARS_PER_TOKEN
 

@@ -142,7 +142,7 @@ class CommandHandlers:
             
             # Conviction count
             ct = getattr(agent_core, 'conviction_tracker', None)
-            active_convictions = len(ct.get_active()) if ct and hasattr(ct, 'get_active') else 0
+            active_convictions = len(ct.get_active_convictions()) if ct and hasattr(ct, 'get_active_convictions') else 0
             
             text = (
                 f"🤖 *Agent Core Status*\n\n"
@@ -171,7 +171,7 @@ class CommandHandlers:
             return
 
         try:
-            active = ct.get_active() if hasattr(ct, 'get_active') else []
+            active = ct.get_active_convictions() if hasattr(ct, 'get_active_convictions') else []
             
             if not active:
                 await self.bot._reply(
