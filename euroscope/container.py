@@ -94,9 +94,13 @@ class ServiceContainer:
         )
         self.difficulty_router = DifficultyRouter(self.router)
         self.prompt_compressor = PromptCompressor()
-
         self.memory = Memory(self.storage)
         self.vector_memory = VectorMemory(storage=self.storage)
+
+        self.regime_engine = RegimeAdaptiveEngine()
+        self.adaptive_tuner = AdaptiveTuner(storage=self.storage, config=self.config)
+        self.forecast_tracker = ForecastTracker(storage=self.storage)
+
         self.orchestrator = Orchestrator(
             storage=self.storage, 
             registry=self.registry,
@@ -144,12 +148,9 @@ class ServiceContainer:
         self.calendar = EconomicCalendar()
         self.macro_provider = FundamentalDataProvider(config.data.fred_api_key)
         self.risk_manager = RiskManager(storage=self.storage)
-        self.regime_engine = RegimeAdaptiveEngine()
         
         # 5. Tracking & Analytics
         self.pattern_tracker = PatternTracker(storage=self.storage)
-        self.adaptive_tuner = AdaptiveTuner(storage=self.storage, config=self.config)
-        self.forecast_tracker = ForecastTracker(storage=self.storage)
         self.evolution_tracker = EvolutionTracker(storage=self.storage)
         self.daily_tracker = DailyTracker(storage=self.storage)
         self.briefing_engine = BriefingEngine(self.config, storage=self.storage, orchestrator=self.orchestrator)
