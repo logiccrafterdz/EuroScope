@@ -844,6 +844,102 @@ class APIServer:
                 stats = container.router.cost_tracker.get_daily_summary()
         return web.json_response({"success": True, "data": stats})
 
+    async def _api_order_flow(self, request):
+        """API endpoint for Order Flow proxy analysis (delta, absorption, volume profile)."""
+        ctx = SkillContext()
+        res_candles = await self.bot.orchestrator.run_skill(
+            "market_data", "get_candles", context=ctx, timeframe="H1", count=50
+        )
+        if not res_candles.success or res_candles.data is None:
+            return web.json_response({"success": False, "data": {}, "error": "No candle data"})
+        ctx.market_data["candles"] = res_candles.data
+        res = await self.bot.orchestrator.run_skill(
+            "order_flow", "analyze", context=ctx, candles=res_candles.data
+        )
+        data = res.data if res.success and res.data else {}
+        return web.json_response({"success": res.success, "data": data, "error": res.error if not res.success else None})
+
+    async def _api_volatility(self, request):
+        """API endpoint for GARCH volatility forecast and regime."""
+        ctx = SkillContext()
+        res_candles = await self.bot.orchestrator.run_skill(
+            "market_data", "get_candles", context=ctx, timeframe="H1", count=100
+        )
+        if not res_candles.success or res_candles.data is None:
+            return web.json_response({"success": False, "data": {}, "error": "No candle data"})
+        ctx.market_data["candles"] = res_candles.data
+        res = await self.bot.orchestrator.run_skill(
+            "volatility_forecast", "forecast", context=ctx, candles=res_candles.data
+        )
+        data = res.data if res.success and res.data else {}
+        return web.json_response({"success": res.success, "data": data, "error": res.error if not res.success else None})
+
+    async def _api_microstructure(self, request):
+        """API endpoint for market microstructure analysis."""
+        ctx = SkillContext()
+        res_candles = await self.bot.orchestrator.run_skill(
+            "market_data", "get_candles", context=ctx, timeframe="H1", count=50
+        )
+        if not res_candles.success or res_candles.data is None:
+            return web.json_response({"success": False, "data": {}, "error": "No candle data"})
+        ctx.market_data["candles"] = res_candles.data
+        res = await self.bot.orchestrator.run_skill(
+            "microstructure", "analyze", context=ctx, candles=res_candles.data
+        )
+        data = res.data if res.success and res.data else {}
+        return web.json_response({"success": res.success, "data": data, "error": res.error if not res.success else None})
+
+    async def _api_confluence(self, request):
+        """API endpoint for Multi-Timeframe Confluence analysis."""
+        ctx = SkillContext()
+        res = await self.bot.orchestrator.run_skill(
+            "multi_timeframe_confluence", "confluence", context=ctx
+        )
+        data = res.data if res.success and res.data else {}
+        return web.json_response({"success": res.success, "data": data, "error": res.error if not res.success else None})
+
+    async def _api_liquidity(self, request):
+        """API endpoint for Liquidity Awareness analysis."""
+        ctx = SkillContext()
+        res_candles = await self.bot.orchestrator.run_skill(
+            "market_data", "get_candles", context=ctx, timeframe="H1", count=50
+        )
+        if not res_candles.success or res_candles.data is None:
+            return web.json_response({"success": False, "data": {}, "error": "No candle data"})
+        ctx.market_data["candles"] = res_candles.data
+        res = await self.bot.orchestrator.run_skill(
+            "liquidity_awareness", "analyze", context=ctx, candles=res_candles.data
+        )
+        data = res.data if res.success and res.data else {}
+        return web.json_response({"success": res.success, "data": data, "error": res.error if not res.success else None})
+
+    async def _api_uncertainty(self, request):
+        """API endpoint for 3-layer Uncertainty Assessment."""
+        ctx = SkillContext()
+        res = await self.bot.orchestrator.run_skill(
+            "uncertainty_assessment", "assess", context=ctx
+        )
+        data = res.data if res.success and res.data else {}
+        return web.json_response({"success": res.success, "data": data, "error": res.error if not res.success else None})
+
+    async def _api_correlation(self, request):
+        """API endpoint for correlation monitor (DXY, US10Y, Gold)."""
+        ctx = SkillContext()
+        res = await self.bot.orchestrator.run_skill(
+            "correlation_monitor", "check_correlations", context=ctx
+        )
+        data = res.data if res.success and res.data else {}
+        return web.json_response({"success": res.success, "data": data, "error": res.error if not res.success else None})
+
+    async def _api_health_dashboard(self, request):
+        """API endpoint for full system health dashboard."""
+        ctx = SkillContext()
+        res = await self.bot.orchestrator.run_skill(
+            "monitoring", "check_health", context=ctx
+        )
+        data = res.data if res.success and res.data else {}
+        return web.json_response({"success": res.success, "data": data, "error": res.error if not res.success else None})
+
     async def _serve_mini_app(self, request):
         """Serve the Zenith Terminal Mini App directly from the bot server."""
         # Prefer root index.html (newer v5 Phase 3+ version with full features)
@@ -934,11 +1030,30 @@ class APIServer:
                 web.get("/api/counterfactual", self._api_counterfactual),
                 web.get("/api/cost_stats", self._api_cost_stats),
                 
+                # Zenith V5 Phase 5+ Skill Routes
+                web.get("/api/order_flow", self._api_order_flow),
+                web.get("/api/volatility", self._api_volatility),
+                web.get("/api/microstructure", self._api_microstructure),
+                web.get("/api/confluence", self._api_confluence),
+                web.get("/api/liquidity", self._api_liquidity),
+                web.get("/api/uncertainty", self._api_uncertainty),
+                web.get("/api/correlation", self._api_correlation),
+                web.get("/api/health_dashboard", self._api_health_dashboard),
+                
                 web.get("/api/v1/agent_state", self._api_agent_state),
                 web.get("/api/v1/narratives", self._api_narratives),
                 web.get("/api/v1/committee_log", self._api_committee_log),
                 web.get("/api/v1/counterfactual", self._api_counterfactual),
-                web.get("/api/v1/cost_stats", self._api_cost_stats)
+                web.get("/api/v1/cost_stats", self._api_cost_stats),
+                
+                web.get("/api/v1/order_flow", self._api_order_flow),
+                web.get("/api/v1/volatility", self._api_volatility),
+                web.get("/api/v1/microstructure", self._api_microstructure),
+                web.get("/api/v1/confluence", self._api_confluence),
+                web.get("/api/v1/liquidity", self._api_liquidity),
+                web.get("/api/v1/uncertainty", self._api_uncertainty),
+                web.get("/api/v1/correlation", self._api_correlation),
+                web.get("/api/v1/health_dashboard", self._api_health_dashboard)
             ])
             port = int(os.getenv("PORT", 8080))
             runner = web.AppRunner(app)
