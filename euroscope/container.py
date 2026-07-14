@@ -30,6 +30,7 @@ from .workspace import WorkspaceManager
 from .automation import EventBus, SmartAlerts, setup_default_alerts
 from .automation.daily_tracker import DailyTracker
 from .evaluation import EvalHarness
+from .brain.performance import DifficultyRouter, PromptCompressor
 
 logger = logging.getLogger('euroscope.container')
 
@@ -91,6 +92,8 @@ class ServiceContainer:
             tertiary_base=config.llm.tertiary_api_base,
             tertiary_model=config.llm.tertiary_model
         )
+        self.difficulty_router = DifficultyRouter(self.router)
+        self.prompt_compressor = PromptCompressor()
 
         self.memory = Memory(self.storage)
         self.vector_memory = VectorMemory(storage=self.storage)

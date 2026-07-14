@@ -240,6 +240,24 @@ class Storage:
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_pattern_stats_name_time ON pattern_stats(pattern_name, detected_at)"
         )
+        # ── Performance indexes ──
+        for idx_sql in [
+            "CREATE INDEX IF NOT EXISTS idx_signals_status ON trading_signals(status)",
+            "CREATE INDEX IF NOT EXISTS idx_signals_created ON trading_signals(created_at)",
+            "CREATE INDEX IF NOT EXISTS idx_signals_status_created ON trading_signals(status, created_at)",
+            "CREATE INDEX IF NOT EXISTS idx_journal_status ON trade_journal(status)",
+            "CREATE INDEX IF NOT EXISTS idx_journal_timestamp ON trade_journal(timestamp)",
+            "CREATE INDEX IF NOT EXISTS idx_journal_status_timestamp ON trade_journal(status, timestamp)",
+            "CREATE INDEX IF NOT EXISTS idx_journal_strategy ON trade_journal(strategy)",
+            "CREATE INDEX IF NOT EXISTS idx_predictions_resolved ON predictions(resolved_at)",
+            "CREATE INDEX IF NOT EXISTS idx_predictions_time ON predictions(timestamp)",
+            "CREATE INDEX IF NOT EXISTS idx_news_impact ON news_events(impact_score)",
+            "CREATE INDEX IF NOT EXISTS idx_news_fetched ON news_events(fetched_at)",
+            "CREATE INDEX IF NOT EXISTS idx_alerts_triggered ON alerts(triggered, created_at)",
+            "CREATE INDEX IF NOT EXISTS idx_performance_period ON performance_metrics(period, calculated_at)",
+            "CREATE INDEX IF NOT EXISTS idx_learning_trade ON learning_insights(trade_id)",
+        ]:
+            conn.execute(idx_sql)
 
     # ── Async Connection Management ──────────────────────────
 
