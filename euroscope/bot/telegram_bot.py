@@ -307,6 +307,9 @@ class EuroScopeBot:
 
     async def _error_handler(self, update: object, context: ContextTypes.DEFAULT_TYPE):
         """Global error handler — logs and notifies the user."""
+        if isinstance(context.error, Conflict):
+            logger.warning(f'Telegram polling conflict (another instance running): {context.error}')
+            return
         logger.error(f'Unhandled exception: {context.error}', exc_info=context.error)
         if isinstance(update, Update) and update.effective_message:
             try:
