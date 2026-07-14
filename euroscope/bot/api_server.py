@@ -1017,6 +1017,7 @@ class APIServer:
 
     async def _api_data_health(self, request):
         """API endpoint for data source health status."""
+        from euroscope.container import get_container
         sources = {}
         container = get_container()
         if container and hasattr(container, 'storage'):
