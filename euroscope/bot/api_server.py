@@ -443,7 +443,7 @@ class APIServer:
             if hasattr(df, 'empty') and df.empty:
                 return web.json_response({"success": False, "error": "Empty candle data from broker"})
 
-            t1 = _time.monotonic()
+            t1 = time.monotonic()
             logger.info(f"API: Backtest got {len(df)} candles in {t1-t0:.1f}s")
 
             # Step 2: Convert DataFrame to candle dicts
@@ -474,7 +474,7 @@ class APIServer:
                 timeout=45.0
             )
 
-            t2 = _time.monotonic()
+            t2 = time.monotonic()
             logger.info(
                 f"API: Backtest complete in {t2-t0:.1f}s — "
                 f"{bt_result.total_trades} trades, WR={bt_result.win_rate}%, PnL={bt_result.total_pnl}"
