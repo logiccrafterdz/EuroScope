@@ -312,14 +312,19 @@ class Orchestrator:
         
         ctx = await self._execute_pipeline(pipeline, context, params)
 
+        # Normalize confidence to 0-1 scale (trading_strategy outputs 0-100)
+        raw_conf = ctx.signals.get("confidence", 0)
+        if raw_conf > 1.0:
+            ctx.signals["confidence"] = raw_conf / 100.0
+
         # 3. Multi-Agent Debate Layer
         if self.config and self.config.debate_enabled and self.debate_engine and self.risk_debate:
             signal_confidence = ctx.signals.get("confidence", 0)
             signal_direction = ctx.signals.get("direction", "NEUTRAL")
             
             # Context-conditional debate threshold
-            # Base from config, adjusted by regime and session
-            min_conf = self.config.debate_min_confidence * 100 if self.config.debate_min_confidence < 1 else self.config.debate_min_confidence
+            # Base from config (0-1 scale), adjusted by regime and session
+            min_conf = self.config.debate_min_confidence
             regime = ctx.metadata.get("regime", "ranging")
             session = ctx.metadata.get("session_regime", "unknown")
             
@@ -458,10 +463,10 @@ class Orchestrator:
     async def run_analysis(self, market_context: dict) -> dict:
         """
         Compatible async wrapper for legacy analysis requests.
-        Calls the full skills pipeline.
+        Calls the full skills pipeline with optional market context override.
         """
-        # Run pipeline
-        ctx = await self.run_full_analysis_pipeline()
+        # Run pipeline, passing market_context if provided
+        ctx = await self.run_full_analysis_pipeline(**market_context)
         
         # Build a compatible dict
         consensus = ctx.signals or {"verdict": "neutral", "confidence": 0}

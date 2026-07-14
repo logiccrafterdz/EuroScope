@@ -1061,8 +1061,10 @@ class LLMInterface:
         from ..skills.base import SkillContext
         from ..utils.charts import generate_chart
 
-        orchestrator = self.orchestrator or Orchestrator()
-        self.orchestrator = orchestrator
+        if not self.orchestrator:
+            logger.error("_execute_tool called without orchestrator; tool calls will fail")
+            return {"error": "No orchestrator configured"}
+        orchestrator = self.orchestrator
         ctx = SkillContext()
 
         if tool_name == "get_price":

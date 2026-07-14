@@ -37,6 +37,7 @@ class EuroScopeBot:
         self.registry = container.registry
         self.alerts = container.alerts
         self.rate_limiter = container.rate_limiter
+        self._app = None
         
         # 2. Core Brain Components
         self.memory = container.memory
@@ -131,10 +132,13 @@ class EuroScopeBot:
     def _on_alert_triggered(self, alert):
         """Callback for SmartAlerts — sends to allowed users."""
         try:
-            loop = asyncio.get_running_loop()
             allowed = self.config.telegram.allowed_users or []
             targets = list(set(allowed + self.config.proactive_alert_chat_ids))
-            loop.create_task(self.notifications.broadcast_alert(alert, chat_ids=targets))
+            if self._app:
+                self._app.create_task(self.notifications.broadcast_alert(alert, chat_ids=targets))
+            else:
+                loop = asyncio.get_running_loop()
+                loop.create_task(self.notifications.broadcast_alert(alert, chat_ids=targets))
         except RuntimeError:
             logger.warning('Alert triggered outside event loop — skipped.')
 
@@ -142,9 +146,9 @@ class EuroScopeBot:
         await self.notifications.broadcast_message(chat_ids, text, parse_mode='HTML')
 
     def _is_authorized(self, user_id: int) -> bool:
-        """Check if user is authorized."""
+        """Check if user is authorized. Deny-all when no users configured."""
         if not self.config.telegram.allowed_users:
-            return True
+            return False
         return user_id in self.config.telegram.allowed_users
 
     async def _check_auth(self, update: Update) -> bool:
@@ -320,6 +324,7 @@ class EuroScopeBot:
     def build_app(self) -> Application:
         """Build and configure the Telegram bot application."""
         app = Application.builder().token(self.config.telegram.token).post_init(self.post_init).post_shutdown(self.post_shutdown).build()
+        self._app = app
         commands = {
             'start': self.commands.cmd_start, 'help': self.commands.cmd_help, 
             'id': self.commands.cmd_id, 'health': self.commands.cmd_health, 
@@ -338,6 +343,9 @@ class EuroScopeBot:
     async def post_init(self, application: Application):
         """Called after bot is initialized, before polling starts."""
         self.application = application
+        
+        # Initialize async database tables
+        await self.container.init()
         
         if self.config.telegram.allowed_users:
             await self.notifications.schedule_daily_reports(application.job_queue, self.config.telegram.allowed_users)

@@ -5,6 +5,7 @@ Manages the lifecycle of trading signals: open, monitor, close.
 Tracks PnL and performance metrics. Uses existing Storage API.
 """
 
+import asyncio
 import logging
 from datetime import datetime
 from typing import Optional
@@ -38,6 +39,7 @@ class SignalExecutor:
         
         # Track highest/lowest price reached for active trailing stops: {signal_id: best_price}
         self._trailing_high_water_marks = {}
+        self._tick_lock = asyncio.Lock()
 
     async def initialize(self):
         """Initialize the executor (load risk state, etc)."""
@@ -84,8 +86,21 @@ class SignalExecutor:
                 await self.storage.update_transaction_status(tx_id, "failed")
                 
             elif action == "close_trade":
-                logger.warning(f"Found pending 'close_trade' transaction #{tx_id}. Marking as completed as broker likely handled it.")
-                await self.storage.update_transaction_status(tx_id, "completed")
+                # Check if position still exists on broker before marking completed
+                broker_positions = []
+                try:
+                    broker_positions = await self.broker.get_positions()
+                except Exception as e:
+                    logger.warning(f"Could not verify broker positions during recovery: {e}")
+                
+                open_ids = {str(p.get("dealId", "")) for p in broker_positions}
+                sig_id = tx.get("signal_id", "")
+                if sig_id and sig_id not in open_ids:
+                    logger.warning(f"Found pending 'close_trade' #{tx_id}. Position no longer on broker — marking completed.")
+                    await self.storage.update_transaction_status(tx_id, "completed")
+                else:
+                    logger.warning(f"Found pending 'close_trade' #{tx_id}. Position may still be open — marking as retry needed.")
+                    await self.storage.update_transaction_status(tx_id, "pending_retry")
             else:
                 await self.storage.update_transaction_status(tx_id, "failed")
 
@@ -100,61 +115,62 @@ class SignalExecutor:
         Handle incoming live ticks. Evaluates all open trades instantly.
         If SL or TP is hit, trade is closed using the exact bid/ask prices.
         """
-        logger.debug(f"SignalExecutor: Processing tick {symbol} {bid}/{ask}")
-        open_signals = await self.get_open_signals()
-        for signal in open_signals:
-            sig_id = signal["id"]
-            direction = signal["direction"]
-            sl = signal["stop_loss"]
-            tp = signal["take_profit"]
+        async with self._tick_lock:
+            logger.debug(f"SignalExecutor: Processing tick {symbol} {bid}/{ask}")
+            open_signals = await self.get_open_signals()
+            for signal in open_signals:
+                sig_id = signal["id"]
+                direction = signal["direction"]
+                sl = signal["stop_loss"]
+                tp = signal["take_profit"]
 
-            reason = None
-            exit_price = None
+                reason = None
+                exit_price = None
 
-            # Trailing Stop Configuration
-            if direction == "BUY":
-                new_sl = self.evaluate_trailing_stop(sig_id, "BUY", bid, signal["entry_price"], sl)
-                if new_sl:
-                    logger.info(f"🔄 Trailing Stop ADVANCED for BUY #{sig_id}: {sl} -> {new_sl} (Current bid: {bid})")
-                    await self.storage.update_signal_sl(sig_id, new_sl)
-                    await self.storage.update_trade_journal_sl(sig_id, new_sl)
-                    sl = new_sl
+                # Trailing Stop Configuration
+                if direction == "BUY":
+                    new_sl = self.evaluate_trailing_stop(sig_id, "BUY", bid, signal["entry_price"], sl)
+                    if new_sl:
+                        logger.info(f"🔄 Trailing Stop ADVANCED for BUY #{sig_id}: {sl} -> {new_sl} (Current bid: {bid})")
+                        await self.storage.update_signal_sl(sig_id, new_sl)
+                        await self.storage.update_trade_journal_sl(sig_id, new_sl)
+                        sl = new_sl
 
-                # Exit condition check
-                if bid <= sl:
-                    reason = "stop_loss"
-                    exit_price = bid
-                elif bid >= tp:
-                    reason = "take_profit"
-                    exit_price = bid
-            elif direction == "SELL":
-                new_sl = self.evaluate_trailing_stop(sig_id, "SELL", ask, signal["entry_price"], sl)
-                if new_sl:
-                    logger.info(f"🔄 Trailing Stop ADVANCED for SELL #{sig_id}: {sl} -> {new_sl} (Current ask: {ask})")
-                    await self.storage.update_signal_sl(sig_id, new_sl)
-                    await self.storage.update_trade_journal_sl(sig_id, new_sl)
-                    sl = new_sl
+                    # Exit condition check
+                    if bid <= sl:
+                        reason = "stop_loss"
+                        exit_price = bid
+                    elif bid >= tp:
+                        reason = "take_profit"
+                        exit_price = bid
+                elif direction == "SELL":
+                    new_sl = self.evaluate_trailing_stop(sig_id, "SELL", ask, signal["entry_price"], sl)
+                    if new_sl:
+                        logger.info(f"🔄 Trailing Stop ADVANCED for SELL #{sig_id}: {sl} -> {new_sl} (Current ask: {ask})")
+                        await self.storage.update_signal_sl(sig_id, new_sl)
+                        await self.storage.update_trade_journal_sl(sig_id, new_sl)
+                        sl = new_sl
 
-                # Exit condition check
-                if ask >= sl:
-                    reason = "stop_loss"
-                    exit_price = ask
-                elif ask <= tp:
-                    reason = "take_profit"
-                    exit_price = ask
+                    # Exit condition check
+                    if ask >= sl:
+                        reason = "stop_loss"
+                        exit_price = ask
+                    elif ask <= tp:
+                        reason = "take_profit"
+                        exit_price = ask
 
-            if reason:
-                logger.warning(f"⚡ WS TICK TRIGGER: Signal #{sig_id} {reason.upper()} hit at {bid}/{ask}")
-                # Execute the exit
-                exec_result = self.execution_sim.simulate_exit(
-                    direction, exit_price, reason, atr=None # Simplified execution on live tick
-                )
-                result = await self.close_signal(sig_id, exec_result.fill_price, reason)
-                if result:
-                    logger.info(f"Signal #{sig_id} closed instantly via Tick Stream. Slippage: {exec_result.slippage_pips} pips.")
-                    # Clean up memory
-                    if sig_id in self._trailing_high_water_marks:
-                        del self._trailing_high_water_marks[sig_id]
+                if reason:
+                    logger.warning(f"⚡ WS TICK TRIGGER: Signal #{sig_id} {reason.upper()} hit at {bid}/{ask}")
+                    # Execute the exit
+                    exec_result = self.execution_sim.simulate_exit(
+                        direction, exit_price, reason, atr=None # Simplified execution on live tick
+                    )
+                    result = await self.close_signal(sig_id, exec_result.fill_price, reason)
+                    if result:
+                        logger.info(f"Signal #{sig_id} closed instantly via Tick Stream. Slippage: {exec_result.slippage_pips} pips.")
+                        # Clean up memory
+                        if sig_id in self._trailing_high_water_marks:
+                            del self._trailing_high_water_marks[sig_id]
 
     def evaluate_trailing_stop(self, sig_id: int, direction: str, current_price: float, entry_price: float, current_sl: float) -> Optional[float]:
         """Evaluates whether to trail a stop loss limit based on current price."""
@@ -256,10 +272,11 @@ class SignalExecutor:
                 await self.storage.update_transaction_status(tx_id, "failed")
                 return -1
             
-            # For simplicity in this v1 bridge, we assume the price we requested is roughly the fill
-            # In a full project we'd poll for 'deal' confirmation
-            fill_price = entry_price 
-            exec_details = "Capital.com Live"
+            deal_data = res.get("data", {})
+            fill_price = deal_data.get("level") or deal_data.get("fillPrice") or entry_price
+            if fill_price == entry_price:
+                logger.warning("Broker did not return fill price; using requested price as fallback")
+            exec_details = f"Capital.com Live (fill={fill_price})"
         rr = 0.0
         sl_dist = abs(fill_price - stop_loss)
         tp_dist = abs(take_profit - fill_price)

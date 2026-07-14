@@ -459,7 +459,7 @@ class RiskManagementSkill(BaseSkill):
         entry = params.get("entry_price", 0)
         sl = params.get("stop_loss", 0)
         try:
-            tp = self.manager.calculate_take_profit(direction, entry, sl)
+            tp = self.manager.calculate_take_profit(entry, sl, direction)
             return SkillResult(success=True, data={"take_profit": tp})
         except Exception as e:
             return SkillResult(success=False, error=str(e))

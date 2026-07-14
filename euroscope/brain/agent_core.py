@@ -441,8 +441,8 @@ class EuroScopeAgent:
                 "conviction_confidence": strongest.confidence,
                 "causal_chain": [
                     {"text": e.text, "source": e.source, "weight": e.weight, "direction": e.direction} 
-                    for e in strongest.evidence
-                ] if hasattr(strongest, 'evidence') else [],
+                    for e in (strongest.evidence_for + strongest.evidence_against)
+                ],
                 "regime": self.world_model.regime.regime,
                 "price": self.world_model.price.price,
             },

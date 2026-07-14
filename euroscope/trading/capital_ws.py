@@ -216,7 +216,7 @@ class CapitalWebsocketClient:
                     bid = payload.get("bid")
                     ask = payload.get("ofr") # Capital.com uses 'ofr' for offer/ask
                     
-                    if epic and bid and ask:
+                    if epic is not None and bid is not None and ask is not None:
                         # Record tick for volume tracking
                         now = time.monotonic()
                         if epic not in self._tick_volume:

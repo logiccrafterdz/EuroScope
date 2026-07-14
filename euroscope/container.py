@@ -54,19 +54,13 @@ class ServiceContainer:
         self.config = config
         
         # 1. Base Infrastructure
+        self._db_manager = None
         if config.database_url:
             from .data.db.engine import DatabaseManager
             from .data.db.alchemy_storage import SQLAlchemyStorage
-            import asyncio
             
-            db_manager = DatabaseManager(config.database_url)
-            try:
-                loop = asyncio.get_running_loop()
-                loop.create_task(db_manager.init_db())
-            except RuntimeError:
-                pass
-            
-            self.storage = SQLAlchemyStorage(db_manager)
+            self._db_manager = DatabaseManager(config.database_url)
+            self.storage = SQLAlchemyStorage(self._db_manager)
             logger.info("Using new SQLAlchemy backend for storage (PostgreSQL Ready).")
         else:
             self.storage = Storage()
@@ -173,6 +167,12 @@ class ServiceContainer:
 
         # 7. Event Listeners
         self.bus.subscribe("trade.closed", self._on_trade_closed)
+
+    async def init(self):
+        """Async initialization — must be called when event loop is running."""
+        if self._db_manager:
+            await self._db_manager.init_db()
+            logger.info("SQLAlchemy database tables initialized.")
 
     async def _on_trade_closed(self, event):
         """Handle trade closed event to resolve debate decisions."""

@@ -142,20 +142,22 @@ class TestAuthAndRateLimit:
 
     @pytest.mark.asyncio
     async def test_check_auth_allows_when_no_restrictions(self):
-        """When allowed_users is empty, all users should be allowed."""
+        """When allowed_users is empty, no users should be allowed (deny-all default)."""
         bot = _make_bot()
         update = MagicMock()
         update.effective_user.id = 123
         update.effective_chat.id = 123
         update.effective_message = MagicMock()
+        update.message = MagicMock()
+        update.message.reply_text = AsyncMock()
         bot.rate_limiter.is_allowed = AsyncMock(return_value=(True, 5))
         result = await bot._check_auth(update)
-        assert result is True
+        assert result is False
 
     def test_is_authorized_with_empty_list(self):
-        """Empty allowed_users means everyone is authorized."""
+        """Empty allowed_users means no one is authorized (deny-all default)."""
         bot = _make_bot()
-        assert bot._is_authorized(12345) is True
+        assert bot._is_authorized(12345) is False
 
     def test_is_authorized_rejects_unlisted_user(self):
         """User not in allowed_users should be rejected."""

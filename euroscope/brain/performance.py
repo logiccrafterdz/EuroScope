@@ -96,14 +96,11 @@ class DifficultyRouter:
             return await self.router.chat(messages, temperature=temperature,
                                           force_provider=force_provider)
 
-        # For simple queries, try primary only (no retry overhead)
+        # For simple queries, try primary only (still through circuit breaker)
         if difficulty == "simple" and self.router.providers:
             try:
-                result = await self.router._call_provider(
-                    self.router.providers[0], messages, temperature
-                )
-                self.router._call_count += 1
-                self.router._last_provider = self.router.providers[0].name
+                result = await self.router.chat(messages, temperature=temperature,
+                                                force_provider=self.router.providers[0].name)
                 return result
             except Exception as e:
                 logger.debug(f"Simple query failed on primary, falling back: {e}")

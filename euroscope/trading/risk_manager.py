@@ -62,7 +62,7 @@ class RiskManager:
         self._daily_pnl: float = 0.0
         self._daily_pnl_date: str = ""
         self._weekly_pnl: float = 0.0
-        self._weekly_pnl_start: str = ""
+        self._weekly_pnl_start_dt: Optional[datetime] = None
         self._monthly_pnl: float = 0.0
         self._monthly_pnl_start: str = ""
         self._consecutive_losses: int = 0
@@ -77,7 +77,6 @@ class RiskManager:
         if state:
             today = datetime.now(UTC)
             today_str = today.strftime("%Y-%m-%d")
-            week_str = today.strftime("%Y-%V")
             month_str = today.strftime("%Y-%m")
             
             if state.get("daily_pnl_date") == today_str:
@@ -87,12 +86,21 @@ class RiskManager:
                 self._daily_pnl = 0.0
                 self._daily_pnl_date = today_str
                 
-            if state.get("weekly_pnl_start") == week_str:
+            # Rolling 7-day window for weekly drawdown
+            weekly_start_str = state.get("weekly_pnl_start_dt")
+            if weekly_start_str:
+                try:
+                    self._weekly_pnl_start_dt = datetime.fromisoformat(weekly_start_str)
+                except (ValueError, TypeError):
+                    self._weekly_pnl_start_dt = today
+            else:
+                self._weekly_pnl_start_dt = today
+
+            if self._weekly_pnl_start_dt and (today - self._weekly_pnl_start_dt) < timedelta(days=7):
                 self._weekly_pnl = state.get("weekly_pnl", 0.0)
-                self._weekly_pnl_start = week_str
             else:
                 self._weekly_pnl = 0.0
-                self._weekly_pnl_start = week_str
+                self._weekly_pnl_start_dt = today
 
             if state.get("monthly_pnl_start") == month_str:
                 self._monthly_pnl = state.get("monthly_pnl", 0.0)
@@ -113,7 +121,7 @@ class RiskManager:
             "daily_pnl": self._daily_pnl,
             "daily_pnl_date": self._daily_pnl_date,
             "weekly_pnl": self._weekly_pnl,
-            "weekly_pnl_start": self._weekly_pnl_start,
+            "weekly_pnl_start_dt": self._weekly_pnl_start_dt.isoformat() if self._weekly_pnl_start_dt else None,
             "monthly_pnl": self._monthly_pnl,
             "monthly_pnl_start": self._monthly_pnl_start,
             "consecutive_losses": self._consecutive_losses,
@@ -352,21 +360,20 @@ class RiskManager:
         # ── Drawdown checks ──
         today = datetime.now(UTC)
         today_str = today.strftime("%Y-%m-%d")
-        week_str = today.strftime("%Y-%V")
         month_str = today.strftime("%Y-%m")
         
         if self._daily_pnl_date != today_str:
             self._daily_pnl = 0.0
             self._daily_pnl_date = today_str
-        if getattr(self, '_weekly_pnl_start', "") != week_str:
+        if not self._weekly_pnl_start_dt or (today - self._weekly_pnl_start_dt) >= timedelta(days=7):
             self._weekly_pnl = 0.0
-            self._weekly_pnl_start = week_str
+            self._weekly_pnl_start_dt = today
         if getattr(self, '_monthly_pnl_start', "") != month_str:
             self._monthly_pnl = 0.0
             self._monthly_pnl_start = month_str
 
         daily_loss_pct = abs(self._daily_pnl / self.config.account_balance * 100) if self._daily_pnl < 0 else 0
-        weekly_loss_pct = abs(getattr(self, '_weekly_pnl', 0.0) / self.config.account_balance * 100) if getattr(self, '_weekly_pnl', 0.0) < 0 else 0
+        weekly_loss_pct = abs(self._weekly_pnl / self.config.account_balance * 100) if self._weekly_pnl < 0 else 0
         monthly_loss_pct = abs(getattr(self, '_monthly_pnl', 0.0) / self.config.account_balance * 100) if getattr(self, '_monthly_pnl', 0.0) < 0 else 0
 
         if daily_loss_pct >= self.config.max_daily_drawdown:
@@ -442,24 +449,19 @@ class RiskManager:
         """Record a closed trade's PnL for drawdown tracking."""
         today = datetime.now(UTC)
         today_str = today.strftime("%Y-%m-%d")
-        week_str = today.strftime("%Y-%V")
         month_str = today.strftime("%Y-%m")
         
         if self._daily_pnl_date != today_str:
             self._daily_pnl = 0.0
             self._daily_pnl_date = today_str
-        if getattr(self, '_weekly_pnl_start', "") != week_str:
+        if not self._weekly_pnl_start_dt or (today - self._weekly_pnl_start_dt) >= timedelta(days=7):
             self._weekly_pnl = 0.0
-            self._weekly_pnl_start = week_str
+            self._weekly_pnl_start_dt = today
         if getattr(self, '_monthly_pnl_start', "") != month_str:
             self._monthly_pnl = 0.0
             self._monthly_pnl_start = month_str
             
         self._daily_pnl += pnl
-        if not hasattr(self, '_weekly_pnl'):
-            self._weekly_pnl = 0.0
-        if not hasattr(self, '_monthly_pnl'):
-            self._monthly_pnl = 0.0
         self._weekly_pnl += pnl
         self._monthly_pnl += pnl
 

@@ -103,8 +103,8 @@ class TestDifficultyRouter:
         router = DifficultyRouter(mock_router)
         msgs = [{"role": "user", "content": "What is the price?"}]
         result = await router.chat(msgs)
-        assert result == "OK"
-        mock_router._call_provider.assert_called_once()
+        assert result == "full chain result"
+        mock_router.chat.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_complex_query_full_chain(self, mock_router):

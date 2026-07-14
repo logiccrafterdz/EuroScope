@@ -74,5 +74,5 @@ class BotTasks:
         report = self.bot.briefing_engine.format_for_telegram(data)
         chat_ids = self.config.proactive_alert_chat_ids
         if chat_ids:
-            await self.bot.notifications.broadcast_message(report, chat_ids=chat_ids, parse_mode='HTML')
+            await self.bot.notifications.broadcast_message(chat_ids, report, parse_mode='HTML')
         logger.info('Cron: Daily briefing sent.')

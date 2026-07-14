@@ -114,7 +114,7 @@ class VoiceBriefingEngine:
             from ..skills.base import SkillContext
             ctx = SkillContext()
             result = await self.orchestrator.run_skill(
-                "market_data", "get_summary", context=ctx
+                "market_data", "get_price", context=ctx
             )
             if result.success and result.data:
                 d = result.data

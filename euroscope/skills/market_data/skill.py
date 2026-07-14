@@ -69,6 +69,7 @@ class MarketDataSkill(BaseSkill):
             if self._ws_client:
                 # Default to EURUSD since the system is currently hardcoded for it
                 tick_vol = self._ws_client.get_tick_volume("EURUSD", window_seconds=300)
+                context.market_data["tick_volume_5m"] = tick_vol
             else:
                 context.market_data["tick_volume_5m"] = 0
                 

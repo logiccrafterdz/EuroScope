@@ -45,7 +45,8 @@ class CapitalProvider:
         
     async def _get_session(self) -> aiohttp.ClientSession:
         if self._session is None or self._session.closed:
-            self._session = aiohttp.ClientSession()
+            timeout = aiohttp.ClientTimeout(total=30, connect=10)
+            self._session = aiohttp.ClientSession(timeout=timeout)
         return self._session
 
     async def login(self) -> bool:
@@ -69,6 +70,7 @@ class CapitalProvider:
 
         # 2. Encrypt password if key is available
         login_password = self.password
+        encryption_succeeded = False
         if encryption_key and timestamp:
             try:
                 from Crypto.PublicKey import RSA
@@ -83,6 +85,7 @@ class CapitalProvider:
                 message = f"{self.password}|{timestamp}".encode('utf-8')
                 encrypted_bytes = cipher.encrypt(message)
                 login_password = base64.b64encode(encrypted_bytes).decode('utf-8')
+                encryption_succeeded = True
                 logger.info("Using encrypted password for login.")
             except Exception as e:
                 logger.error(f"Encryption failed: {e}")
@@ -97,7 +100,7 @@ class CapitalProvider:
         payload = {
             "identifier": self.identifier,
             "password": login_password,
-            "encryptedPassword": True if encryption_key else False
+            "encryptedPassword": encryption_succeeded
         }
         
         try:
@@ -250,7 +253,8 @@ class CapitalProvider:
             return None
 
     async def execute_trade(self, symbol: str, direction: str, size: float, 
-                      stop_loss: float = None, take_profit: float = None) -> Dict[str, Any]:
+                      stop_loss: float = None, take_profit: float = None,
+                      _retry_count: int = 0) -> Dict[str, Any]:
         """Place a market order."""
         if not self.session_token:
             if not await self.login(): return {"success": False, "error": "Login failed"}
@@ -274,6 +278,12 @@ class CapitalProvider:
         try:
             session = await self._get_session()
             async with session.post(url, json=payload, headers=headers) as response:
+                if response.status == 401 and _retry_count < 1:
+                    logger.warning("execute_trade: 401 received, re-authenticating...")
+                    if await self.login():
+                        return await self.execute_trade(symbol, direction, size,
+                            stop_loss, take_profit, _retry_count=_retry_count + 1)
+                    return {"success": False, "error": "Re-authentication failed"}
                 response.raise_for_status()
                 res_data = await response.json()
                 return {"success": True, "data": res_data}

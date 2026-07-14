@@ -812,8 +812,8 @@ class APIServer:
 
     async def _api_narratives(self, request):
         """API endpoint for Sentiment Network Graph edges."""
-        from euroscope.data.sentiment_graph import SentimentGraph
-        sg = SentimentGraph.get_instance()
+        from euroscope.data.sentiment_graph import NarrativeGraph
+        sg = NarrativeGraph()
         data = []
         if sg and hasattr(sg, 'graph'):
             for u, v, d in sg.graph.edges(data=True):
@@ -1074,7 +1074,7 @@ class APIServer:
                 # Legacy v0 routes (For backwards compatibility with existing frontend)
                 web.get("/api/summary", self._api_summary), 
                 web.get("/api/signals", self._api_signals), 
-                web.get("/api/scan_signals", self._api_scan_signals), 
+                web.post("/api/scan_signals", self._api_scan_signals), 
                 web.get("/api/alerts", self._api_alerts), 
                 web.get("/api/analysis", self._api_analysis), 
                 web.get("/api/candles", self._api_candles), 
@@ -1096,7 +1096,7 @@ class APIServer:
                 # New v1 versioned routes
                 web.get("/api/v1/summary", self._api_summary), 
                 web.get("/api/v1/signals", self._api_signals), 
-                web.get("/api/v1/scan_signals", self._api_scan_signals), 
+                web.post("/api/v1/scan_signals", self._api_scan_signals), 
                 web.get("/api/v1/alerts", self._api_alerts), 
                 web.get("/api/v1/analysis", self._api_analysis), 
                 web.get("/api/v1/candles", self._api_candles), 
