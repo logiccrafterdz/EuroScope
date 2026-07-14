@@ -54,11 +54,13 @@ class LLMRouter:
             logger.info(f"LLM Provider chain: {chain}")
 
         from euroscope.utils.resilience import AsyncCircuitBreaker
-        self.breaker = AsyncCircuitBreaker(
-            exceptions=(httpx.HTTPError, asyncio.TimeoutError),
-            failure_threshold=5,
-            recovery_timeout=60.0
-        )
+        self._breakers = {}
+        for p in self.providers:
+            self._breakers[p.name] = AsyncCircuitBreaker(
+                exceptions=(httpx.HTTPError, asyncio.TimeoutError),
+                failure_threshold=5,
+                recovery_timeout=60.0
+            )
         limits = httpx.Limits(max_keepalive_connections=20, max_connections=40)
         self._client = httpx.AsyncClient(timeout=15.0, limits=limits)
 
@@ -148,7 +150,7 @@ class LLMRouter:
         for provider in target_providers:
             for attempt in range(self.max_retries + 1):
                 try:
-                    result = await self.breaker.call(call_fn, provider)
+                    result = await self._breakers[provider.name].call(call_fn, provider)
                     self._last_provider = provider.name
                     return result
 
@@ -196,6 +198,7 @@ class LLMRouter:
                 except Exception as e:
                     from euroscope.utils.resilience import CircuitBreakerOpenException
                     if isinstance(e, CircuitBreakerOpenException):
+                        last_error = e
                         logger.critical(f"LLM Circuit breaker OPEN on {provider.name}. Skipping to next.")
                         break
                     last_error = e
