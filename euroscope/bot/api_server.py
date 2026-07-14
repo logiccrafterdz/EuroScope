@@ -9,13 +9,13 @@ import os
 import json
 import logging
 import asyncio
+import time
 import traceback
 from datetime import datetime
 from aiohttp import web
 
 from ..skills.base import SkillContext
 from .webhooks import WebhookDispatcher
-from ..analytics.voice_briefing import VoiceBriefingEngine
 
 logger = logging.getLogger("euroscope.api")
 
@@ -37,7 +37,6 @@ class APIServer:
         self._FORECAST_TTL = 300  
         
         # Security & Limits
-        import time
         self.api_secret = getattr(self.config, "api_secret_key", None)
         if not self.api_secret or self.api_secret == "euroscope-zenith-v5":
             logger.warning("Using default API secret. It is HIGHLY recommended to set EUROSCOPE_API_SECRET in your .env.")
@@ -84,7 +83,6 @@ class APIServer:
 
     def _is_rate_limited(self, request, endpoint: str, limit: int, window: int) -> bool:
         """Memory-based rate limiter per IP and endpoint."""
-        import time
         ip = request.remote or "unknown"
         now = time.monotonic()
         key = f"{ip}:{endpoint}"
@@ -154,7 +152,6 @@ class APIServer:
         if self._is_rate_limited(request, "forecast", limit=3, window=10):
             return web.json_response({"success": False, "error": "Rate limit exceeded (3 requests per 10s)"}, status=429)
         logger.debug("API: Running deep AI forecast...")
-        import time
         try:
             tf = request.query.get("timeframe", "24 hours")
             now = time.monotonic()
@@ -431,8 +428,7 @@ class APIServer:
         strategy = request.query.get("strategy", None)
         timeframe = request.query.get("timeframe", "H1")
         try:
-            import time as _time
-            t0 = _time.monotonic()
+            t0 = time.monotonic()
 
             # Step 1: Fetch candles (reduced from 500→200 for speed)
             ctx = SkillContext()
@@ -795,7 +791,6 @@ class APIServer:
 
     async def _api_agent_state(self, request):
         """API endpoint for Agent Core state."""
-        import time
         core = self.bot.core
         state = "UNKNOWN"
         if hasattr(core, 'state') and hasattr(core.state, 'name'):

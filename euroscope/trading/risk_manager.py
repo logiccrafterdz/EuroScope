@@ -372,6 +372,15 @@ class RiskManager:
             self._monthly_pnl = 0.0
             self._monthly_pnl_start = month_str
 
+        if self.config.account_balance <= 0:
+            warnings.append("🛑 account_balance is zero or negative — cannot compute drawdown")
+            return TradeRisk(
+                direction=direction, entry_price=entry_price, stop_loss=stop_loss,
+                take_profit=take_profit, stop_pips=stop_pips, tp_pips=tp_pips,
+                risk_reward=rr, position_size=0, risk_amount=0, risk_score=10,
+                warnings=warnings, approved=False
+            )
+
         daily_loss_pct = abs(self._daily_pnl / self.config.account_balance * 100) if self._daily_pnl < 0 else 0
         weekly_loss_pct = abs(self._weekly_pnl / self.config.account_balance * 100) if self._weekly_pnl < 0 else 0
         monthly_loss_pct = abs(getattr(self, '_monthly_pnl', 0.0) / self.config.account_balance * 100) if getattr(self, '_monthly_pnl', 0.0) < 0 else 0

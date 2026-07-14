@@ -116,7 +116,7 @@ class SignalExecutor:
         If SL or TP is hit, trade is closed using the exact bid/ask prices.
         """
         async with self._tick_lock:
-            logger.debug(f"SignalExecutor: Processing tick {symbol} {bid}/{ask}")
+            logger.debug("SignalExecutor: Processing tick %s %s/%s", symbol, bid, ask)
             open_signals = await self.get_open_signals()
             for signal in open_signals:
                 sig_id = signal["id"]
@@ -501,7 +501,7 @@ class SignalExecutor:
             engine = CounterfactualEngine()
             engine.run_in_background(trade_obj)
         except Exception as e:
-            logger.error(f"Failed to trigger Counterfactual Engine: {e}")
+            logger.error(f"Failed to trigger Counterfactual Engine: {e}", exc_info=True)
 
         return {
             "id": signal_id,

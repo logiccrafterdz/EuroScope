@@ -172,7 +172,7 @@ class PriceProvider:
             return {}
 
         output: dict[str, Optional[pd.DataFrame]] = {}
-        for tf, result in zip(valid_tasks.keys(), results):
+        for tf, result in zip(valid_tasks, results):
             if isinstance(result, Exception):
                 logger.warning(f"Failed to fetch {tf}: {result}")
                 output[tf] = None

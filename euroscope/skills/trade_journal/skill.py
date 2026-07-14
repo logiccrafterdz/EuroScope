@@ -95,7 +95,7 @@ class TradeJournalSkill(BaseSkill):
                 if isinstance(causal, str):
                     try:
                         causal = json.loads(causal)
-                    except:
+                    except (json.JSONDecodeError, TypeError):
                         causal = {}
                 elif not isinstance(causal, dict):
                     causal = {}

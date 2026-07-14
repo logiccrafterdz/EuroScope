@@ -147,19 +147,23 @@ class Forecaster:
             # Process all responses
             all_parsed = [self._parse_forecast(text) for text in forecast_texts_raw]
             
+            if not all_parsed:
+                all_parsed = [{"direction": "NEUTRAL", "confidence": 50.0}]
+            
             # Aggregate Logic
             bullish_conf = sum(p.get("confidence", 50.0) for p in all_parsed if p.get("direction") == "BULLISH")
             bearish_conf = sum(p.get("confidence", 50.0) for p in all_parsed if p.get("direction") == "BEARISH")
             
+            n = len(all_parsed)
             if bullish_conf > bearish_conf:
                 final_dir = "BULLISH"
-                final_conf = bullish_conf / len(all_parsed)
+                final_conf = bullish_conf / n
             elif bearish_conf > bullish_conf:
                 final_dir = "BEARISH"
-                final_conf = bearish_conf / len(all_parsed)
+                final_conf = bearish_conf / n
             else:
                 final_dir = "NEUTRAL"
-                final_conf = sum(p.get("confidence", 50.0) for p in all_parsed) / len(all_parsed) if all_parsed else 50.0
+                final_conf = sum(p.get("confidence", 50.0) for p in all_parsed) / n
 
             # Build a unified JSON structure
             primary_res = all_parsed[0]
