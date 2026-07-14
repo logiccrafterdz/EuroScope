@@ -931,6 +931,30 @@ class APIServer:
         data = res.data if res.success and res.data else {}
         return web.json_response({"success": res.success, "data": data, "error": res.error if not res.success else None})
 
+    async def _api_cot(self, request):
+        """API endpoint for Commitment of Traders positioning data."""
+        ctx = SkillContext()
+        res = await self.bot.orchestrator.run_skill(
+            "cot_positioning", "get_net_positioning", context=ctx
+        )
+        data = res.data if res.success and res.data else {}
+        return web.json_response({"success": res.success, "data": data, "error": res.error if not res.success else None})
+
+    async def _api_portfolio(self, request):
+        """API endpoint for portfolio health and exposure."""
+        ctx = SkillContext()
+        res_health = await self.bot.orchestrator.run_skill(
+            "portfolio_context", "assess_health", context=ctx
+        )
+        res_exposure = await self.bot.orchestrator.run_skill(
+            "portfolio_context", "get_exposure", context=ctx
+        )
+        data = {
+            "health": res_health.data if res_health.success and res_health.data else {},
+            "exposure": res_exposure.data if res_exposure.success and res_exposure.data else {},
+        }
+        return web.json_response({"success": True, "data": data})
+
     async def _api_health_dashboard(self, request):
         """API endpoint for full system health dashboard."""
         ctx = SkillContext()
@@ -1038,6 +1062,8 @@ class APIServer:
                 web.get("/api/liquidity", self._api_liquidity),
                 web.get("/api/uncertainty", self._api_uncertainty),
                 web.get("/api/correlation", self._api_correlation),
+                web.get("/api/cot", self._api_cot),
+                web.get("/api/portfolio", self._api_portfolio),
                 web.get("/api/health_dashboard", self._api_health_dashboard),
                 
                 web.get("/api/v1/agent_state", self._api_agent_state),
@@ -1053,6 +1079,8 @@ class APIServer:
                 web.get("/api/v1/liquidity", self._api_liquidity),
                 web.get("/api/v1/uncertainty", self._api_uncertainty),
                 web.get("/api/v1/correlation", self._api_correlation),
+                web.get("/api/v1/cot", self._api_cot),
+                web.get("/api/v1/portfolio", self._api_portfolio),
                 web.get("/api/v1/health_dashboard", self._api_health_dashboard)
             ])
             port = int(os.getenv("PORT", 8080))

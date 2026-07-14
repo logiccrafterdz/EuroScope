@@ -910,6 +910,34 @@
                 </div>
             </div>
 
+            <!-- Correlation, COT, Portfolio Bento -->
+            <div class="bento">
+                <div class="glass-card" style="padding:16px;">
+                    <div class="label-sm">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+                        CORRELATIONS
+                    </div>
+                    <div id="correlation-data" style="font-size: 0.75rem;"><div class="empty-state"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg><span>AWAITING DATA</span></div></div>
+                </div>
+                <div class="glass-card" style="padding:16px;">
+                    <div class="label-sm">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                        COT POSITIONING
+                    </div>
+                    <div id="cot-data" style="font-size: 0.75rem;"><div class="empty-state"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg><span>AWAITING DATA</span></div></div>
+                </div>
+            </div>
+
+            <div class="bento">
+                <div class="glass-card bento-full" style="padding:16px;">
+                    <div class="label-sm">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+                        PORTFOLIO
+                    </div>
+                    <div id="portfolio-data" style="font-size: 0.75rem;"><div class="empty-state"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg><span>AWAITING DATA</span></div></div>
+                </div>
+            </div>
+
             <!-- Strategic Reasoning (Merged Briefing & Forecast Text) -->
             <div id="b-narrative-card" class="glass-card bento-full" style="padding:20px; display:none;">
                 <div style="display:flex; align-items:center; gap:6px; margin-bottom:14px;">
@@ -1160,6 +1188,15 @@
                 <div class="glow-bar-container" style="margin: 8px 0;">
                     <div id="sys-budget-bar" class="glow-bar" style="background: var(--up-color); width: 0%;"></div>
                 </div>
+            </div>
+
+            <!-- System Health Dashboard -->
+            <div class="glass-card bento-full" style="margin-top: 12px;">
+                <div class="label-sm">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+                    SYSTEM HEALTH
+                </div>
+                <div id="health-dashboard-data" style="font-size: 0.75rem;"><div class="empty-state"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg><span>AWAITING DATA</span></div></div>
             </div>
         </div>
     </div>
@@ -2198,6 +2235,69 @@
                         }
                     });
 
+                    api('/correlation').then(res => {
+                        const el = document.getElementById('correlation-data');
+                        if (res.success && res.data) {
+                            const d = res.data;
+                            const entries = d.correlations || d;
+                            if (typeof entries === 'object' && !Array.isArray(entries)) {
+                                const rows = Object.entries(entries).map(([k, v]) => {
+                                    const label = v.label || k;
+                                    const corr = v.correlation_full || v.correlation || 0;
+                                    const div = v.is_diverging;
+                                    return `<div class="info-row"><span class="label">${label}</span><span class="val" style="color:${div?'var(--warn-color)':'var(--text-main)'}">${(corr*100).toFixed(0)}% ${div?'⚠':''}</span></div>`;
+                                }).join('');
+                                el.innerHTML = rows || '<div class="empty-state" style="padding:10px 0;">NO DATA</div>';
+                            } else if (Array.isArray(entries)) {
+                                el.innerHTML = entries.map(v => `<div class="info-row"><span class="label">${v.label||'---'}</span><span class="val" style="color:${v.is_diverging?'var(--warn-color)':'var(--text-main)'}">${((v.correlation_full||0)*100).toFixed(0)}% ${v.is_diverging?'⚠':''}</span></div>`).join('');
+                            }
+                        }
+                    });
+
+                    api('/cot').then(res => {
+                        const el = document.getElementById('cot-data');
+                        if (res.success && res.data) {
+                            const d = res.data;
+                            const bias = (d.bias || '---').toUpperCase();
+                            const biasColor = bias === 'BULLISH' ? 'var(--up-color)' : bias === 'BEARISH' ? 'var(--down-color)' : 'var(--text-muted)';
+                            el.innerHTML = `
+                                <div class="info-row"><span class="label">BIAS</span><span class="val" style="color:${biasColor}; font-weight:700;">${bias}</span></div>
+                                <div class="info-row"><span class="label">NET POS.</span><span class="val">${(d.net_positions||0).toLocaleString()}</span></div>
+                                <div class="info-row"><span class="label">CONFIDENCE</span><span class="val">${f2(d.confidence)}%</span></div>
+                                <div class="info-row"><span class="label">DATE</span><span class="val" style="font-size:0.65rem;">${d.report_date||'---'}</span></div>
+                            `;
+                        }
+                    });
+
+                    api('/portfolio').then(res => {
+                        const el = document.getElementById('portfolio-data');
+                        if (res.success && res.data) {
+                            const h = res.data.health || {};
+                            const e = res.data.exposure || {};
+                            const statusColor = h.status === 'Healthy' ? 'var(--up-color)' : 'var(--down-color)';
+                            el.innerHTML = `
+                                <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:10px;">
+                                    <div style="background:#F5F0E8; padding:10px; border:3px solid #1A1A1A;">
+                                        <div class="label-sm" style="margin-bottom:4px;">STATUS</div>
+                                        <div style="font-size:0.85rem; font-weight:700; color:${statusColor};">${(h.status||'---').toUpperCase()}</div>
+                                    </div>
+                                    <div style="background:#F5F0E8; padding:10px; border:3px solid #1A1A1A;">
+                                        <div class="label-sm" style="margin-bottom:4px;">DAILY P/L</div>
+                                        <div style="font-size:0.85rem; font-weight:700; color:${(h.daily_pnl_pips||0)>=0?'var(--up-color)':'var(--down-color)'};">${f2(h.daily_pnl_pips)} pip</div>
+                                    </div>
+                                    <div style="background:#F5F0E8; padding:10px; border:3px solid #1A1A1A;">
+                                        <div class="label-sm" style="margin-bottom:4px;">ACTIVE</div>
+                                        <div style="font-size:0.85rem; font-weight:700;">${e.active_trades_count||0}</div>
+                                    </div>
+                                </div>
+                                <div style="margin-top:8px;">
+                                    <div class="info-row"><span class="label">NET EXPOSURE</span><span class="val" style="color:${(e.net_exposure||0)>=0?'var(--up-color)':'var(--down-color)'};">${f2(e.net_exposure)}</span></div>
+                                    <div class="info-row"><span class="label">LONG / SHORT</span><span class="val">${f2(e.total_long)} / ${f2(e.total_short)}</span></div>
+                                </div>
+                            `;
+                        }
+                    });
+
                 } finally {
                     bLoading.style.display = 'none';
                     window._intelLoading = false;
@@ -2308,6 +2408,22 @@
                         list.innerHTML = res.data.map(i => `<div style="padding:10px 0; border-bottom:2px solid #E5E0D8;"><strong style="color:var(--text-main);">${i.trade}</strong>: <span style="color:var(--text-muted);">${i.insight}</span></div>`).join('');
                     } else {
                         list.innerHTML = `<div class="empty-state" style="padding: 10px 0;">NO INSIGHTS YET</div>`;
+                    }
+                });
+
+                api('/health_dashboard').then(res => {
+                    const el = document.getElementById('health-dashboard-data');
+                    if (res.success && res.data) {
+                        const d = res.data;
+                        const items = d.subsystems || d;
+                        if (typeof items === 'object') {
+                            const rows = Object.entries(items).map(([k, v]) => {
+                                const status = typeof v === 'string' ? v : (v.status || v.state || '---');
+                                const color = status === 'UP' || status === 'OK' || status === 'Healthy' ? 'var(--up-color)' : status === 'DOWN' || status === 'ERROR' ? 'var(--down-color)' : 'var(--warn-color)';
+                                return `<div class="info-row"><span class="label">${k.replace(/_/g,' ').toUpperCase()}</span><span class="val" style="color:${color}; font-weight:700;">${status}</span></div>`;
+                            }).join('');
+                            el.innerHTML = rows || '<div class="empty-state" style="padding:10px 0;">ALL SYSTEMS OPERATIONAL</div>';
+                        }
                     }
                 });
             }
