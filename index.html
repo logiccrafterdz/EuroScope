@@ -786,6 +786,24 @@
                 <div style="font-size:0.55rem; color:var(--text-dim); margin-top:4px; opacity:0.5;">Integrating market regime & macro data</div>
             </div>
 
+            <!-- Session Plan Card -->
+            <div class="glass-card bento-full" style="margin-bottom: 12px; padding: 16px; border-left: 5px solid var(--accent-primary);">
+                <div class="label-sm" style="color:var(--text-main);">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+                    SESSION PLAN
+                </div>
+                <div id="session-plan-data" style="font-size: 0.75rem; margin-top: 8px;"><div class="empty-state"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg><span>NO SESSION PLAN</span></div></div>
+            </div>
+
+            <!-- Active Convictions Card -->
+            <div class="glass-card bento-full" style="margin-bottom: 12px; padding: 16px;">
+                <div class="label-sm" style="color:var(--text-main);">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                    ACTIVE CONVICTIONS
+                </div>
+                <div id="convictions-list" style="font-size: 0.75rem; margin-top: 8px;"><div class="empty-state"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg><span>NO ACTIVE CONVICTIONS</span></div></div>
+            </div>
+
             <!-- Committee Agent Verdict Banner (Merges Forecast & Briefing Headers) -->
             <div class="glass-card bento-full" style="text-align: center; margin-bottom: 12px; position: relative; overflow: hidden;">
                 <div style="position:absolute; top:-30px; right:-30px; width:140px; height:140px; border-radius:50%; background:radial-gradient(circle, rgba(0,200,150,0.06) 0%, transparent 70%);"></div>
@@ -1197,6 +1215,15 @@
                     SYSTEM HEALTH
                 </div>
                 <div id="health-dashboard-data" style="font-size: 0.75rem;"><div class="empty-state"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg><span>AWAITING DATA</span></div></div>
+            </div>
+
+            <!-- Data Source Health -->
+            <div class="glass-card bento-full" style="margin-top: 12px;">
+                <div class="label-sm">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+                    DATA SOURCES
+                </div>
+                <div id="data-health-list" style="font-size: 0.75rem;"><div class="empty-state"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg><span>AWAITING DATA</span></div></div>
             </div>
         </div>
     </div>
@@ -2133,6 +2160,39 @@
                     });
 
                     // Advanced Intelligence: Order Flow, Volatility, Microstructure, Confluence, Liquidity, Uncertainty
+                    api('/session_plan').then(res => {
+                        const el = document.getElementById('session-plan-data');
+                        if (res.success && res.data && (res.data.scenarios?.length > 0 || res.data.briefing)) {
+                            const d = res.data;
+                            let html = `<div style="margin-bottom:6px;"><strong style="color:var(--accent-primary);">${(d.session||'').toUpperCase()} SESSION</strong> <span style="color:var(--text-muted); font-size:0.65rem;">${d.date||''}</span></div>`;
+                            if (d.briefing) html += `<div style="color:var(--text-muted); margin-bottom:8px; line-height:1.5;">${d.briefing}</div>`;
+                            if (d.scenarios?.length > 0) {
+                                html += d.scenarios.map(s => {
+                                    const dirColor = s.direction === 'BUY' ? 'var(--up-color)' : s.direction === 'SELL' ? 'var(--down-color)' : 'var(--text-muted)';
+                                    return `<div style="padding:6px 0; border-bottom:2px solid #E5E0D8;"><span style="color:${dirColor}; font-weight:700;">${s.direction}</span> <span style="color:var(--text-main);">${s.name}</span> <span style="color:var(--text-muted); font-size:0.65rem;">${s.entry_zone}</span></div>`;
+                                }).join('');
+                            }
+                            el.innerHTML = html;
+                        }
+                    });
+
+                    api('/convictions').then(res => {
+                        const el = document.getElementById('convictions-list');
+                        if (res.success && res.data && res.data.length > 0) {
+                            el.innerHTML = res.data.map(c => {
+                                const dirColor = c.direction === 'bullish' ? 'var(--up-color)' : c.direction === 'bearish' ? 'var(--down-color)' : 'var(--text-muted)';
+                                const conf = (c.confidence * 100).toFixed(0);
+                                return `<div style="padding:8px 0; border-bottom:2px solid #E5E0D8;">
+                                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                                        <span style="color:${dirColor}; font-weight:700; text-transform:uppercase;">${c.direction} <span style="font-size:0.65rem; color:var(--text-muted);">${conf}%</span></span>
+                                        <span style="font-size:0.6rem; color:var(--text-muted);">+${c.evidence_for_count} / -${c.evidence_against_count}</span>
+                                    </div>
+                                    <div style="color:var(--text-muted); font-size:0.7rem; margin-top:4px;">${c.thesis}</div>
+                                </div>`;
+                            }).join('');
+                        }
+                    });
+
                     api('/order_flow').then(res => {
                         const el = document.getElementById('order-flow-data');
                         if (res.success && res.data) {
@@ -2424,6 +2484,18 @@
                             }).join('');
                             el.innerHTML = rows || '<div class="empty-state" style="padding:10px 0;">ALL SYSTEMS OPERATIONAL</div>';
                         }
+                    }
+                });
+
+                api('/data_health').then(res => {
+                    const el = document.getElementById('data-health-list');
+                    if (res.success && res.data) {
+                        const rows = Object.entries(res.data).map(([k, v]) => {
+                            const status = v.status || '---';
+                            const color = status === 'UP' ? 'var(--up-color)' : status === 'DOWN' ? 'var(--down-color)' : 'var(--warn-color)';
+                            return `<div class="info-row"><span class="label">${k.replace(/_/g,' ').toUpperCase()}</span><span class="val" style="color:${color}; font-weight:700;">${status}</span></div>`;
+                        }).join('');
+                        el.innerHTML = rows || '<div class="empty-state" style="padding:10px 0;">ALL SOURCES ONLINE</div>';
                     }
                 });
             }

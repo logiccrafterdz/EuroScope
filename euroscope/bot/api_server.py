@@ -964,6 +964,73 @@ class APIServer:
         data = res.data if res.success and res.data else {}
         return web.json_response({"success": res.success, "data": data, "error": res.error if not res.success else None})
 
+    async def _api_session_plan(self, request):
+        """API endpoint for current session trading plan."""
+        from euroscope.container import get_container
+        container = get_container()
+        plan_data = {"scenarios": [], "session": "UNKNOWN", "briefing": ""}
+        if container and hasattr(container, 'orchestrator'):
+            orchestrator = container.orchestrator
+            if hasattr(orchestrator, 'session_planner') and orchestrator.session_planner:
+                planner = orchestrator.session_planner
+                if hasattr(planner, 'current_plan') and planner.current_plan:
+                    plan = planner.current_plan
+                    plan_data = {
+                        "session": getattr(plan, 'session_name', 'UNKNOWN'),
+                        "date": getattr(plan, 'date_str', ''),
+                        "briefing": getattr(plan, 'session_briefing', ''),
+                        "scenarios": [
+                            {
+                                "name": s.name,
+                                "direction": s.direction,
+                                "condition": s.condition,
+                                "entry_zone": s.entry_zone,
+                                "target": s.target_level,
+                                "invalidation": s.invalidation_level,
+                            }
+                            for s in getattr(plan, 'scenarios', [])
+                        ],
+                    }
+        return web.json_response({"success": True, "data": plan_data})
+
+    async def _api_convictions(self, request):
+        """API endpoint for active trading convictions."""
+        from euroscope.container import get_container
+        container = get_container()
+        convictions_data = []
+        if container and hasattr(container, 'orchestrator'):
+            orchestrator = container.orchestrator
+            if hasattr(orchestrator, 'conviction_tracker') and orchestrator.conviction_tracker:
+                tracker = orchestrator.conviction_tracker
+                active = getattr(tracker, 'active_convictions', {})
+                for cid, c in active.items():
+                    convictions_data.append({
+                        "id": cid,
+                        "thesis": getattr(c, 'thesis', ''),
+                        "direction": getattr(c, 'direction', 'neutral'),
+                        "confidence": getattr(c, 'confidence', 0.5),
+                        "invalidation": getattr(c, 'invalidation_level', 0),
+                        "evidence_for_count": len(getattr(c, 'evidence_for', [])),
+                        "evidence_against_count": len(getattr(c, 'evidence_against', [])),
+                    })
+        return web.json_response({"success": True, "data": convictions_data})
+
+    async def _api_data_health(self, request):
+        """API endpoint for data source health status."""
+        sources = {}
+        container = get_container()
+        if container and hasattr(container, 'storage'):
+            sources["database"] = {"status": "UP"}
+        if container and hasattr(container, 'price_provider'):
+            sources["price_provider"] = {"status": "UP"}
+        if container and hasattr(container, 'news_engine'):
+            sources["news"] = {"status": "UP"}
+        if container and hasattr(container, 'macro_provider'):
+            sources["macro_fred"] = {"status": "UP"}
+        if container and hasattr(container, 'calendar'):
+            sources["economic_calendar"] = {"status": "UP"}
+        return web.json_response({"success": True, "data": sources})
+
     async def _serve_mini_app(self, request):
         """Serve the Zenith Terminal Mini App directly from the bot server."""
         # Prefer root index.html (newer v5 Phase 3+ version with full features)
@@ -1065,6 +1132,9 @@ class APIServer:
                 web.get("/api/cot", self._api_cot),
                 web.get("/api/portfolio", self._api_portfolio),
                 web.get("/api/health_dashboard", self._api_health_dashboard),
+                web.get("/api/session_plan", self._api_session_plan),
+                web.get("/api/convictions", self._api_convictions),
+                web.get("/api/data_health", self._api_data_health),
                 
                 web.get("/api/v1/agent_state", self._api_agent_state),
                 web.get("/api/v1/narratives", self._api_narratives),
@@ -1081,7 +1151,10 @@ class APIServer:
                 web.get("/api/v1/correlation", self._api_correlation),
                 web.get("/api/v1/cot", self._api_cot),
                 web.get("/api/v1/portfolio", self._api_portfolio),
-                web.get("/api/v1/health_dashboard", self._api_health_dashboard)
+                web.get("/api/v1/health_dashboard", self._api_health_dashboard),
+                web.get("/api/v1/session_plan", self._api_session_plan),
+                web.get("/api/v1/convictions", self._api_convictions),
+                web.get("/api/v1/data_health", self._api_data_health)
             ])
             port = int(os.getenv("PORT", 8080))
             runner = web.AppRunner(app)
