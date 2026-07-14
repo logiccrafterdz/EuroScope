@@ -846,7 +846,21 @@ class APIServer:
 
     async def _serve_mini_app(self, request):
         """Serve the Zenith Terminal Mini App directly from the bot server."""
-        # Note: adjust path relative to current file vs telegram_bot
+        # Prefer root index.html (newer v5 Phase 3+ version with full features)
+        root_index = os.path.normpath(
+            os.path.join(os.path.dirname(__file__), "..", "..", "index.html")
+        )
+        if os.path.exists(root_index):
+            return web.FileResponse(
+                root_index,
+                headers={
+                    "Content-Type": "text/html; charset=utf-8",
+                    "Cache-Control": "no-cache, no-store, must-revalidate",
+                    "Pragma": "no-cache",
+                    "Expires": "0"
+                }
+            )
+        # Fallback to legacy mini_app version
         mini_app_path = os.path.join(os.path.dirname(__file__), "mini_app", "index.html")
         if os.path.exists(mini_app_path):
             return web.FileResponse(
