@@ -172,3 +172,10 @@ class AsyncCircuitBreaker:
                 
             raise e
 
+    def reset(self):
+        """Manually reset the circuit breaker to CLOSED state."""
+        if self.state != "CLOSED":
+            logger.info(f"Circuit breaker manually reset from {self.state} ➔ CLOSED.")
+            self.state = "CLOSED"
+            self.failure_count = 0
+

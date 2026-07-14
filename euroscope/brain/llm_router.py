@@ -68,6 +68,12 @@ class LLMRouter:
         """Close the persistent HTTP client."""
         await self._client.aclose()
 
+    def reset_breakers(self):
+        """Manually reset all circuit breakers to CLOSED state."""
+        for name, breaker in self._breakers.items():
+            breaker.reset()
+        logger.info("All LLM circuit breakers manually reset.")
+
     @classmethod
     def from_config(cls, primary_key: str = "", primary_base: str = "",
                     primary_model: str = "", fallback_key: str = "",
@@ -199,7 +205,7 @@ class LLMRouter:
                     from euroscope.utils.resilience import CircuitBreakerOpenException
                     if isinstance(e, CircuitBreakerOpenException):
                         last_error = e
-                        logger.critical(f"LLM Circuit breaker OPEN on {provider.name}. Skipping to next.")
+                        logger.warning(f"{provider.name}: Circuit breaker OPEN (too many failures). Waiting for auto-recovery or use router.reset_breakers() to force reset.")
                         break
                     last_error = e
                     wait = 2 ** attempt

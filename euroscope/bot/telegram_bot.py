@@ -48,6 +48,7 @@ class EuroScopeBot:
         # 3. Intelligence Layers
         self.agent = container.agent
         self.forecaster = container.forecaster
+        self.agent_core = container.agent_core
         
         # 4. Domain & Data Services
         self.price_provider = container.price_provider
@@ -406,9 +407,25 @@ class EuroScopeBot:
 
         logger.info('⚡ Background services & Commands registered.')
 
+        # Start autonomous Agent Core
+        if self.agent_core:
+            try:
+                await self.agent_core.start()
+                logger.info("🤖 Agent Core started successfully.")
+            except Exception as e:
+                logger.error(f"Failed to start Agent Core: {e}")
+
     async def post_shutdown(self, application: Application):
         """Gracefully stop background services on shutdown."""
         logger.info('Shutting down background services...')
+
+        # Stop autonomous Agent Core first
+        if hasattr(self, 'agent_core') and self.agent_core:
+            try:
+                await self.agent_core.stop()
+            except Exception as e:
+                logger.warning(f"Shutdown: agent_core stop failed: {e}")
+
         await self.heartbeat.stop()
         await self.cron.stop()
         

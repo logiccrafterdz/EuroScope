@@ -31,6 +31,7 @@ from .automation import EventBus, SmartAlerts, setup_default_alerts
 from .automation.daily_tracker import DailyTracker
 from .evaluation import EvalHarness
 from .brain.performance import DifficultyRouter, PromptCompressor
+from .brain.agent_core import EuroScopeAgent
 
 logger = logging.getLogger('euroscope.container')
 
@@ -119,7 +120,15 @@ class ServiceContainer:
             pattern_tracker=None # Set later to avoid circular dependency
         )
         self.agent.forecaster = self.forecaster
-        
+
+        # 3b. Autonomous Agent Core
+        self.agent_core = EuroScopeAgent(
+            orchestrator=self.orchestrator,
+            config=self.config,
+            storage=self.storage,
+            llm_interface=self.agent,
+        )
+
         # 4. Domain & Data Services
         self.price_provider = MultiSourceProvider(
             alphavantage_key=config.data.alphavantage_key,
