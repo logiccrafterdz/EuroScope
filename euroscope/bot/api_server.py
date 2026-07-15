@@ -543,8 +543,12 @@ class APIServer:
             except Exception as e:
                 logger.warning(f"API: Failed to get risk state: {e}")
 
-            # AdaptiveTuner analyze is async now
-            tuning = await self.bot.adaptive_tuner.analyze()
+            # AdaptiveTuner analyze is async now — isolate from stats/risk
+            tuning = {"ready": False, "recommendations": [], "params": {}}
+            try:
+                tuning = await self.bot.adaptive_tuner.analyze()
+            except Exception as e:
+                logger.warning(f"API: AdaptiveTuner.analyze() failed: {e}")
             # Build live equity curve from closed trades
             try:
                 closed_trades = await self.bot.storage.get_trade_journal(status="closed", limit=200)
@@ -816,6 +820,19 @@ class APIServer:
         # Sort by weight desc, limit to top 10
         top_data = sorted(data, key=lambda x: x['weight'], reverse=True)[:10]
         return web.json_response({"success": True, "data": top_data})
+
+    async def _api_regime_history(self, request):
+        """API endpoint for regime transition history."""
+        data = []
+        try:
+            from euroscope.container import get_container
+            container = get_container()
+            if container and hasattr(container, 'regime_engine'):
+                engine = container.regime_engine
+                data = getattr(engine, '_regime_history', [])[-20:]
+        except Exception as e:
+            logger.warning(f"API: regime_history failed: {e}")
+        return web.json_response({"success": True, "data": data})
 
     async def _api_committee_log(self, request):
         """API endpoint for the last Multi-Agent Deliberation result."""
@@ -1113,6 +1130,7 @@ class APIServer:
                 # Zenith V5 Phase 3 Expansion Routes
                 web.get("/api/agent_state", self._api_agent_state),
                 web.get("/api/narratives", self._api_narratives),
+                web.get("/api/regime_history", self._api_regime_history),
                 web.get("/api/committee_log", self._api_committee_log),
                 web.get("/api/counterfactual", self._api_counterfactual),
                 web.get("/api/cost_stats", self._api_cost_stats),
@@ -1134,6 +1152,7 @@ class APIServer:
                 
                 web.get("/api/v1/agent_state", self._api_agent_state),
                 web.get("/api/v1/narratives", self._api_narratives),
+                web.get("/api/v1/regime_history", self._api_regime_history),
                 web.get("/api/v1/committee_log", self._api_committee_log),
                 web.get("/api/v1/counterfactual", self._api_counterfactual),
                 web.get("/api/v1/cost_stats", self._api_cost_stats),

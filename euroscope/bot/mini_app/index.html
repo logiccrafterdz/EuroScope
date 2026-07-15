@@ -1471,7 +1471,7 @@
             btn.style.opacity = "0.7";
 
             try {
-                const res = await api('/scan_signals');
+                const res = await api('/scan_signals', { method: 'POST' });
                 btnText.textContent = "SCAN MARKET";
                 if (res.success && res.signal) {
                     if (res.execution_skipped) {

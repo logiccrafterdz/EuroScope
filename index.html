@@ -1574,7 +1574,7 @@
 
                 // Increased timeout to 60s to accommodate slow LLM AI responses (Briefing, Macro, Backtests)
                 const r = await fetch(url, { signal: AbortSignal.timeout(60000), ...options, headers });
-                if (!r.ok) throw new Error(`HTTP ${r.status}`);
+                if (!r.ok && r.status !== 401 && r.status !== 429) throw new Error(`HTTP ${r.status}`);
                 const res = await r.json();
                 const errText = (res && res.error) ? String(res.error).toLowerCase() : '';
                 if (!res.success && errText.includes('timed out') && path === '/forecast') {
@@ -1763,7 +1763,9 @@
 
                     const t = res.data.tuning || {}; const recs = t.recommendations || [];
                     const recEl = document.getElementById('perf-recommendations');
-                    if (recs.length > 0) {
+                    if (t.ready === false) {
+                        recEl.innerHTML = '<div class="empty-state">Insufficient data (need 5+ trades)</div>';
+                    } else if (recs.length > 0) {
                         recEl.innerHTML = recs.map(r => `
                             <div class="info-row"><span class="label">${r.param}</span><span class="val" style="font-size:0.75rem; color:var(--text-main);">${r.action}</span></div>
                             <div style="font-size:0.75rem; color:var(--text-dim); padding-bottom:8px;">${r.reason}</div>
@@ -1826,7 +1828,7 @@
                 knob.style.background = '#1A1A1A';
             }
             try {
-                await fetch(`${API}/settings_update`, {
+                await api('/settings', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ auto_trading_enabled: _autoTradingEnabled })
@@ -1870,7 +1872,7 @@
             btn.style.opacity = "0.7";
 
             try {
-                const res = await api('/scan_signals');
+                const res = await api('/scan_signals', { method: 'POST' });
                 btnText.textContent = "SCAN MARKET";
                 if (res.success && res.signal) {
                     const s = res.signal;
@@ -2500,6 +2502,29 @@
                 });
             }
         }
+        async function loadInitialSettings() {
+            try {
+                const res = await api('/settings');
+                if (res.success && res.data) {
+                    _autoTradingEnabled = !!res.data.auto_trading_enabled;
+                    const toggle = document.getElementById('auto-trade-toggle');
+                    const knob = document.getElementById('auto-trade-knob');
+                    if (toggle && knob) {
+                        if (_autoTradingEnabled) {
+                            toggle.style.background = 'var(--accent-primary)';
+                            toggle.style.borderColor = '#1A1A1A';
+                            knob.style.left = '22px';
+                            knob.style.background = '#FFFFFF';
+                        } else {
+                            toggle.style.background = '#E5E0D8';
+                            toggle.style.borderColor = '#1A1A1A';
+                            knob.style.left = '2px';
+                            knob.style.background = '#1A1A1A';
+                        }
+                    }
+                }
+            } catch (e) { /* silent on init */ }
+        }
         async function runInit() {
             try { 
                 tg.expand(); 
@@ -2510,6 +2535,7 @@
                 console.log("Not in Telegram environment");
             }
             initChart();
+            await loadInitialSettings();
             await sync();
             setInterval(() => sync(), 15000);
         }
