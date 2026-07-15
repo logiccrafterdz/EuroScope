@@ -195,6 +195,10 @@ class EuroScopeAgent:
             sleep_time = self._get_sleep_time()
             await asyncio.sleep(sleep_time)
 
+    async def tick(self) -> AgentCycleStats:
+        """Public single-tick entry point — used by cron heartbeat."""
+        return await self._tick()
+
     async def _tick(self) -> AgentCycleStats:
         """Wrapper for _tick_inner with a hard timeout to prevent cascade hangs."""
         try:

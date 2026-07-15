@@ -174,9 +174,12 @@ class WorldModel:
         candles = market_data.get("candles")
         if candles is not None and hasattr(candles, "iloc") and len(candles) > 0:
             last = candles.iloc[-1]
-            self.price.price = float(last.get("close", 0))
-            self.price.high_today = float(candles["high"].max())
-            self.price.low_today = float(candles["low"].min())
+            close_col = "Close" if "Close" in candles.columns else "close"
+            high_col = "High" if "High" in candles.columns else "high"
+            low_col = "Low" if "Low" in candles.columns else "low"
+            self.price.price = float(last.get(close_col, 0))
+            self.price.high_today = float(candles[high_col].max())
+            self.price.low_today = float(candles[low_col].min())
             self.price.last_updated = now
 
         price_data = market_data.get("price_data", {})

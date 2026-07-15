@@ -40,6 +40,7 @@ class DatabaseManager:
             if "sqlite" in self.db_url:
                 await conn.execute(org_sqlalchemy_text("PRAGMA journal_mode=WAL"))
                 await conn.execute(org_sqlalchemy_text("PRAGMA synchronous=NORMAL"))
+                await conn.execute(org_sqlalchemy_text("PRAGMA busy_timeout=5000"))
             await conn.run_sync(Base.metadata.create_all)
             
     @asynccontextmanager
