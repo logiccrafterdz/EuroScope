@@ -2,7 +2,7 @@
 Multi-Source Data Provider
 
 Aggregates price data from multiple sources with automatic failover.
-Primary: OANDA | Secondary: yfinance | Fallback: Alpha Vantage
+Primary: BiQuote (Free, No API Key) | Secondary: OANDA | Tertiary: yfinance | Fallback: Alpha Vantage
 """
 
 import asyncio
@@ -16,6 +16,7 @@ from .alpha_vantage import AlphaVantageProvider
 from .tiingo import TiingoProvider
 from .oanda import OandaProvider
 from .capital import CapitalDataProvider
+from .biquote import BiQuoteProvider
 
 logger = logging.getLogger("euroscope.data.multi")
 
@@ -24,26 +25,20 @@ class MultiSourceProvider:
     """
     Unified price provider that tries multiple data sources.
 
-    Tries OANDA first, then yfinance, then Tiingo, then Alpha Vantage.
+    Tries BiQuote first (Free, No API Key), then Capital, OANDA, Tiingo, yfinance, Alpha Vantage.
     """
 
     def __init__(self, alphavantage_key: str = "", tiingo_key: str = "", oanda_key: str = "", oanda_account: str = "", oanda_practice: bool = True,
                  capital_key: str = "", capital_identifier: str = "", capital_password: str = ""):
+        self.biquote = BiQuoteProvider()  # Free, no API key needed
         self.capital = CapitalDataProvider(capital_key, capital_identifier, capital_password) if capital_key else None
         self.oanda = OandaProvider(oanda_key, oanda_account, oanda_practice) if oanda_key else None
         self.tiingo = TiingoProvider(tiingo_key) if tiingo_key else None
         self.legacy = PriceProvider() # yfinance
         self.fallback = AlphaVantageProvider(alphavantage_key) if alphavantage_key else None
         
-        # Determine initial preferred source
-        if self.capital:
-            self._last_source = "capital"
-        elif self.oanda:
-            self._last_source = "oanda"
-        elif self.tiingo:
-            self._last_source = "tiingo"
-        else:
-            self._last_source = "yfinance"
+        # Determine initial preferred source (BiQuote is first - free and no API key)
+        self._last_source = "biquote"
 
     @property
     def last_source(self) -> str:
@@ -52,6 +47,17 @@ class MultiSourceProvider:
 
     async def get_price(self) -> dict:
         """Get current EUR/USD price with automatic failover."""
+        # Try BiQuote first (Free, No API Key)
+        try:
+            result = await self.biquote.get_price()
+            if "error" not in result:
+                self._last_source = "biquote"
+                result["source"] = "biquote"
+                return result
+            logger.warning(f"BiQuote price failed: {result.get('error')}, trying Capital...")
+        except Exception as e:
+            logger.warning(f"BiQuote exception: {e}, trying Capital...")
+
         # Try Capital.com
         if self.capital:
             result = await self.capital.get_price()
@@ -99,6 +105,7 @@ class MultiSourceProvider:
     async def close(self):
         """Close all underlying provider sessions."""
         tasks = []
+        if self.biquote: tasks.append(self.biquote.close())
         if self.capital: tasks.append(self.capital.provider.close())
         if self.oanda: tasks.append(self.oanda.close())
         if self.tiingo: # Tiingo uses context managers per call, but we can add close() for future-proofing

@@ -695,6 +695,38 @@
                     (---%)</div>
             </div>
 
+            <!-- Trading Simulation Panel -->
+            <div class="glass-card bento-full" id="simulation-panel" style="margin-bottom: 16px; padding: 16px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                    <div class="label-sm" style="font-weight:800;">TRADING SIMULATION</div>
+                    <div id="sim-status" style="font-size: 0.75rem; color: var(--text-dim);">STOPPED</div>
+                </div>
+                
+                <div class="bento" style="margin-bottom: 12px;">
+                    <div style="text-align: center;">
+                        <div class="label-sm">Balance</div>
+                        <div id="sim-balance" class="val-md" style="font-size: 1rem;">$100,000</div>
+                    </div>
+                    <div style="text-align: center;">
+                        <div class="label-sm">PnL</div>
+                        <div id="sim-pnl" class="val-md" style="font-size: 1rem; color: var(--accent-primary);">$0.00</div>
+                    </div>
+                    <div style="text-align: center;">
+                        <div class="label-sm">Win Rate</div>
+                        <div id="sim-winrate" class="val-md" style="font-size: 1rem;">0%</div>
+                    </div>
+                </div>
+                
+                <div style="display: flex; gap: 8px;">
+                    <button class="action-btn" style="flex: 1; font-size: 0.8rem; padding: 10px;" onclick="startSimulation()">START</button>
+                    <button class="action-btn" style="flex: 1; font-size: 0.8rem; padding: 10px; background: var(--down-color);" onclick="stopSimulation()">STOP</button>
+                </div>
+                
+                <div id="sim-trades" style="margin-top: 12px; max-height: 150px; overflow-y: auto; font-size: 0.75rem;">
+                    <!-- Trades will appear here -->
+                </div>
+            </div>
+
             <div class="bento">
                 <div class="glass-card" style="padding:16px;">
                     <div class="label-sm">Broker Balance</div>
@@ -1508,6 +1540,90 @@
                 spinner.style.display = "none";
                 btn.disabled = false;
                 btn.style.opacity = "1";
+            }
+        }
+
+        // Trading Simulation Functions
+        let simulationRunning = false;
+        let simulationInterval = null;
+
+        async function startSimulation() {
+            try {
+                const res = await api('/simulation/start', { method: 'POST' });
+                if (res.success) {
+                    simulationRunning = true;
+                    document.getElementById('sim-status').textContent = 'RUNNING';
+                    document.getElementById('sim-status').style.color = 'var(--up-color)';
+                    
+                    // Start polling for simulation status
+                    simulationInterval = setInterval(updateSimulationStatus, 2000);
+                    log('Simulation started', 'info');
+                }
+            } catch (e) {
+                log(`Simulation start error: ${e}`, 'error');
+            }
+        }
+
+        async function stopSimulation() {
+            try {
+                const res = await api('/simulation/stop', { method: 'POST' });
+                if (res.success) {
+                    simulationRunning = false;
+                    document.getElementById('sim-status').textContent = 'STOPPED';
+                    document.getElementById('sim-status').style.color = 'var(--text-dim)';
+                    
+                    if (simulationInterval) {
+                        clearInterval(simulationInterval);
+                        simulationInterval = null;
+                    }
+                    log('Simulation stopped', 'warn');
+                }
+            } catch (e) {
+                log(`Simulation stop error: ${e}`, 'error');
+            }
+        }
+
+        async function updateSimulationStatus() {
+            try {
+                const res = await api('/simulation');
+                if (res.success && res.simulation) {
+                    const sim = res.simulation;
+                    
+                    document.getElementById('sim-balance').textContent = `$${sim.balance.toLocaleString()}`;
+                    document.getElementById('sim-pnl').textContent = `$${sim.total_pnl.toFixed(2)}`;
+                    document.getElementById('sim-pnl').style.color = sim.total_pnl >= 0 ? 'var(--up-color)' : 'var(--down-color)';
+                    document.getElementById('sim-winrate').textContent = `${sim.win_rate}%`;
+                    
+                    // Update trades list
+                    const tradesEl = document.getElementById('sim-trades');
+                    if (sim.trades && sim.trades.length > 0) {
+                        const recentTrades = sim.trades.slice(-5).reverse();
+                        tradesEl.innerHTML = recentTrades.map(t => `
+                            <div style="padding: 6px; margin-bottom: 4px; background: ${t.status === 'OPEN' ? 'var(--surface-accent)' : 'var(--surface-color)'}; border: 1px solid var(--border-color);">
+                                <span style="color: ${t.direction === 'BUY' ? 'var(--up-color)' : 'var(--down-color)'}; font-weight: bold;">${t.direction}</span>
+                                <span> @ ${f5(t.entry_price)}</span>
+                                <span style="float: right; color: ${t.pnl >= 0 ? 'var(--up-color)' : 'var(--down-color)'};">$${t.pnl.toFixed(2)}</span>
+                            </div>
+                        `).join('');
+                    }
+                }
+            } catch (e) {
+                // Silently handle errors during polling
+            }
+        }
+
+        async function openManualTrade(direction) {
+            try {
+                const res = await api('/simulation/trade', {
+                    method: 'POST',
+                    body: JSON.stringify({ direction: direction, sl_pips: 20, tp_pips: 40 })
+                });
+                if (res.success) {
+                    log(`Manual ${direction} trade opened`, 'info');
+                    updateSimulationStatus();
+                }
+            } catch (e) {
+                log(`Trade error: ${e}`, 'error');
             }
         }
 

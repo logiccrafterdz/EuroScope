@@ -1074,6 +1074,104 @@ class APIServer:
             )
         return web.Response(text="Mini App not found", status=404)
 
+    # Trading Simulation API Handlers
+    async def _api_simulation(self, request):
+        """API endpoint for simulation status."""
+        try:
+            from ..simulation.trading_simulator import TradingSimulator
+            from ..container import get_container
+            
+            container = get_container()
+            if not hasattr(container, 'simulator'):
+                container.simulator = TradingSimulator()
+            
+            status = container.simulator.get_status()
+            return web.json_response({"success": True, "simulation": status})
+        except Exception as e:
+            logger.error(f"Simulation API error: {e}")
+            return web.json_response({"success": False, "error": str(e)})
+
+    async def _api_simulation_start(self, request):
+        """API endpoint to start simulation."""
+        try:
+            from ..simulation.trading_simulator import TradingSimulator
+            from ..container import get_container
+            
+            container = get_container()
+            if not hasattr(container, 'simulator'):
+                container.simulator = TradingSimulator()
+                container.simulator.set_provider(container.price_provider)
+            
+            # Start simulation in background task
+            if not container.simulator.is_running:
+                asyncio.create_task(container.simulator.start())
+            
+            return web.json_response({"success": True, "message": "Simulation started"})
+        except Exception as e:
+            logger.error(f"Simulation start error: {e}")
+            return web.json_response({"success": False, "error": str(e)})
+
+    async def _api_simulation_stop(self, request):
+        """API endpoint to stop simulation."""
+        try:
+            from ..container import get_container
+            
+            container = get_container()
+            if hasattr(container, 'simulator'):
+                container.simulator.stop()
+            
+            return web.json_response({"success": True, "message": "Simulation stopped"})
+        except Exception as e:
+            logger.error(f"Simulation stop error: {e}")
+            return web.json_response({"success": False, "error": str(e)})
+
+    async def _api_simulation_trade(self, request):
+        """API endpoint to open a manual trade."""
+        try:
+            from ..simulation.trading_simulator import TradingSimulator, TradeDirection
+            from ..container import get_container
+            
+            data = await request.json()
+            container = get_container()
+            
+            if not hasattr(container, 'simulator'):
+                container.simulator = TradingSimulator()
+                container.simulator.set_provider(container.price_provider)
+            
+            # Get current price
+            price_data = await container.price_provider.get_price()
+            if "error" in price_data:
+                return web.json_response({"success": False, "error": price_data["error"]})
+            
+            current_price = price_data["price"]
+            direction = TradeDirection.BUY if data.get("direction") == "BUY" else TradeDirection.SELL
+            
+            # Calculate SL/TP
+            sl_pips = data.get("sl_pips", 20)
+            tp_pips = data.get("tp_pips", 40)
+            
+            if direction == TradeDirection.BUY:
+                stop_loss = current_price - (sl_pips * 0.0001)
+                take_profit = current_price + (tp_pips * 0.0001)
+            else:
+                stop_loss = current_price + (sl_pips * 0.0001)
+                take_profit = current_price - (tp_pips * 0.0001)
+            
+            trade = container.simulator.open_trade(
+                direction=direction,
+                entry_price=current_price,
+                stop_loss=stop_loss,
+                take_profit=take_profit
+            )
+            
+            return web.json_response({
+                "success": True, 
+                "trade": container.simulator._trade_to_dict(trade)
+            })
+        except Exception as e:
+            logger.error(f"Simulation trade error: {e}")
+            return web.json_response({"success": False, "error": str(e)})
+
     async def start(self):
         """Run the AIOHTTP server as a background task."""
         try:
@@ -1169,7 +1267,14 @@ class APIServer:
                 web.get("/api/v1/health_dashboard", self._api_health_dashboard),
                 web.get("/api/v1/session_plan", self._api_session_plan),
                 web.get("/api/v1/convictions", self._api_convictions),
-                web.get("/api/v1/data_health", self._api_data_health)
+                web.get("/api/v1/data_health", self._api_data_health),
+                
+                # Trading Simulation Routes
+                web.get("/api/simulation", self._api_simulation),
+                web.get("/api/v1/simulation", self._api_simulation),
+                web.post("/api/simulation/start", self._api_simulation_start),
+                web.post("/api/simulation/stop", self._api_simulation_stop),
+                web.post("/api/simulation/trade", self._api_simulation_trade)
             ])
             port = int(os.getenv("PORT", 8080))
             runner = web.AppRunner(app)
