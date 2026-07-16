@@ -17,8 +17,6 @@ from .data.fundamental import FundamentalDataProvider
 from .data.storage import Storage
 from .forecast.engine import Forecaster
 from .trading.risk_manager import RiskManager
-from .trading.capital_provider import CapitalProvider
-from .trading.capital_ws import CapitalWebsocketClient
 from .trading.regime_adaptive import RegimeAdaptiveEngine
 from .bot.rate_limiter import RateLimiter
 from .bot.user_settings import UserSettings
@@ -136,16 +134,9 @@ class ServiceContainer:
             oanda_key=config.data.oanda_api_key,
             oanda_account=config.data.oanda_account_id,
             oanda_practice=config.data.oanda_practice,
-            capital_key=config.data.capital_api_key,
-            capital_identifier=config.data.capital_identifier,
-            capital_password=config.data.capital_password
         )
-        self.broker = CapitalProvider(
-            api_key=config.data.capital_api_key,
-            identifier=config.data.capital_identifier,
-            password=config.data.capital_password
-        ) if config.data.capital_api_key else None
-        self.ws_client = CapitalWebsocketClient(self.broker) if self.broker else None
+        self.broker = None
+        self.ws_client = None
         
         self.news_engine = NewsEngine(config.data.brave_api_key, storage=self.storage)
         self.calendar = EconomicCalendar()

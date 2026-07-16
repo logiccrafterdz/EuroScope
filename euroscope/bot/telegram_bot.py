@@ -388,22 +388,10 @@ class EuroScopeBot:
         self._bg_tasks.add(api_task)
         api_task.add_done_callback(self._bg_tasks.discard)
 
-        # Capital.com WebSocket Integration
         signal_executor_skill = self.registry.get('signal_executor')
         if signal_executor_skill:
             await signal_executor_skill.initialize()
             logger.info("SignalExecutor initialized (Risk state loaded).")
-
-        if self.ws_client:
-            logger.info("Starting Capital.com WebSocket Stream...")
-            ws_success = await self.ws_client.connect()
-            if ws_success:
-                await self.ws_client.subscribe(["EURUSD"])
-                if signal_executor_skill:
-                    signal_executor_skill.start_streaming(self.ws_client)
-                    logger.info("Real-time Tick Stream INTEGRATED with SignalExecutor.")
-            else:
-                logger.error("Failed to connect Capital.com WebSocket stream.")
 
         logger.info('⚡ Background services & Commands registered.')
 

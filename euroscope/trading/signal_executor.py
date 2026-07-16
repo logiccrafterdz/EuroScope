@@ -8,12 +8,10 @@ Tracks PnL and performance metrics. Uses existing Storage API.
 import asyncio
 import logging
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Any
 
 from ..data.storage import Storage
 from .execution_simulator import ExecutionSimulator
-from .capital_provider import CapitalProvider
-from .capital_ws import CapitalWebsocketClient
 from .risk_manager import RiskManager
 
 logger = logging.getLogger("euroscope.trading.signal_executor")
@@ -28,14 +26,14 @@ class SignalExecutor:
     """
 
     def __init__(self, storage: Storage, execution_sim: ExecutionSimulator = None, 
-                 risk_manager: RiskManager = None, broker: CapitalProvider = None, 
+                 risk_manager: RiskManager = None, broker: Any = None, 
                  paper_trading: bool = True):
         self.storage = storage
         self.execution_sim = execution_sim or ExecutionSimulator()
         self.risk_manager = risk_manager or RiskManager(storage=storage)
         self.broker = broker
         self.paper_trading = paper_trading
-        self.ws_client: Optional[CapitalWebsocketClient] = None
+        self.ws_client: Optional[Any] = None
         
         # Track highest/lowest price reached for active trailing stops: {signal_id: best_price}
         self._trailing_high_water_marks = {}
@@ -104,7 +102,7 @@ class SignalExecutor:
             else:
                 await self.storage.update_transaction_status(tx_id, "failed")
 
-    def start_streaming(self, ws_client: CapitalWebsocketClient):
+    def start_streaming(self, ws_client):
         """Bind WS client to the executor and register the on_tick callback."""
         self.ws_client = ws_client
         self.ws_client.add_callback(self._on_tick)
@@ -258,7 +256,7 @@ class SignalExecutor:
             fill_price = exec_result.fill_price
             exec_details = exec_result.details
         else:
-            # REAL EXECUTION via Capital.com
+            # REAL EXECUTION via broker
             if not self.broker:
                 logger.error("Real trading enabled but no broker configured!")
                 await self.storage.update_transaction_status(tx_id, "failed")
@@ -276,7 +274,7 @@ class SignalExecutor:
             fill_price = deal_data.get("level") or deal_data.get("fillPrice") or entry_price
             if fill_price == entry_price:
                 logger.warning("Broker did not return fill price; using requested price as fallback")
-            exec_details = f"Capital.com Live (fill={fill_price})"
+            exec_details = f"Live (fill={fill_price})"
         rr = 0.0
         sl_dist = abs(fill_price - stop_loss)
         tp_dist = abs(take_profit - fill_price)

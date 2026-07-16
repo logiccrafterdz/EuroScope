@@ -32,9 +32,6 @@ def _make_bot():
     config.data.oanda_api_key = ""
     config.data.oanda_account_id = ""
     config.data.oanda_practice = True
-    config.data.capital_api_key = ""
-    config.data.capital_identifier = ""
-    config.data.capital_password = ""
     config.llm = MagicMock()
     config.llm.api_key = ""
     config.llm.api_base = ""
@@ -67,8 +64,6 @@ def _make_bot():
          patch("euroscope.forecast.engine.Forecaster"), \
          patch("euroscope.brain.orchestrator.Orchestrator"), \
          patch("euroscope.trading.risk_manager.RiskManager"), \
-         patch("euroscope.trading.capital_provider.CapitalProvider"), \
-         patch("euroscope.trading.capital_ws.CapitalWebsocketClient"), \
          patch("euroscope.data.storage.Storage"):
         from euroscope.bot.rate_limiter import RateLimiter
         container = MagicMock()

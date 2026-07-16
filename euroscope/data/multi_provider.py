@@ -2,7 +2,7 @@
 Multi-Source Data Provider
 
 Aggregates price data from multiple sources with automatic failover.
-Primary: BiQuote (Free, No API Key) | Secondary: OANDA | Tertiary: yfinance | Fallback: Alpha Vantage
+Primary: BiQuote (Free, No API Key) | Secondary: yfinance | Fallback: Alpha Vantage
 """
 
 import asyncio
@@ -15,7 +15,6 @@ from .provider import PriceProvider
 from .alpha_vantage import AlphaVantageProvider
 from .tiingo import TiingoProvider
 from .oanda import OandaProvider
-from .capital import CapitalDataProvider
 from .biquote import BiQuoteProvider
 
 logger = logging.getLogger("euroscope.data.multi")
@@ -25,13 +24,11 @@ class MultiSourceProvider:
     """
     Unified price provider that tries multiple data sources.
 
-    Tries BiQuote first (Free, No API Key), then Capital, OANDA, Tiingo, yfinance, Alpha Vantage.
+    Tries BiQuote first (Free, No API Key), then OANDA, Tiingo, yfinance, Alpha Vantage.
     """
 
-    def __init__(self, alphavantage_key: str = "", tiingo_key: str = "", oanda_key: str = "", oanda_account: str = "", oanda_practice: bool = True,
-                 capital_key: str = "", capital_identifier: str = "", capital_password: str = ""):
+    def __init__(self, alphavantage_key: str = "", tiingo_key: str = "", oanda_key: str = "", oanda_account: str = "", oanda_practice: bool = True):
         self.biquote = BiQuoteProvider()  # Free, no API key needed
-        self.capital = CapitalDataProvider(capital_key, capital_identifier, capital_password) if capital_key else None
         self.oanda = OandaProvider(oanda_key, oanda_account, oanda_practice) if oanda_key else None
         self.tiingo = TiingoProvider(tiingo_key) if tiingo_key else None
         self.legacy = PriceProvider() # yfinance
@@ -54,18 +51,9 @@ class MultiSourceProvider:
                 self._last_source = "biquote"
                 result["source"] = "biquote"
                 return result
-            logger.warning(f"BiQuote price failed: {result.get('error')}, trying Capital...")
+            logger.warning(f"BiQuote price failed: {result.get('error')}, trying OANDA...")
         except Exception as e:
-            logger.warning(f"BiQuote exception: {e}, trying Capital...")
-
-        # Try Capital.com
-        if self.capital:
-            result = await self.capital.get_price()
-            if "error" not in result:
-                self._last_source = "capital"
-                result["source"] = "capital"
-                return result
-            logger.warning(f"Capital.com price failed: {result.get('error')}, trying OANDA...")
+            logger.warning(f"BiQuote exception: {e}, trying OANDA...")
 
         # Try OANDA
         if self.oanda:
@@ -106,7 +94,6 @@ class MultiSourceProvider:
         """Close all underlying provider sessions."""
         tasks = []
         if self.biquote: tasks.append(self.biquote.close())
-        if self.capital: tasks.append(self.capital.provider.close())
         if self.oanda: tasks.append(self.oanda.close())
         if self.tiingo: # Tiingo uses context managers per call, but we can add close() for future-proofing
             pass
@@ -116,17 +103,6 @@ class MultiSourceProvider:
 
     async def get_candles(self, timeframe: str = "H1", count: int = 100, symbol: str = "EURUSD", **kwargs) -> Optional[pd.DataFrame]:
         """Get OHLCV candles with automatic failover."""
-        # Try Capital.com
-        if self.capital:
-            df = await self.capital.get_candles(timeframe, count)
-            if df is not None and not df.empty:
-                df = self._validate_data(df)
-                if df is not None:
-                    self._last_source = "capital"
-                    return df
-                logger.error(f"Capital.com data failed validation for {timeframe}")
-            logger.warning(f"Capital.com candles failed for {timeframe}, trying OANDA...")
-
         # Try OANDA
         if self.oanda:
             df = await self.oanda.get_candles(timeframe, count)

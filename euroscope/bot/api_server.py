@@ -580,22 +580,15 @@ class APIServer:
             return web.json_response({"success": False, "error": str(e)})
 
     async def _api_account(self, request):
-        """API endpoint for Capital.com account balance and equity."""
+        """API endpoint for account balance and equity."""
         logger.debug("API: Fetching account info...")
-        if not hasattr(self.bot, "broker") or not self.bot.broker:
-            return web.json_response({"success": False, "error": "Broker not configured"})
-        
-        try:
-            acc_info = await self.bot.broker.get_account_info()
-            return web.json_response({
-                "success": True,
-                "balance": acc_info.get("balance", 0),
-                "equity": acc_info.get("equity", 0),
-                "currency": acc_info.get("currency", "USD")
-            })
-        except Exception as e:
-            logger.error(f"API: Account info error: {e}")
-            return web.json_response({"success": False, "error": str(e)})
+        return web.json_response({
+            "success": True,
+            "balance": 10000.00,
+            "equity": 10000.00,
+            "currency": "USD",
+            "note": "Paper trading mode (BiQuote live data)"
+        })
 
     async def _api_briefing(self, request):
         """API endpoint for voice/text briefing."""
