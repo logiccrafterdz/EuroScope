@@ -7,6 +7,9 @@ Primary: BiQuote (Free, No API Key) | Secondary: yfinance | Fallback: Alpha Vant
 
 import asyncio
 import logging
+import sqlite3
+from datetime import datetime, timedelta, UTC
+from pathlib import Path
 from typing import Optional
 
 import pandas as pd
@@ -20,11 +23,91 @@ from .biquote import BiQuoteProvider
 logger = logging.getLogger("euroscope.data.multi")
 
 
+class CandleCache:
+    """SQLite-backed candle cache that persists across restarts."""
+
+    def __init__(self, db_path: str = "data/candle_cache.db"):
+        Path(db_path).parent.mkdir(parents=True, exist_ok=True)
+        self._db_path = db_path
+        self._init_db()
+
+    def _init_db(self):
+        conn = sqlite3.connect(self._db_path, timeout=5)
+        try:
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS candles (
+                    timeframe TEXT NOT NULL,
+                    timestamp TEXT NOT NULL,
+                    open REAL, high REAL, low REAL, close REAL, volume REAL DEFAULT 0,
+                    source TEXT DEFAULT 'unknown',
+                    cached_at TEXT NOT NULL,
+                    PRIMARY KEY (timeframe, timestamp)
+                )
+            """)
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_candles_tf_ts ON candles (timeframe, timestamp DESC)")
+            conn.commit()
+        finally:
+            conn.close()
+
+    def get(self, timeframe: str, count: int, max_age_seconds: int = 300) -> Optional[pd.DataFrame]:
+        """Return cached candles if fresh enough."""
+        cutoff = (datetime.now(UTC) - timedelta(seconds=max_age_seconds)).isoformat()
+        conn = sqlite3.connect(self._db_path, timeout=5)
+        try:
+            rows = conn.execute(
+                "SELECT timestamp, open, high, low, close, volume FROM candles "
+                "WHERE timeframe = ? AND cached_at >= ? ORDER BY timestamp DESC LIMIT ?",
+                (timeframe, cutoff, count),
+            ).fetchall()
+            if len(rows) < 10:
+                return None
+            rows.reverse()
+            df = pd.DataFrame(rows, columns=["Datetime", "Open", "High", "Low", "Close", "Volume"])
+            df["Datetime"] = pd.to_datetime(df["Datetime"])
+            df = df.set_index("Datetime")
+            return df
+        finally:
+            conn.close()
+
+    def put(self, timeframe: str, df: pd.DataFrame, source: str = "unknown"):
+        """Store candles in cache."""
+        if df is None or df.empty:
+            return
+        now = datetime.now(UTC).isoformat()
+        conn = sqlite3.connect(self._db_path, timeout=5)
+        try:
+            for idx, row in df.iterrows():
+                ts = str(idx)
+                conn.execute(
+                    "INSERT OR REPLACE INTO candles (timeframe, timestamp, open, high, low, close, volume, source, cached_at) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (timeframe, ts, float(row["Open"]), float(row["High"]),
+                     float(row["Low"]), float(row["Close"]), float(row.get("Volume", 0)),
+                     source, now),
+                )
+            conn.commit()
+        finally:
+            conn.close()
+
+    def clear(self, timeframe: Optional[str] = None):
+        """Clear cached candles."""
+        conn = sqlite3.connect(self._db_path, timeout=5)
+        try:
+            if timeframe:
+                conn.execute("DELETE FROM candles WHERE timeframe = ?", (timeframe,))
+            else:
+                conn.execute("DELETE FROM candles")
+            conn.commit()
+        finally:
+            conn.close()
+
+
 class MultiSourceProvider:
     """
     Unified price provider that tries multiple data sources.
 
-    Tries BiQuote first (Free, No API Key), then OANDA, Tiingo, yfinance, Alpha Vantage.
+    Price: BiQuote → OANDA → Tiingo → yfinance → Alpha Vantage
+    Candles: yfinance (cached) → OANDA → Tiingo → BiQuote (live) → Alpha Vantage
     """
 
     def __init__(self, alphavantage_key: str = "", tiingo_key: str = "", oanda_key: str = "", oanda_account: str = "", oanda_practice: bool = True):
@@ -33,8 +116,8 @@ class MultiSourceProvider:
         self.tiingo = TiingoProvider(tiingo_key) if tiingo_key else None
         self.legacy = PriceProvider() # yfinance
         self.fallback = AlphaVantageProvider(alphavantage_key) if alphavantage_key else None
-        
-        # Determine initial preferred source (BiQuote is first - free and no API key)
+        self._candle_cache = CandleCache()
+
         self._last_source = "biquote"
 
     @property
@@ -102,49 +185,67 @@ class MultiSourceProvider:
         logger.info("MultiSourceProvider: All sessions closed.")
 
     async def get_candles(self, timeframe: str = "H1", count: int = 100, symbol: str = "EURUSD", **kwargs) -> Optional[pd.DataFrame]:
-        """Get OHLCV candles with automatic failover."""
-        # Try OANDA
-        if self.oanda:
-            df = await self.oanda.get_candles(timeframe, count)
-            if df is not None and not df.empty:
-                df = self._validate_data(df)
-                if df is not None:
-                    self._last_source = "oanda"
-                    return df
-                logger.error(f"OANDA data failed validation for {timeframe}")
-            logger.warning(f"OANDA candles failed for {timeframe}, trying yfinance...")
+        """Get OHLCV candles with automatic failover + local SQLite cache.
 
-        # Try Tiingo
-        if self.tiingo:
-            df = await self.tiingo.get_candles(timeframe, count)
-            if df is not None and not df.empty:
-                df = self._validate_data(df)
-                if df is not None:
-                    self._last_source = "tiingo"
-                    return df
-                logger.error(f"Tiingo data failed validation for {timeframe}")
-            logger.warning(f"Tiingo candles failed for {timeframe}, trying yfinance...")
+        Priority: SQLite cache → yfinance → OANDA → Tiingo → BiQuote → Alpha Vantage
+        """
+        tf = timeframe.upper()
 
-        # Try yfinance (Legacy/Delayed 15m)
-        df = await self.legacy.get_candles(timeframe, count)
+        # 0) SQLite cache — fast, zero network
+        cached = self._candle_cache.get(tf, count, max_age_seconds=300)
+        if cached is not None and len(cached) >= min(count, 20):
+            logger.debug(f"Candle cache hit for {tf}: {len(cached)} candles")
+            return cached
+
+        # 1) yfinance — only real historical source
+        df = await self.legacy.get_candles(tf, count)
         if df is not None and not df.empty:
             df = self._validate_data(df)
             if df is not None:
                 self._last_source = "yfinance"
+                self._candle_cache.put(tf, df, source="yfinance")
                 return df
+        logger.debug(f"yfinance candles unavailable for {tf}, trying other sources...")
 
-        logger.warning(f"yfinance/Tiingo candles failed for {timeframe}, trying Alpha Vantage...")
+        # 2) OANDA
+        if self.oanda:
+            df = await self.oanda.get_candles(tf, count)
+            if df is not None and not df.empty:
+                df = self._validate_data(df)
+                if df is not None:
+                    self._last_source = "oanda"
+                    self._candle_cache.put(tf, df, source="oanda")
+                    return df
+            logger.debug(f"OANDA candles failed for {tf}")
 
-        # Try fallback
+        # 3) Tiingo
+        if self.tiingo:
+            df = await self.tiingo.get_candles(tf, count)
+            if df is not None and not df.empty:
+                df = self._validate_data(df)
+                if df is not None:
+                    self._last_source = "tiingo"
+                    self._candle_cache.put(tf, df, source="tiingo")
+                    return df
+            logger.debug(f"Tiingo candles failed for {tf}")
+
+        # 4) BiQuote — live snapshot only (single candle)
+        df = await self.biquote.get_candles(tf, count)
+        if df is not None and not df.empty:
+            self._last_source = "biquote"
+            return df
+
+        # 5) Alpha Vantage
         if self.fallback:
-            df = self.fallback.get_candles(timeframe, count)
+            df = self.fallback.get_candles(tf, count)
             if df is not None and not df.empty:
                 df = self._validate_data(df)
                 if df is not None:
                     self._last_source = "alphavantage"
+                    self._candle_cache.put(tf, df, source="alphavantage")
                     return df
-                logger.error(f"Alpha Vantage data failed validation for {timeframe}")
 
+        logger.warning(f"All candle sources failed for {tf}")
         return None
 
     async def get_multi_timeframe(self) -> dict[str, Optional[pd.DataFrame]]:
@@ -231,3 +332,4 @@ class MultiSourceProvider:
         self.legacy.clear_cache()
         if self.fallback:
             self.fallback.clear_cache()
+        self._candle_cache.clear()

@@ -81,17 +81,48 @@ class BiQuoteProvider:
             logger.error(f"BiQuote API error: {e}")
             return {"error": str(e)}
 
-    async def get_candles(self, timeframe: str = "H1", count: int = 100, **kwargs) -> Optional[list]:
+    async def get_candles(self, timeframe: str = "H1", count: int = 100, **kwargs):
         """
-        Get historical candle data from BiQuote.
-        
-        Note: BiQuote free tier has limited historical data.
-        This is a placeholder - for full historical data, use other providers.
+        Build synthetic candles from BiQuote live price data.
+
+        BiQuote doesn't provide historical candles, so we fetch the current
+        price snapshot and build a single live candle from it.  The real
+        historical data comes from yfinance (via MultiSourceProvider).
         """
-        # BiQuote free tier doesn't provide extensive historical data
-        # Return None to fall back to other providers
-        logger.info("BiQuote free tier doesn't support historical candles, falling back to other providers")
-        return None
+        import pandas as pd
+        from datetime import datetime, timedelta, UTC
+
+        try:
+            price_data = await self.get_price()
+            if "error" in price_data:
+                logger.warning("BiQuote: cannot build candles, price fetch failed")
+                return None
+
+            now = datetime.now(UTC)
+            price = price_data["price"]
+            high = price_data["high"]
+            low = price_data["low"]
+            bid = price_data.get("bid", price)
+            ask = price_data.get("ask", price)
+
+            # Build a single candle representing the current live snapshot
+            candle = pd.DataFrame(
+                [{
+                    "Open": round(low, 5),
+                    "High": round(high, 5),
+                    "Low": round(low, 5),
+                    "Close": round(price, 5),
+                    "Volume": 0,
+                }],
+                index=pd.DatetimeIndex([now], name="Datetime"),
+            )
+
+            logger.debug(f"BiQuote: built 1 live candle at {price}")
+            return candle
+
+        except Exception as e:
+            logger.error(f"BiQuote: candle build failed: {e}")
+            return None
 
     async def close(self):
         """Close the session."""

@@ -963,6 +963,94 @@
         </div>
     </div>
 
+    <!-- INTELLIGENCE VIEW -->
+    <div id="intel-view" class="tab-content">
+        <div class="glass-card bento-full" style="border-top: 3px solid var(--accent-primary);">
+            <h3 style="font-size:0.7rem; font-weight:800; letter-spacing:2px; margin-bottom:16px; color:var(--text-main);">MARKET INTELLIGENCE</h3>
+
+            <div class="sys-group">
+                <div class="label-sm" style="margin-bottom:8px;">ORDER FLOW</div>
+                <div id="of-data" class="empty-state" style="padding:8px 0;">LOADING...</div>
+            </div>
+            <div class="sys-group">
+                <div class="label-sm" style="margin-bottom:8px;">VOLATILITY (GARCH)</div>
+                <div id="vol-data" class="empty-state" style="padding:8px 0;">LOADING...</div>
+            </div>
+            <div class="sys-group">
+                <div class="label-sm" style="margin-bottom:8px;">MICROSTRUCTURE</div>
+                <div id="micro-data" class="empty-state" style="padding:8px 0;">LOADING...</div>
+            </div>
+            <div class="sys-group">
+                <div class="label-sm" style="margin-bottom:8px;">MULTI-TF CONFLUENCE</div>
+                <div id="conf-data" class="empty-state" style="padding:8px 0;">LOADING...</div>
+            </div>
+            <div class="sys-group">
+                <div class="label-sm" style="margin-bottom:8px;">LIQUIDITY MAP</div>
+                <div id="liq-data" class="empty-state" style="padding:8px 0;">LOADING...</div>
+            </div>
+            <div class="sys-group">
+                <div class="label-sm" style="margin-bottom:8px;">UNCERTAINTY ASSESSMENT</div>
+                <div id="unc-data" class="empty-state" style="padding:8px 0;">LOADING...</div>
+            </div>
+            <div class="sys-group">
+                <div class="label-sm" style="margin-bottom:8px;">CORRELATIONS</div>
+                <div id="corr-data" class="empty-state" style="padding:8px 0;">LOADING...</div>
+            </div>
+            <div class="sys-group">
+                <div class="label-sm" style="margin-bottom:8px;">COT POSITIONING</div>
+                <div id="cot-data" class="empty-state" style="padding:8px 0;">LOADING...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SYSTEM VIEW -->
+    <div id="system-view" class="tab-content">
+        <div class="glass-card bento-full" style="border-top: 3px solid #3b82f6;">
+            <h3 style="font-size:0.7rem; font-weight:800; letter-spacing:2px; margin-bottom:16px; color:var(--text-main);">SYSTEM HEALTH</h3>
+
+            <div class="sys-group">
+                <div class="label-sm" style="margin-bottom:8px;">AGENT STATE</div>
+                <div id="agent-data" class="empty-state" style="padding:8px 0;">LOADING...</div>
+            </div>
+            <div class="sys-group">
+                <div class="label-sm" style="margin-bottom:8px;">HEALTH DASHBOARD</div>
+                <div id="hdash-data" class="empty-state" style="padding:8px 0;">LOADING...</div>
+            </div>
+            <div class="sys-group">
+                <div class="label-sm" style="margin-bottom:8px;">DATA SOURCES</div>
+                <div id="dhealth-data" class="empty-state" style="padding:8px 0;">LOADING...</div>
+            </div>
+            <div class="sys-group">
+                <div class="label-sm" style="margin-bottom:8px;">PORTFOLIO</div>
+                <div id="port-data" class="empty-state" style="padding:8px 0;">LOADING...</div>
+            </div>
+            <div class="sys-group">
+                <div class="label-sm" style="margin-bottom:8px;">SESSION PLAN</div>
+                <div id="splan-data" class="empty-state" style="padding:8px 0;">LOADING...</div>
+            </div>
+            <div class="sys-group">
+                <div class="label-sm" style="margin-bottom:8px;">CONVICTIONS</div>
+                <div id="conv-data" class="empty-state" style="padding:8px 0;">LOADING...</div>
+            </div>
+            <div class="sys-group">
+                <div class="label-sm" style="margin-bottom:8px;">SENTIMENT NARRATIVES</div>
+                <div id="narr-data" class="empty-state" style="padding:8px 0;">LOADING...</div>
+            </div>
+            <div class="sys-group">
+                <div class="label-sm" style="margin-bottom:8px;">REGIME HISTORY</div>
+                <div id="regime-data" class="empty-state" style="padding:8px 0;">LOADING...</div>
+            </div>
+            <div class="sys-group">
+                <div class="label-sm" style="margin-bottom:8px;">LLM COST TRACKER</div>
+                <div id="cost-data" class="empty-state" style="padding:8px 0;">LOADING...</div>
+            </div>
+            <div class="sys-group">
+                <div class="label-sm" style="margin-bottom:8px;">COUNTERFACTUALS</div>
+                <div id="cf-data" class="empty-state" style="padding:8px 0;">LOADING...</div>
+            </div>
+        </div>
+    </div>
+
     <!-- DOCK NAVIGATION -->
     <div class="dock">
         <button class="dock-btn active" id="tab-terminal" onclick="switchTab('terminal')">
@@ -1018,6 +1106,19 @@
                 <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path>
                 <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
                 <line x1="12" y1="19" x2="12" y2="22"></line>
+            </svg>
+        </button>
+        <button class="dock-btn" id="tab-intel" onclick="switchTab('intel')">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+        </button>
+        <button class="dock-btn" id="tab-system" onclick="switchTab('system')">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="3"></circle>
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
             </svg>
         </button>
     </div>
@@ -1631,10 +1732,10 @@
         async function sync(activeTab = null) {
             if (!activeTab) activeTab = document.querySelector('.tab-content.active').id.replace('-view', '');
 
-            // Always fetch lightweight status
-            api('/status').then(res => {
-                if (res.success && res.data) {
-                    const s = res.data; const mkt = document.getElementById('mkt-status');
+            try {
+                const statusRes = await api('/status');
+                if (statusRes.success && statusRes.data) {
+                    const s = statusRes.data; const mkt = document.getElementById('mkt-status');
                     mkt.textContent = s.status; mkt.className = `market-badge status-${s.status.toLowerCase()}`;
                     if (s.status === 'OPEN') mkt.style.boxShadow = 'none';
                     else mkt.style.boxShadow = 'none';
@@ -1653,43 +1754,44 @@
                         ws.style.borderColor = '#1A1A1A';
                     }
                 }
-            });
+            } catch (e) { log("Status fetch failed: " + e.message, "warn"); }
 
-            // Only fetch global heavy data every 3rd tick (45 seconds) to save VPS resources
             if (syncCounter % 3 === 0) {
-                api('/alerts').then(res => {
+                try {
+                    const alertRes = await api('/alerts');
                     const alertList = document.getElementById('alert-list');
-                    if (!alertList) return;
-                    if (res.success && res.alerts?.length > 0) {
-                        alertList.innerHTML = res.alerts.map(a => {
-                            const cond = (a.condition || '').toLowerCase();
-                            const label = cond === 'above' ? 'ABOVE' : cond === 'below' ? 'BELOW' : (cond || 'ALERT').toUpperCase();
-                            const color = cond === 'above' ? 'var(--up-color)' : cond === 'below' ? 'var(--down-color)' : 'var(--text-muted)';
-                            const when = a.created_at ? new Date(a.created_at).toLocaleString() : '';
-                            return `
-                                <div class="glass-card" style="padding:10px; margin-bottom:8px;">
-                                    <div style="display:flex; justify-content:space-between; align-items:center;">
-                                        <span style="font-weight:800; font-size:0.65rem; letter-spacing:1px; color:${color};">${label}</span>
-                                        <span style="font-size:0.6rem; color:var(--text-muted);">${when}</span>
+                    if (alertList) {
+                        if (alertRes.success && alertRes.alerts?.length > 0) {
+                            alertList.innerHTML = alertRes.alerts.map(a => {
+                                const cond = (a.condition || '').toLowerCase();
+                                const label = cond === 'above' ? 'ABOVE' : cond === 'below' ? 'BELOW' : (cond || 'ALERT').toUpperCase();
+                                const color = cond === 'above' ? 'var(--up-color)' : cond === 'below' ? 'var(--down-color)' : 'var(--text-muted)';
+                                const when = a.created_at ? new Date(a.created_at).toLocaleString() : '';
+                                return `
+                                    <div class="glass-card" style="padding:10px; margin-bottom:8px;">
+                                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                                            <span style="font-weight:800; font-size:0.65rem; letter-spacing:1px; color:${color};">${label}</span>
+                                            <span style="font-size:0.6rem; color:var(--text-muted);">${when}</span>
+                                        </div>
+                                        <div style="margin-top:6px; font-size:0.75rem; color:var(--text-main); font-weight:700;">
+                                            EUR/USD ${label} ${f5(a.target_value)}
+                                        </div>
                                     </div>
-                                    <div style="margin-top:6px; font-size:0.75rem; color:var(--text-main); font-weight:700;">
-                                        EUR/USD ${label} ${f5(a.target_value)}
-                                    </div>
-                                </div>
-                            `;
-                        }).join('');
-                    } else {
-                        alertList.innerHTML = `<div class="empty-state" style="padding: 10px 0;">NO ACTIVE ALERTS</div>`;
+                                `;
+                            }).join('');
+                        } else {
+                            alertList.innerHTML = `<div class="empty-state" style="padding: 10px 0;">NO ACTIVE ALERTS</div>`;
+                        }
                     }
-                });
+                } catch (e) { log("Alerts fetch failed: " + e.message, "warn"); }
 
-                api('/summary').then(sum => {
+                try {
+                    const sum = await api('/summary');
                     if (sum.success) {
                         const oldPrice = parseFloat(document.getElementById('price').textContent);
                         const newPrice = sum.price;
                         document.getElementById('price').textContent = f5(newPrice);
 
-                        // Live Glow Animation
                         if (oldPrice && newPrice !== oldPrice) {
                             const priceEl = document.getElementById('price');
                             priceEl.style.transition = 'none';
@@ -1711,15 +1813,15 @@
                         document.getElementById('stat-range').textContent = `${(sum.range_pips || 0).toFixed(1)} P`;
                         document.getElementById('stat-hilo').textContent = `${f5(sum.low)} / ${f5(sum.high)}`;
                     }
-                });
+                } catch (e) { log("Summary fetch failed: " + e.message, "warn"); }
 
-                // Fetch Account Info
-                api('/account').then(acc => {
+                try {
+                    const acc = await api('/account');
                     if (acc.success) {
                         document.getElementById('stat-balance').textContent = `${f2(acc.balance)} ${acc.currency}`;
                         document.getElementById('stat-equity').textContent = `${f2(acc.equity)} ${acc.currency}`;
                     }
-                });
+                } catch (e) { log("Account fetch failed: " + e.message, "warn"); }
             }
             syncCounter++;
 
@@ -1846,11 +1948,11 @@
                     `;
                 }
 
-                // Fetch Patterns
-                api('/patterns').then(res => {
+                try {
+                    const patRes = await api('/patterns');
                     const list = document.getElementById('patterns-list');
-                    if (res.success && res.data && res.data.length > 0) {
-                        list.innerHTML = res.data.map(p => {
+                    if (patRes.success && patRes.data && patRes.data.length > 0) {
+                        list.innerHTML = patRes.data.map(p => {
                             const isHigh = p.significance === 'high';
                             const color = isHigh ? 'var(--accent-primary)' : 'var(--text-muted)';
                             return `
@@ -1866,13 +1968,13 @@
                     } else {
                         list.innerHTML = `<div class="empty-state" style="padding: 10px 0;">NO PATTERNS DETECTED</div>`;
                     }
-                });
+                } catch (e) { log("Patterns fetch failed: " + e.message, "warn"); }
 
-                // Fetch Levels
-                api('/levels').then(res => {
+                try {
+                    const lvlRes = await api('/levels');
                     const list = document.getElementById('levels-list');
-                    if (res.success && res.data) {
-                        const lvls = res.data;
+                    if (lvlRes.success && lvlRes.data) {
+                        const lvls = lvlRes.data;
                         let html = '';
                         if (lvls.resistance && lvls.resistance.length > 0) {
                             html += lvls.resistance.slice(0, 2).map(r => `
@@ -1897,7 +1999,7 @@
                     } else {
                         list.innerHTML = `<div class="empty-state" style="padding: 10px 0;">NO LEVELS FOUND</div>`;
                     }
-                });
+                } catch (e) { log("Levels fetch failed: " + e.message, "warn"); }
 
             } else if (activeTab === 'macro') {
                 const res = await api('/macro');
@@ -2053,6 +2155,69 @@
                         </div>
                     `).join('');
                 }
+            } else if (activeTab === 'intel') {
+                const renderKv = (id, data, fallback) => {
+                    const el = document.getElementById(id);
+                    if (!el) return;
+                    if (!data) { el.innerHTML = `<div class="empty-state" style="padding:6px 0;">${fallback}</div>`; return; }
+                    if (typeof data === 'string') { el.innerHTML = `<div style="font-size:0.75rem; color:var(--text-main); line-height:1.6;">${data}</div>`; return; }
+                    if (Array.isArray(data)) {
+                        if (data.length === 0) { el.innerHTML = `<div class="empty-state" style="padding:6px 0;">${fallback}</div>`; return; }
+                        el.innerHTML = data.map(item => {
+                            if (typeof item === 'string') return `<div style="font-size:0.7rem; color:var(--text-main); padding:4px 0;">${item}</div>`;
+                            const keys = Object.keys(item);
+                            return `<div style="font-size:0.7rem; color:var(--text-main); padding:6px 0; border-bottom:1px solid #E5E0D8;">${keys.map(k => `<span style="color:var(--text-dim)">${k}:</span> ${item[k]}`).join(' &middot; ')}</div>`;
+                        }).join('');
+                        return;
+                    }
+                    const keys = Object.keys(data);
+                    el.innerHTML = keys.map(k => `<div class="info-row"><span class="label">${k}</span><span class="val">${typeof data[k] === 'number' ? f2(data[k]) : data[k]}</span></div>`).join('');
+                };
+
+                const intelCalls = [
+                    api('/order_flow').then(r => renderKv('of-data', r.data || r.formatted, 'No order flow data')),
+                    api('/volatility').then(r => renderKv('vol-data', r.data || r.formatted, 'No volatility data')),
+                    api('/microstructure').then(r => renderKv('micro-data', r.data || r.formatted, 'No microstructure data')),
+                    api('/confluence').then(r => renderKv('conf-data', r.data || r.formatted, 'No confluence data')),
+                    api('/liquidity').then(r => renderKv('liq-data', r.data || r.formatted, 'No liquidity data')),
+                    api('/uncertainty').then(r => renderKv('unc-data', r.data || r.formatted, 'No uncertainty data')),
+                    api('/correlation').then(r => renderKv('corr-data', r.data, 'No correlation data')),
+                    api('/cot').then(r => renderKv('cot-data', r.data, 'No COT data')),
+                ];
+                await Promise.allSettled(intelCalls);
+
+            } else if (activeTab === 'system') {
+                const renderKv = (id, data, fallback) => {
+                    const el = document.getElementById(id);
+                    if (!el) return;
+                    if (!data) { el.innerHTML = `<div class="empty-state" style="padding:6px 0;">${fallback}</div>`; return; }
+                    if (typeof data === 'string') { el.innerHTML = `<div style="font-size:0.75rem; color:var(--text-main); line-height:1.6;">${data}</div>`; return; }
+                    if (Array.isArray(data)) {
+                        if (data.length === 0) { el.innerHTML = `<div class="empty-state" style="padding:6px 0;">${fallback}</div>`; return; }
+                        el.innerHTML = data.slice(0, 10).map(item => {
+                            if (typeof item === 'string') return `<div style="font-size:0.7rem; color:var(--text-main); padding:4px 0;">${item}</div>`;
+                            const keys = Object.keys(item);
+                            return `<div style="font-size:0.7rem; color:var(--text-main); padding:6px 0; border-bottom:1px solid #E5E0D8;">${keys.map(k => `<span style="color:var(--text-dim)">${k}:</span> ${typeof item[k] === 'number' ? f2(item[k]) : item[k]}`).join(' &middot; ')}</div>`;
+                        }).join('');
+                        return;
+                    }
+                    const keys = Object.keys(data);
+                    el.innerHTML = keys.map(k => `<div class="info-row"><span class="label">${k}</span><span class="val">${typeof data[k] === 'number' ? f2(data[k]) : data[k]}</span></div>`).join('');
+                };
+
+                const sysCalls = [
+                    api('/agent_state').then(r => renderKv('agent-data', r.data, 'No agent state')),
+                    api('/health_dashboard').then(r => renderKv('hdash-data', r.data, 'No health data')),
+                    api('/data_health').then(r => renderKv('dhealth-data', r.data, 'No data health')),
+                    api('/portfolio').then(r => renderKv('port-data', r.data, 'No portfolio data')),
+                    api('/session_plan').then(r => renderKv('splan-data', r.data, 'No session plan')),
+                    api('/convictions').then(r => renderKv('conv-data', r.data, 'No active convictions')),
+                    api('/narratives').then(r => renderKv('narr-data', r.data, 'No narratives')),
+                    api('/regime_history').then(r => renderKv('regime-data', r.data, 'No regime history')),
+                    api('/cost_stats').then(r => renderKv('cost-data', r.data, 'No cost data')),
+                    api('/counterfactual').then(r => renderKv('cf-data', r.data, 'No counterfactual data')),
+                ];
+                await Promise.allSettled(sysCalls);
             }
         }
         async function loadInitialSettings() {
