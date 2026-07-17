@@ -561,11 +561,11 @@ class CronScheduler:
             logger.info("Auto Trader task starting...")
             bot_settings = getattr(self.bot, "bot_settings", {})
             if not bot_settings.get("auto_trading_enabled"):
-                logger.debug("Auto Trader skipped: auto_trading_enabled is OFF")
+                logger.info("Auto Trader skipped: auto_trading_enabled is OFF (toggle in Mini App Settings)")
                 return
                 
             if self._is_quiet_time():
-                logger.debug("Auto Trader skipped: quiet time")
+                logger.info("Auto Trader skipped: quiet time (market closed)")
                 return
                 
             orch: Any = getattr(self.bot, "orchestrator", None)
@@ -631,6 +631,8 @@ class CronScheduler:
                             await self._send_proactive_alert_message(chat_id, msg)
                     else:
                         logger.warning(f"Auto Trader execution blocked: {exec_res.error}")
+                else:
+                    logger.info(f"Auto Trader: signal={direction} confidence={confidence} — no actionable trade (need BUY/SELL with >=60%)")
                         
             except Exception as e:
                 logger.error(f"Auto Trader task failed: {e}", exc_info=True)
