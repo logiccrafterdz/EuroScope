@@ -33,8 +33,11 @@ class APIServer:
         self._forecast_cache = None
         self._forecast_cache_ts = 0.0
         self._forecast_lock = asyncio.Lock()
-        # Cache forecast for 5 minutes
-        self._FORECAST_TTL = 300  
+        self._FORECAST_TTL = 300
+
+        # Generic response cache for heavy endpoints (Intel/System tabs)
+        self._resp_cache: dict[str, tuple[float, dict]] = {}
+        self._RESP_TTL = 60  # 60 seconds for most endpoints
         
         # Security & Limits
         self.api_secret = getattr(self.config, "api_secret_key", None)
@@ -98,6 +101,17 @@ class APIServer:
             
         self.rate_limits[key].append(now)
         return False
+
+    def _get_cached(self, key: str) -> dict | None:
+        """Return cached response if fresh enough, else None."""
+        entry = self._resp_cache.get(key)
+        if entry and (time.monotonic() - entry[0]) < self._RESP_TTL:
+            return entry[1]
+        return None
+
+    def _set_cached(self, key: str, data: dict):
+        """Store response in cache."""
+        self._resp_cache[key] = (time.monotonic(), data)
 
     async def _api_summary(self, request):
         """API endpoint for live price and sentiment summary."""
@@ -794,34 +808,43 @@ class APIServer:
 
     async def _api_agent_state(self, request):
         """API endpoint for Agent Core state."""
+        cached = self._get_cached("agent_state")
+        if cached: return web.json_response(cached)
         core = self.bot.core
         state = "UNKNOWN"
         if hasattr(core, 'state') and hasattr(core.state, 'name'):
             state = core.state.name
         elif hasattr(core, 'state'):
             state = str(core.state)
-            
+
         data = {
             "state": state,
             "uptime_seconds": time.time() - getattr(core, 'start_time', time.time()),
             "ticks": getattr(core, 'tick_count', 0),
         }
-        return web.json_response({"success": True, "data": data})
+        resp = {"success": True, "data": data}
+        self._set_cached("agent_state", resp)
+        return web.json_response(resp)
 
     async def _api_narratives(self, request):
         """API endpoint for Sentiment Network Graph edges."""
+        cached = self._get_cached("narratives")
+        if cached: return web.json_response(cached)
         from euroscope.data.sentiment_graph import NarrativeGraph
         sg = NarrativeGraph()
         data = []
         if sg and hasattr(sg, 'graph'):
             for u, v, d in sg.graph.edges(data=True):
                 data.append({"source": u, "target": v, "weight": d.get("weight", 0), "relation": d.get("relation", "affects")})
-        # Sort by weight desc, limit to top 10
         top_data = sorted(data, key=lambda x: x['weight'], reverse=True)[:10]
-        return web.json_response({"success": True, "data": top_data})
+        resp = {"success": True, "data": top_data}
+        self._set_cached("narratives", resp)
+        return web.json_response(resp)
 
     async def _api_regime_history(self, request):
         """API endpoint for regime transition history."""
+        cached = self._get_cached("regime_history")
+        if cached: return web.json_response(cached)
         data = []
         try:
             from euroscope.container import get_container
@@ -831,7 +854,9 @@ class APIServer:
                 data = getattr(engine, '_regime_history', [])[-20:]
         except Exception as e:
             logger.warning(f"API: regime_history failed: {e}")
-        return web.json_response({"success": True, "data": data})
+        resp = {"success": True, "data": data}
+        self._set_cached("regime_history", resp)
+        return web.json_response(resp)
 
     async def _api_committee_log(self, request):
         """API endpoint for the last Multi-Agent Deliberation result."""
@@ -840,23 +865,33 @@ class APIServer:
 
     async def _api_counterfactual(self, request):
         """API endpoint for Counterfactual insights."""
-        return web.json_response({"success": True, "data": [
+        cached = self._get_cached("counterfactual")
+        if cached: return web.json_response(cached)
+        resp = {"success": True, "data": [
             {"trade": "Last BUY", "insight": "Wider Stop Loss (+10 pips) might have avoided the stop hunt, but needs more M1 data verification."},
             {"trade": "Session Exit", "insight": "Trailing stop executed perfectly. Letting it run for 24H would have yielded 12 pips less."}
-        ]})
+        ]}
+        self._set_cached("counterfactual", resp)
+        return web.json_response(resp)
 
     async def _api_cost_stats(self, request):
         """API endpoint for LLM Token usage."""
+        cached = self._get_cached("cost_stats")
+        if cached: return web.json_response(cached)
         stats = {"budget_pct_used": 0, "estimated_cost_usd": 0, "total_tokens": 0}
         from euroscope.container import get_container
         container = get_container()
         if container and hasattr(container, 'router') and container.router:
             if hasattr(container.router, 'cost_tracker'):
                 stats = container.router.cost_tracker.get_daily_summary()
-        return web.json_response({"success": True, "data": stats})
+        resp = {"success": True, "data": stats}
+        self._set_cached("cost_stats", resp)
+        return web.json_response(resp)
 
     async def _api_order_flow(self, request):
         """API endpoint for Order Flow proxy analysis (delta, absorption, volume profile)."""
+        cached = self._get_cached("order_flow")
+        if cached: return web.json_response(cached)
         ctx = SkillContext()
         res_candles = await self.bot.orchestrator.run_skill(
             "market_data", "get_candles", context=ctx, timeframe="H1", count=50
@@ -868,10 +903,14 @@ class APIServer:
             "order_flow", "analyze", context=ctx, candles=res_candles.data
         )
         data = res.data if res.success and res.data else {}
-        return web.json_response({"success": res.success, "data": data, "error": res.error if not res.success else None})
+        resp = {"success": res.success, "data": data, "error": res.error if not res.success else None}
+        if res.success: self._set_cached("order_flow", resp)
+        return web.json_response(resp)
 
     async def _api_volatility(self, request):
         """API endpoint for GARCH volatility forecast and regime."""
+        cached = self._get_cached("volatility")
+        if cached: return web.json_response(cached)
         ctx = SkillContext()
         res_candles = await self.bot.orchestrator.run_skill(
             "market_data", "get_candles", context=ctx, timeframe="H1", count=100
@@ -883,10 +922,14 @@ class APIServer:
             "volatility_forecast", "forecast", context=ctx, candles=res_candles.data
         )
         data = res.data if res.success and res.data else {}
-        return web.json_response({"success": res.success, "data": data, "error": res.error if not res.success else None})
+        resp = {"success": res.success, "data": data, "error": res.error if not res.success else None}
+        if res.success: self._set_cached("volatility", resp)
+        return web.json_response(resp)
 
     async def _api_microstructure(self, request):
         """API endpoint for market microstructure analysis."""
+        cached = self._get_cached("microstructure")
+        if cached: return web.json_response(cached)
         ctx = SkillContext()
         res_candles = await self.bot.orchestrator.run_skill(
             "market_data", "get_candles", context=ctx, timeframe="H1", count=50
@@ -898,19 +941,27 @@ class APIServer:
             "microstructure", "analyze", context=ctx, candles=res_candles.data
         )
         data = res.data if res.success and res.data else {}
-        return web.json_response({"success": res.success, "data": data, "error": res.error if not res.success else None})
+        resp = {"success": res.success, "data": data, "error": res.error if not res.success else None}
+        if res.success: self._set_cached("microstructure", resp)
+        return web.json_response(resp)
 
     async def _api_confluence(self, request):
         """API endpoint for Multi-Timeframe Confluence analysis."""
+        cached = self._get_cached("confluence")
+        if cached: return web.json_response(cached)
         ctx = SkillContext()
         res = await self.bot.orchestrator.run_skill(
             "multi_timeframe_confluence", "confluence", context=ctx
         )
         data = res.data if res.success and res.data else {}
-        return web.json_response({"success": res.success, "data": data, "error": res.error if not res.success else None})
+        resp = {"success": res.success, "data": data, "error": res.error if not res.success else None}
+        if res.success: self._set_cached("confluence", resp)
+        return web.json_response(resp)
 
     async def _api_liquidity(self, request):
         """API endpoint for Liquidity Awareness analysis."""
+        cached = self._get_cached("liquidity")
+        if cached: return web.json_response(cached)
         ctx = SkillContext()
         res_candles = await self.bot.orchestrator.run_skill(
             "market_data", "get_candles", context=ctx, timeframe="H1", count=50
@@ -922,37 +973,53 @@ class APIServer:
             "liquidity_awareness", "analyze", context=ctx, candles=res_candles.data
         )
         data = res.data if res.success and res.data else {}
-        return web.json_response({"success": res.success, "data": data, "error": res.error if not res.success else None})
+        resp = {"success": res.success, "data": data, "error": res.error if not res.success else None}
+        if res.success: self._set_cached("liquidity", resp)
+        return web.json_response(resp)
 
     async def _api_uncertainty(self, request):
         """API endpoint for 3-layer Uncertainty Assessment."""
+        cached = self._get_cached("uncertainty")
+        if cached: return web.json_response(cached)
         ctx = SkillContext()
         res = await self.bot.orchestrator.run_skill(
             "uncertainty_assessment", "assess", context=ctx
         )
         data = res.data if res.success and res.data else {}
-        return web.json_response({"success": res.success, "data": data, "error": res.error if not res.success else None})
+        resp = {"success": res.success, "data": data, "error": res.error if not res.success else None}
+        if res.success: self._set_cached("uncertainty", resp)
+        return web.json_response(resp)
 
     async def _api_correlation(self, request):
         """API endpoint for correlation monitor (DXY, US10Y, Gold)."""
+        cached = self._get_cached("correlation")
+        if cached: return web.json_response(cached)
         ctx = SkillContext()
         res = await self.bot.orchestrator.run_skill(
             "correlation_monitor", "check_correlations", context=ctx
         )
         data = res.data if res.success and res.data else {}
-        return web.json_response({"success": res.success, "data": data, "error": res.error if not res.success else None})
+        resp = {"success": res.success, "data": data, "error": res.error if not res.success else None}
+        if res.success: self._set_cached("correlation", resp)
+        return web.json_response(resp)
 
     async def _api_cot(self, request):
         """API endpoint for Commitment of Traders positioning data."""
+        cached = self._get_cached("cot")
+        if cached: return web.json_response(cached)
         ctx = SkillContext()
         res = await self.bot.orchestrator.run_skill(
             "cot_positioning", "get_net_positioning", context=ctx
         )
         data = res.data if res.success and res.data else {}
-        return web.json_response({"success": res.success, "data": data, "error": res.error if not res.success else None})
+        resp = {"success": res.success, "data": data, "error": res.error if not res.success else None}
+        if res.success: self._set_cached("cot", resp)
+        return web.json_response(resp)
 
     async def _api_portfolio(self, request):
         """API endpoint for portfolio health and exposure."""
+        cached = self._get_cached("portfolio")
+        if cached: return web.json_response(cached)
         ctx = SkillContext()
         res_health = await self.bot.orchestrator.run_skill(
             "portfolio_context", "assess_health", context=ctx
@@ -964,16 +1031,22 @@ class APIServer:
             "health": res_health.data if res_health.success and res_health.data else {},
             "exposure": res_exposure.data if res_exposure.success and res_exposure.data else {},
         }
-        return web.json_response({"success": True, "data": data})
+        resp = {"success": True, "data": data}
+        self._set_cached("portfolio", resp)
+        return web.json_response(resp)
 
     async def _api_health_dashboard(self, request):
         """API endpoint for full system health dashboard."""
+        cached = self._get_cached("health_dashboard")
+        if cached: return web.json_response(cached)
         ctx = SkillContext()
         res = await self.bot.orchestrator.run_skill(
             "monitoring", "check_health", context=ctx
         )
         data = res.data if res.success and res.data else {}
-        return web.json_response({"success": res.success, "data": data, "error": res.error if not res.success else None})
+        resp = {"success": res.success, "data": data, "error": res.error if not res.success else None}
+        if res.success: self._set_cached("health_dashboard", resp)
+        return web.json_response(resp)
 
     async def _api_session_plan(self, request):
         """API endpoint for current session trading plan."""
@@ -1006,6 +1079,8 @@ class APIServer:
 
     async def _api_convictions(self, request):
         """API endpoint for active trading convictions."""
+        cached = self._get_cached("convictions")
+        if cached: return web.json_response(cached)
         from euroscope.container import get_container
         container = get_container()
         convictions_data = []
@@ -1024,10 +1099,14 @@ class APIServer:
                         "evidence_for_count": len(getattr(c, 'evidence_for', [])),
                         "evidence_against_count": len(getattr(c, 'evidence_against', [])),
                     })
-        return web.json_response({"success": True, "data": convictions_data})
+        resp = {"success": True, "data": convictions_data}
+        self._set_cached("convictions", resp)
+        return web.json_response(resp)
 
     async def _api_data_health(self, request):
         """API endpoint for data source health status."""
+        cached = self._get_cached("data_health")
+        if cached: return web.json_response(cached)
         from euroscope.container import get_container
         sources = {}
         container = get_container()
@@ -1041,7 +1120,9 @@ class APIServer:
             sources["macro_fred"] = {"status": "UP"}
         if container and hasattr(container, 'calendar'):
             sources["economic_calendar"] = {"status": "UP"}
-        return web.json_response({"success": True, "data": sources})
+        resp = {"success": True, "data": sources}
+        self._set_cached("data_health", resp)
+        return web.json_response(resp)
 
     async def _serve_mini_app(self, request):
         """Serve the Zenith Terminal Mini App directly from the bot server."""
