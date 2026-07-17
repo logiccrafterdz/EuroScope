@@ -121,8 +121,22 @@ class OrderFlowSkill(BaseSkill):
         lookback = min(n, 50)
         recent = df.tail(lookback).copy()
 
+        has_volume = "volume" in recent.columns and recent["volume"].sum() > 0
+
         # Delta per candle
-        deltas = recent.apply(_estimate_delta, axis=1).tolist()
+        if has_volume:
+            deltas = recent.apply(_estimate_delta, axis=1).tolist()
+        else:
+            # Price-based delta estimation when volume is unavailable
+            deltas = []
+            for _, row in recent.iterrows():
+                body = row["close"] - row["open"]
+                rng = row["high"] - row["low"]
+                if rng < 1e-10:
+                    deltas.append(0.0)
+                    continue
+                body_ratio = abs(body) / rng
+                deltas.append(body * body_ratio * 100000)
 
         # Buying/selling pressure
         total_delta = sum(deltas)

@@ -21,6 +21,7 @@ from typing import Optional, Any, Callable
 
 from .world_model import WorldModel
 from .conviction import ConvictionTracker, Conviction, Evidence
+from .session_planner import SessionPlanner
 
 logger = logging.getLogger("euroscope.brain.agent_core")
 
@@ -107,6 +108,7 @@ class EuroScopeAgent:
         # Core components
         self.world_model = WorldModel()
         self.conviction_tracker = ConvictionTracker()
+        self.session_planner = SessionPlanner(llm_interface=llm_interface)
         self.state = AgentState.IDLE
 
         # Timing
@@ -357,6 +359,23 @@ class EuroScopeAgent:
 
             self._last_deep_analysis = time.time()
             logger.info(f"Deep analysis complete: {self.world_model.get_compact_summary()}")
+
+            # Generate session plan if none exists
+            if not self.session_planner.current_plan:
+                try:
+                    from euroscope.skills.session_context.skill import SessionContextSkill
+                    session_name = "LONDON"
+                    hour = datetime.now(UTC).hour
+                    if 12 <= hour < 20:
+                        session_name = "NEW_YORK"
+                    elif 20 <= hour or hour < 7:
+                        session_name = "ASIAN"
+                    await self.session_planner.generate_plan(
+                        session_name, self.world_model, self.conviction_tracker
+                    )
+                    logger.info(f"Auto-generated session plan for {session_name}")
+                except Exception as e:
+                    logger.debug(f"Session plan generation skipped: {e}")
         except Exception as e:
             logger.error(f"Deep analysis failed: {e}", exc_info=True)
 

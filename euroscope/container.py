@@ -167,6 +167,13 @@ class ServiceContainer:
 
         # 7. Event Listeners
         self.bus.subscribe("trade.closed", self._on_trade_closed)
+        
+        # 8. Inject dependencies into skills that need them
+        monitoring_skill = self.registry.get("monitoring")
+        if monitoring_skill:
+            monitoring_skill.set_price_provider(self.price_provider)
+            monitoring_skill.set_agent(self.agent_core)
+            logger.info("Injected dependencies into monitoring skill")
 
     async def init(self):
         """Async initialization — must be called when event loop is running."""

@@ -2236,12 +2236,11 @@
                             const d = res.data;
                             const eff = d.efficiency_ratio || 0;
                             const effColor = eff > 0.7 ? 'var(--up-color)' : eff < 0.3 ? 'var(--down-color)' : 'var(--text-muted)';
-                            const tickRegime = (d.tick_regime || '---').toUpperCase();
                             el.innerHTML = `
                                 <div class="info-row"><span class="label">EFFICIENCY</span><span class="val" style="color:${effColor}">${(eff*100).toFixed(0)}%</span></div>
-                                <div class="info-row"><span class="label">TICK PATTERN</span><span class="val">${tickRegime}</span></div>
+                                <div class="info-row"><span class="label">TICK PATTERN</span><span class="val">${(d.tick_pattern || '---').toUpperCase()}</span></div>
                                 <div class="info-row"><span class="label">AMIHUD</span><span class="val">${d.amihud_illiquidity ? d.amihud_illiquidity.toExponential(1) : '---'}</span></div>
-                                <div class="info-row"><span class="label">SPREAD EST</span><span class="val">${f2((d.spread_estimate||0)*10000)} pip</span></div>
+                                <div class="info-row"><span class="label">SPREAD EST</span><span class="val">${f2(d.spread_estimate||0)} pip</span></div>
                                 <div class="info-row"><span class="label">LIQ. SCORE</span><span class="val" style="color:var(--accent-primary);">${f2(d.liquidity_score)}</span></div>
                             `;
                         }
@@ -2301,7 +2300,7 @@
                         const el = document.getElementById('correlation-data');
                         if (res.success && res.data) {
                             const d = res.data;
-                            const entries = d.correlations || d;
+                            const entries = d.instruments || d.correlations || d;
                             if (typeof entries === 'object' && !Array.isArray(entries)) {
                                 const rows = Object.entries(entries).map(([k, v]) => {
                                     const label = v.label || k;

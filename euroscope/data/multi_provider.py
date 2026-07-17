@@ -59,7 +59,9 @@ class CandleCache:
                 "WHERE timeframe = ? AND cached_at >= ? ORDER BY timestamp DESC LIMIT ?",
                 (timeframe, cutoff, count),
             ).fetchall()
-            if len(rows) < 10:
+            # Adaptive minimum: D1/W1 only have 1-2 candles per hour
+            min_rows = {"M1": 10, "M5": 10, "M15": 10, "H1": 10, "H4": 5, "D1": 1, "W1": 1}.get(timeframe, 5)
+            if len(rows) < min_rows:
                 return None
             rows.reverse()
             df = pd.DataFrame(rows, columns=["Datetime", "Open", "High", "Low", "Close", "Volume"])
@@ -192,7 +194,9 @@ class MultiSourceProvider:
         tf = timeframe.upper()
 
         # 0) SQLite cache — fast, zero network
-        cached = self._candle_cache.get(tf, count, max_age_seconds=300)
+        # Adaptive TTL: D1/W1 candles rarely change, use longer cache
+        cache_ttl = {"M1": 60, "M5": 60, "M15": 120, "H1": 300, "H4": 600, "D1": 3600, "W1": 7200}.get(tf, 300)
+        cached = self._candle_cache.get(tf, count, max_age_seconds=cache_ttl)
         if cached is not None and len(cached) >= min(count, 20):
             logger.debug(f"Candle cache hit for {tf}: {len(cached)} candles")
             return cached
