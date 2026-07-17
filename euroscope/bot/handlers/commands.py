@@ -134,7 +134,7 @@ class CommandHandlers:
 
         try:
             state = agent_core.state.value if hasattr(agent_core.state, 'value') else str(agent_core.state)
-            tick_count = getattr(agent_core, 'tick_count', 0)
+            tick_count = getattr(agent_core, '_cycle_count', 0)
             
             # World Model summary
             wm = getattr(agent_core, 'world_model', None)

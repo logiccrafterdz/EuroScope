@@ -124,6 +124,7 @@ class EuroScopeAgent:
         self._running: bool = False
         self._task: Optional[asyncio.Task] = None
         self._paused: bool = False
+        self._tick_lock: asyncio.Lock = asyncio.Lock()
 
         # Stats
         self._total_actions: int = 0
@@ -179,7 +180,11 @@ class EuroScopeAgent:
         """The agent's continuous reasoning loop."""
         while self._running:
             try:
-                stats = await self._tick()
+                if self._tick_lock.locked():
+                    await asyncio.sleep(5)
+                    continue
+                async with self._tick_lock:
+                    stats = await self._tick_inner()
                 if stats.error:
                     self._total_errors += 1
                     logger.error(f"Agent tick error: {stats.error}")
@@ -196,8 +201,15 @@ class EuroScopeAgent:
             await asyncio.sleep(sleep_time)
 
     async def tick(self) -> AgentCycleStats:
-        """Public single-tick entry point — used by cron heartbeat."""
-        return await self._tick()
+        """Public single-tick entry point — used by cron heartbeat.
+
+        Uses a lock to prevent concurrent ticks from dual loops.
+        """
+        if self._tick_lock.locked():
+            logger.debug("Agent tick already in progress, skipping cron call")
+            return AgentCycleStats(duration_seconds=0, error="tick_locked")
+        async with self._tick_lock:
+            return await self._tick()
 
     async def _tick(self) -> AgentCycleStats:
         """Wrapper for _tick_inner with a hard timeout to prevent cascade hangs."""
@@ -304,8 +316,8 @@ class EuroScopeAgent:
     async def _do_scan(self, stats: AgentCycleStats) -> None:
         """Quick market scan — price + key indicators."""
         now = time.time()
-        if now - self._last_scan < self.SCAN_INTERVAL / 2:
-            return  # Too soon
+        if now - self._last_scan < self.SCAN_INTERVAL / 3:
+            return  # Too soon (20s minimum between scans)
 
         try:
             # Quick price fetch
@@ -852,12 +864,21 @@ class EuroScopeAgent:
     def _should_activate(self) -> bool:
         """Check if the agent should wake up from IDLE."""
         session = self.world_model.session.active_session
-        if session in ("london", "new_york", "overlap"):
+        if session in ("london", "new_york", "overlap", "asian"):
             return True
-        # Asian session — reduced activity but still scan
-        if session == "asian":
-            return True
-        return False
+        # Fallback: check time directly if world model is stale
+        from datetime import datetime, timezone, timedelta
+        now_utc = datetime.now(timezone.utc)
+        now_et = now_utc - timedelta(hours=5)
+        weekday = now_et.weekday()
+        hour = now_et.hour
+        if weekday == 5:
+            return False
+        if weekday == 4 and hour >= 17:
+            return False
+        if weekday == 6 and hour < 17:
+            return False
+        return True
 
     def _needs_deep_analysis(self) -> bool:
         """Check if a full pipeline run is needed."""

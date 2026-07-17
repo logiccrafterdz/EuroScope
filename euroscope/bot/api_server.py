@@ -748,8 +748,8 @@ class APIServer:
 
         # 4. Agent Core Health
         try:
-            if hasattr(self.bot, "core") and self.bot.core:
-                state_name = getattr(self.bot.core.state, "name", str(self.bot.core.state))
+            if hasattr(self.bot, "agent_core") and self.bot.agent_core:
+                state_name = getattr(self.bot.agent_core.state, "name", str(self.bot.agent_core.state))
                 health_data["subsystems"]["agent_core"] = f"UP ({state_name})"
             else:
                 health_data["subsystems"]["agent_core"] = "NOT_CONFIGURED"
@@ -810,17 +810,20 @@ class APIServer:
         """API endpoint for Agent Core state."""
         cached = self._get_cached("agent_state")
         if cached: return web.json_response(cached)
-        core = self.bot.core
+        core = getattr(self.bot, "agent_core", None)
         state = "UNKNOWN"
-        if hasattr(core, 'state') and hasattr(core.state, 'name'):
-            state = core.state.name
-        elif hasattr(core, 'state'):
-            state = str(core.state)
+        uptime = 0
+        ticks = 0
+        if core:
+            if hasattr(core, 'state'):
+                state = core.state.name if hasattr(core.state, 'name') else str(core.state)
+            uptime = time.time() - getattr(core, '_start_time', time.time())
+            ticks = getattr(core, '_cycle_count', 0)
 
         data = {
             "state": state,
-            "uptime_seconds": time.time() - getattr(core, 'start_time', time.time()),
-            "ticks": getattr(core, 'tick_count', 0),
+            "uptime_seconds": uptime,
+            "ticks": ticks,
         }
         resp = {"success": True, "data": data}
         self._set_cached("agent_state", resp)
@@ -1050,32 +1053,37 @@ class APIServer:
 
     async def _api_session_plan(self, request):
         """API endpoint for current session trading plan."""
+        cached = self._get_cached("session_plan")
+        if cached: return web.json_response(cached)
         from euroscope.container import get_container
         container = get_container()
         plan_data = {"scenarios": [], "session": "UNKNOWN", "briefing": ""}
-        if container and hasattr(container, 'orchestrator'):
-            orchestrator = container.orchestrator
-            if hasattr(orchestrator, 'session_planner') and orchestrator.session_planner:
-                planner = orchestrator.session_planner
-                if hasattr(planner, 'current_plan') and planner.current_plan:
-                    plan = planner.current_plan
-                    plan_data = {
-                        "session": getattr(plan, 'session_name', 'UNKNOWN'),
-                        "date": getattr(plan, 'date_str', ''),
-                        "briefing": getattr(plan, 'session_briefing', ''),
-                        "scenarios": [
-                            {
-                                "name": s.name,
-                                "direction": s.direction,
-                                "condition": s.condition,
-                                "entry_zone": s.entry_zone,
-                                "target": s.target_level,
-                                "invalidation": s.invalidation_level,
-                            }
-                            for s in getattr(plan, 'scenarios', [])
-                        ],
+        planner = None
+        if container:
+            planner = getattr(getattr(container, 'agent_core', None), 'session_planner', None)
+            if not planner:
+                planner = getattr(getattr(container, 'orchestrator', None), 'session_planner', None)
+        if planner and hasattr(planner, 'current_plan') and planner.current_plan:
+            plan = planner.current_plan
+            plan_data = {
+                "session": getattr(plan, 'session_name', 'UNKNOWN'),
+                "date": getattr(plan, 'date_str', ''),
+                "briefing": getattr(plan, 'session_briefing', ''),
+                "scenarios": [
+                    {
+                        "name": s.name,
+                        "direction": s.direction,
+                        "condition": s.condition,
+                        "entry_zone": s.entry_zone,
+                        "target": s.target_level,
+                        "invalidation": s.invalidation_level,
                     }
-        return web.json_response({"success": True, "data": plan_data})
+                    for s in getattr(plan, 'scenarios', [])
+                ],
+            }
+        resp = {"success": True, "data": plan_data}
+        self._set_cached("session_plan", resp)
+        return web.json_response(resp)
 
     async def _api_convictions(self, request):
         """API endpoint for active trading convictions."""
@@ -1084,21 +1092,20 @@ class APIServer:
         from euroscope.container import get_container
         container = get_container()
         convictions_data = []
-        if container and hasattr(container, 'orchestrator'):
-            orchestrator = container.orchestrator
-            if hasattr(orchestrator, 'conviction_tracker') and orchestrator.conviction_tracker:
-                tracker = orchestrator.conviction_tracker
-                active = getattr(tracker, 'active_convictions', {})
-                for cid, c in active.items():
-                    convictions_data.append({
-                        "id": cid,
-                        "thesis": getattr(c, 'thesis', ''),
-                        "direction": getattr(c, 'direction', 'neutral'),
-                        "confidence": getattr(c, 'confidence', 0.5),
-                        "invalidation": getattr(c, 'invalidation_level', 0),
-                        "evidence_for_count": len(getattr(c, 'evidence_for', [])),
-                        "evidence_against_count": len(getattr(c, 'evidence_against', [])),
-                    })
+        agent = getattr(container, 'agent_core', None) if container else None
+        if agent and hasattr(agent, 'conviction_tracker') and agent.conviction_tracker:
+            tracker = agent.conviction_tracker
+            active = getattr(tracker, 'active_convictions', {})
+            for cid, c in active.items():
+                convictions_data.append({
+                    "id": cid,
+                    "thesis": getattr(c, 'thesis', ''),
+                    "direction": getattr(c, 'direction', 'neutral'),
+                    "confidence": getattr(c, 'confidence', 0.5),
+                    "invalidation": getattr(c, 'invalidation_level', 0),
+                    "evidence_for_count": len(getattr(c, 'evidence_for', [])),
+                    "evidence_against_count": len(getattr(c, 'evidence_against', [])),
+                })
         resp = {"success": True, "data": convictions_data}
         self._set_cached("convictions", resp)
         return web.json_response(resp)

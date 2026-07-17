@@ -172,8 +172,10 @@ class CronScheduler:
             try:
                 agent_core = getattr(self.bot, "agent_core", None)
                 if not agent_core:
-                    return  # Agent Core not yet wired
-                await agent_core.tick()
+                    return
+                result = await agent_core.tick()
+                if result and getattr(result, 'error', None):
+                    logger.warning(f"Agent tick returned error: {result.error}")
             except Exception as e:
                 logger.error(f"Agent heartbeat failed: {e}", exc_info=True)
 
