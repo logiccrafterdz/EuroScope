@@ -185,17 +185,22 @@ class APIServer:
                     return web.json_response(self._forecast_cache)
 
                 result = await asyncio.wait_for(self.bot.forecaster.generate_forecast(tf), timeout=90)
+                reasoning_text = result.get("text", "")
+                direction = result.get("direction", "NEUTRAL")
+                _llm_error = any(reasoning_text.startswith(p) for p in ("AI unavailable", "No LLM providers", "\u274c")) if reasoning_text else False
                 response_payload = {
-                    "success": True,
+                    "success": not _llm_error,
                     "data": {
-                        "direction": result.get("direction", "NEUTRAL"),
+                        "direction": direction,
                         "confidence": result.get("confidence", 0) / 100,
-                        "reasoning": result.get("text", ""),
+                        "reasoning": reasoning_text,
                         "timeframe": tf,
                         "price": result.get("price"),
                         "timestamp": datetime.now().isoformat(),
                     }
                 }
+                if _llm_error:
+                    response_payload["error"] = "AI providers unavailable"
                 # Store in cache
                 self._forecast_cache = response_payload
                 self._forecast_cache_ts = time.monotonic()
@@ -659,7 +664,7 @@ class APIServer:
             data = {
                 "risk_per_trade": 1.0,
                 "max_daily_loss": 3.0,
-                "auto_trading_enabled": False
+                "auto_trading_enabled": True
             }
             if os.path.exists(settings_path):
                 with open(settings_path, "r") as f:
@@ -676,7 +681,7 @@ class APIServer:
             data = {
                 "risk_per_trade": 1.0,
                 "max_daily_loss": 3.0,
-                "auto_trading_enabled": False
+                "auto_trading_enabled": True
             }
             if os.path.exists(settings_path):
                 with open(settings_path, "r") as f:
@@ -771,7 +776,7 @@ class APIServer:
             s_data = {
                 "risk_per_trade": 1.0,
                 "max_daily_loss": 3.0,
-                "auto_trading_enabled": False,
+                "auto_trading_enabled": True,
                 "emergency_mode": False
             }
             if os.path.exists(settings_path):
@@ -814,16 +819,52 @@ class APIServer:
         state = "UNKNOWN"
         uptime = 0
         ticks = 0
+        total_actions = 0
+        total_errors = 0
+        paused = False
+        last_scan_ago = -1
+        last_analysis_ago = -1
+        price = 0.0
+        session = "unknown"
+        convictions_count = 0
+        state_history = []
         if core:
             if hasattr(core, 'state'):
                 state = core.state.name if hasattr(core.state, 'name') else str(core.state)
             uptime = time.time() - getattr(core, '_started_at', time.time())
             ticks = getattr(core, '_cycle_count', 0)
+            total_actions = getattr(core, '_total_actions', 0)
+            total_errors = getattr(core, '_total_errors', 0)
+            paused = getattr(core, '_paused', False)
+            last_scan = getattr(core, '_last_scan', 0)
+            last_analysis = getattr(core, '_last_deep_analysis', 0)
+            now = time.time()
+            if last_scan > 0:
+                last_scan_ago = round(now - last_scan, 1)
+            if last_analysis > 0:
+                last_analysis_ago = round(now - last_analysis, 1)
+            wm = getattr(core, 'world_model', None)
+            if wm:
+                price = getattr(getattr(wm, 'price', None), 'price', 0.0)
+                session = getattr(getattr(wm, 'session', None), 'active_session', 'unknown')
+            ct = getattr(core, 'conviction_tracker', None)
+            if ct and hasattr(ct, 'get_active_convictions'):
+                convictions_count = len(ct.get_active_convictions())
+            state_history = getattr(core, '_state_history', [])[-5:]
 
         data = {
             "state": state,
-            "uptime_seconds": uptime,
+            "uptime_seconds": round(uptime, 1),
             "ticks": ticks,
+            "total_actions": total_actions,
+            "total_errors": total_errors,
+            "paused": paused,
+            "last_scan_seconds_ago": last_scan_ago,
+            "last_analysis_seconds_ago": last_analysis_ago,
+            "current_price": price,
+            "active_session": session,
+            "active_convictions": convictions_count,
+            "recent_states": [{"ts": s[0], "state": s[1]} for s in state_history] if state_history else [],
         }
         resp = {"success": True, "data": data}
         self._set_cached("agent_state", resp)

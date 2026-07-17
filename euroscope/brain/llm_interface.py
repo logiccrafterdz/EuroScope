@@ -830,7 +830,8 @@ class LLMInterface:
             logger.error(f"Market Pulse LLM generation failed: {e}")
             response = ""
         # Add a fallback just in case the final answer is empty or an error string
-        if not response.strip() or response.strip().startswith("AI unavailable") or response.strip().startswith("No LLM providers"):
+        _resp = response.strip()
+        if not _resp or any(_resp.startswith(p) for p in ("AI unavailable", "No LLM providers", "\u274c")):
             response = "Market is currently consolidating. Awaiting clearer direction."
             
         # Log this to memory so it remembers its last pulse
