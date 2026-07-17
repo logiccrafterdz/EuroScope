@@ -82,7 +82,7 @@ class LLMRouter:
                     tertiary_model: str = "") -> "LLMRouter":
         """Create router from configuration values.
         
-        Provider chain: FreeTheAI (GLM 5.2) → NVIDIA NIM (DeepSeek) → OpenAI (GPT-4o-mini)
+        Provider chain: FreeTheAI (GLM 5.2) → OpenRouter (DeepSeek) → OpenAI (GPT-4o-mini)
         """
         providers = []
 
@@ -98,8 +98,8 @@ class LLMRouter:
             providers.append(LLMProvider(
                 name="fallback",
                 api_key=fallback_key,
-                api_base=fallback_base or "https://integrate.api.nvidia.com/v1",
-                model=fallback_model or "deepseek-ai/deepseek-v4-flash",
+                api_base=fallback_base or "https://openrouter.ai/api/v1",
+                model=fallback_model or "deepseek/deepseek-chat",
             ))
 
         if tertiary_key:
