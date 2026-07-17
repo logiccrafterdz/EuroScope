@@ -817,7 +817,7 @@ class APIServer:
         if core:
             if hasattr(core, 'state'):
                 state = core.state.name if hasattr(core.state, 'name') else str(core.state)
-            uptime = time.time() - getattr(core, '_start_time', time.time())
+            uptime = time.time() - getattr(core, '_started_at', time.time())
             ticks = getattr(core, '_cycle_count', 0)
 
         data = {
@@ -1095,17 +1095,17 @@ class APIServer:
         agent = getattr(container, 'agent_core', None) if container else None
         if agent and hasattr(agent, 'conviction_tracker') and agent.conviction_tracker:
             tracker = agent.conviction_tracker
-            active = getattr(tracker, 'active_convictions', {})
-            for cid, c in active.items():
-                convictions_data.append({
-                    "id": cid,
-                    "thesis": getattr(c, 'thesis', ''),
-                    "direction": getattr(c, 'direction', 'neutral'),
-                    "confidence": getattr(c, 'confidence', 0.5),
-                    "invalidation": getattr(c, 'invalidation_level', 0),
-                    "evidence_for_count": len(getattr(c, 'evidence_for', [])),
-                    "evidence_against_count": len(getattr(c, 'evidence_against', [])),
-                })
+            if hasattr(tracker, 'get_active_convictions'):
+                for c in tracker.get_active_convictions():
+                    convictions_data.append({
+                        "id": getattr(c, 'id', ''),
+                        "thesis": getattr(c, 'thesis', ''),
+                        "direction": getattr(c, 'direction', 'neutral'),
+                        "confidence": getattr(c, 'confidence', 0.5),
+                        "invalidation": getattr(c, 'invalidation_level', 0),
+                        "evidence_for_count": len(getattr(c, 'evidence_for', [])),
+                        "evidence_against_count": len(getattr(c, 'evidence_against', [])),
+                    })
         resp = {"success": True, "data": convictions_data}
         self._set_cached("convictions", resp)
         return web.json_response(resp)
