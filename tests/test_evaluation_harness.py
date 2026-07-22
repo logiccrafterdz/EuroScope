@@ -1,5 +1,6 @@
 """
-Tests for Evaluation Harness — ReplayEngine, ShadowMode, WalkForwardEvaluator, EvalHarness.
+Tests for Evaluation Harness — ReplayEngine, ShadowMode, WalkForwardEvaluator,
+CPCVEvaluator, EvalHarness.
 """
 
 import math
@@ -13,7 +14,11 @@ from euroscope.evaluation.harness_core import (
     ReplayEngine,
     ShadowMode,
     WalkForwardEvaluator,
+    CPCVEvaluator,
+    CPCVConfig,
+    CPCVFoldResult,
     EvalHarness,
+    cpcv_splits,
     _spearman_rank_corr,
     _classify_session,
     _build_equity_curve,
@@ -326,3 +331,147 @@ class TestEvalMetrics:
         assert m.total_trades == 100
         assert m.information_coefficient == 0.42
         assert m.regime_breakdown["trending"]["trades"] == 50
+
+
+# ── CPCV Tests ────────────────────────────────────────────────
+
+class TestCPCVSplits:
+    def test_basic_splits(self):
+        config = CPCVConfig(n_folds=5, purge_bars=10, embargo_bars=5)
+        splits = cpcv_splits(1000, config)
+        assert len(splits) == 5
+        for train_idx, test_idx in splits:
+            assert len(test_idx) == 200
+            assert len(train_idx) > 0
+
+    def test_no_overlap_train_test(self):
+        config = CPCVConfig(n_folds=5, purge_bars=10, embargo_bars=5)
+        splits = cpcv_splits(1000, config)
+        for train_idx, test_idx in splits:
+            overlap = set(train_idx) & set(test_idx)
+            assert len(overlap) == 0
+
+    def test_purge_removes_near_test(self):
+        config = CPCVConfig(n_folds=3, purge_bars=20, embargo_bars=0)
+        splits = cpcv_splits(600, config)
+        for train_idx, test_idx in splits:
+            test_min = min(test_idx)
+            test_max = max(test_idx)
+            for ti in train_idx:
+                if ti < test_min:
+                    assert ti < test_min - config.purge_bars + 1
+                elif ti > test_max:
+                    assert ti > test_max + config.purge_bars - 1
+
+    def test_embargo_gap_after_test(self):
+        config = CPCVConfig(n_folds=3, purge_bars=0, embargo_bars=10)
+        splits = cpcv_splits(600, config)
+        for train_idx, test_idx in splits:
+            embargo_start = max(test_idx) + 1
+            embargo_end = embargo_start + config.embargo_bars
+            embargo_range = set(range(embargo_start, embargo_end))
+            train_set = set(train_idx)
+            overlap = train_set & embargo_range
+            assert len(overlap) == 0
+
+    def test_small_dataset_adjustment(self):
+        config = CPCVConfig(n_folds=5, purge_bars=100, embargo_bars=100)
+        splits = cpcv_splits(500, config)
+        assert len(splits) > 0
+
+    def test_single_fold(self):
+        config = CPCVConfig(n_folds=1, purge_bars=0, embargo_bars=0)
+        splits = cpcv_splits(100, config)
+        assert len(splits) == 1
+        assert len(splits[0][1]) == 100
+
+
+class TestCPCVEvaluator:
+    def _make_mock_bt(self):
+        mock_bt = MagicMock()
+        from euroscope.analytics.backtest_engine import BacktestResult, BacktestTrade
+
+        trades = []
+        for i in range(5):
+            pnl = 5.0 if i % 2 == 0 else -3.0
+            trades.append(BacktestTrade(
+                direction="BUY" if i % 2 == 0 else "SELL",
+                entry_price=1.08 + i * 0.001,
+                pnl_pips=pnl,
+                strategy="trend_following",
+                is_win=pnl > 0,
+            ))
+        res = BacktestResult(total_trades=5, wins=3, losses=2, win_rate=60.0, trades=trades)
+        mock_bt.run.return_value = res
+        return mock_bt
+
+    def test_cpcv_basic(self):
+        mock_bt = self._make_mock_bt()
+        config = CPCVConfig(n_folds=3, purge_bars=5, embargo_bars=3)
+        evaluator = CPCVEvaluator(mock_bt, config)
+        candles = [{"close": 1.0 + i * 0.001} for i in range(600)]
+        result = evaluator.run(candles)
+        assert result.mode == "cpcv"
+        assert result.metrics.total_trades > 0
+        assert "stability" in result.metadata
+        assert "overfit_score" in result.metadata
+
+    def test_cpcv_insufficient_data(self):
+        mock_bt = MagicMock()
+        config = CPCVConfig(n_folds=5, purge_bars=50, embargo_bars=20)
+        evaluator = CPCVEvaluator(mock_bt, config)
+        candles = [{"close": 1.0}] * 50
+        result = evaluator.run(candles)
+        assert "error" in result.metadata
+
+    def test_cpcv_fold_details(self):
+        mock_bt = self._make_mock_bt()
+        config = CPCVConfig(n_folds=3, purge_bars=5, embargo_bars=3)
+        evaluator = CPCVEvaluator(mock_bt, config)
+        candles = [{"close": 1.0 + i * 0.001} for i in range(600)]
+        result = evaluator.run(candles)
+        fold_details = result.metadata.get("fold_details", [])
+        assert len(fold_details) == 3
+        for fd in fold_details:
+            assert "fold_id" in fd
+            assert "trades" in fd
+            assert "train_size" in fd
+            assert "test_size" in fd
+
+    def test_cpcv_overfit_score(self):
+        mock_bt = self._make_mock_bt()
+        config = CPCVConfig(n_folds=3, purge_bars=5, embargo_bars=3)
+        evaluator = CPCVEvaluator(mock_bt, config)
+        candles = [{"close": 1.0 + i * 0.001} for i in range(600)]
+        result = evaluator.run(candles)
+        overfit = result.metadata["overfit_score"]
+        assert "score" in overfit
+        assert "grade" in overfit
+        assert 0.0 <= overfit["score"] <= 1.0
+
+    def test_cpcv_stability(self):
+        mock_bt = self._make_mock_bt()
+        config = CPCVConfig(n_folds=3, purge_bars=5, embargo_bars=3)
+        evaluator = CPCVEvaluator(mock_bt, config)
+        candles = [{"close": 1.0 + i * 0.001} for i in range(600)]
+        result = evaluator.run(candles)
+        stability = result.metadata["stability"]
+        assert "total_folds" in stability
+        assert "profitable_folds" in stability
+        assert "fold_win_rate" in stability
+
+    def test_cpcv_format_report(self):
+        mock_bt = self._make_mock_bt()
+        config = CPCVConfig(n_folds=3, purge_bars=5, embargo_bars=3)
+        evaluator = CPCVEvaluator(mock_bt, config)
+        candles = [{"close": 1.0 + i * 0.001} for i in range(600)]
+        result = evaluator.run(candles)
+        report = EvalHarness.format_report(result)
+        assert "CPCV" in report
+        assert "Overfit Score" in report
+
+    def test_cpcv_evaluator_in_harness(self):
+        mock_bt = self._make_mock_bt()
+        harness = EvalHarness()
+        evaluator = harness.cpcv(mock_bt, CPCVConfig(n_folds=3))
+        assert isinstance(evaluator, CPCVEvaluator)

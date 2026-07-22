@@ -2,8 +2,8 @@
 Evaluation Harness — Unified System Assessment Framework.
 
 Combines ReplayEngine (stored signal analysis), ShadowMode (live observation),
-WalkForwardEvaluator (rolling window testing), and advanced metrics
-into a single cohesive evaluation API.
+WalkForwardEvaluator (rolling window testing), CPCVEvaluator (combinatorial
+purged cross-validation), and advanced metrics into a single cohesive API.
 
 Key metrics beyond basic PnL:
 - Information Coefficient (Spearman rank corr between confidence and actual PnL)
@@ -12,10 +12,12 @@ Key metrics beyond basic PnL:
 - Session-conditional performance breakdown
 - Skill/strategy attribution
 - Flip-flop rate and noise ratio
+- CPCV: Overfitting-resistant validation with purging + embargo
 """
 
 import asyncio
 import dataclasses
+import itertools
 import logging
 import math
 import json
@@ -186,6 +188,291 @@ def _compute_core_metrics(pnls: list[float]) -> dict:
         "worst_trade": round(min(pnls), 1),
         "equity_curve": equity,
     }
+
+
+# ── CPCV (Combinatorial Purged Cross-Validation) ──────────────
+
+@dataclass
+class CPCVConfig:
+    """Configuration for CPCV validation."""
+    n_folds: int = 5
+    purge_bars: int = 50
+    embargo_bars: int = 20
+    test_combinations: int = 0
+    min_trades_per_fold: int = 10
+
+
+@dataclass
+class CPCVFoldResult:
+    """Result of a single CPCV fold."""
+    fold_id: int
+    test_indices: list
+    metrics: EvalMetrics
+    trades: list = field(default_factory=list)
+    train_size: int = 0
+    test_size: int = 0
+
+
+def cpcv_splits(total_bars: int, config: CPCVConfig) -> list[tuple[list[int], list[int]]]:
+    """
+    Generate Combinatorial Purged Cross-Validation splits.
+
+    Unlike standard K-Fold, CPCV:
+    1. Creates N equal folds
+    2. For each combination of N-1 folds as train, the remaining fold is test
+    3. Applies purging: removes purge_bars from end of train set (prevents lookahead)
+    4. Applies embargo: skips embargo_bars after test set (prevents contamination)
+
+    Args:
+        total_bars: Total number of bars in the dataset
+        config: CPCV configuration
+
+    Returns:
+        List of (train_indices, test_indices) tuples
+    """
+    n = config.n_folds
+    fold_size = total_bars // n
+    if fold_size < config.purge_bars + config.embargo_bars + 10:
+        logger.warning(f"CPCV: fold_size={fold_size} too small for purge={config.purge_bars} "
+                       f"+ embargo={config.embargo_bars}. Adjusting.")
+        config.purge_bars = max(0, fold_size // 4)
+        config.embargo_bars = max(0, fold_size // 8)
+
+    folds = []
+    for i in range(n):
+        start = i * fold_size
+        end = start + fold_size if i < n - 1 else total_bars
+        folds.append(list(range(start, end)))
+
+    test_fold_indices = list(range(n))
+    if config.test_combinations > 0:
+        combos = list(itertools.combinations(test_fold_indices, 1))
+        if len(combos) > config.test_combinations:
+            combos = combos[:config.test_combinations]
+    else:
+        combos = [(i,) for i in test_fold_indices]
+
+    splits = []
+    for test_combo in combos:
+        test_fold_idx = test_combo[0]
+        test_indices = folds[test_fold_idx]
+
+        train_indices = []
+        for f_idx in range(n):
+            if f_idx == test_fold_idx:
+                continue
+            train_indices.extend(folds[f_idx])
+
+        if config.purge_bars > 0:
+            train_indices = [i for i in train_indices
+                             if i < min(test_indices) - config.purge_bars
+                             or i > max(test_indices) + config.purge_bars]
+
+        if config.embargo_bars > 0:
+            embargo_start = max(test_indices) + 1
+            embargo_end = embargo_start + config.embargo_bars
+            embargo_range = set(range(embargo_start, embargo_end))
+            train_indices = [i for i in train_indices if i not in embargo_range]
+
+        splits.append((sorted(train_indices), sorted(test_indices)))
+
+    return splits
+
+
+class CPCVEvaluator:
+    """
+    Combinatorial Purged Cross-Validation evaluator.
+
+    Prevents overfitting by testing on combinations of folds with:
+    - Purging: removes N bars from train set near test boundary
+    - Embargo: skips N bars after test set to prevent contamination
+    - Aggregates metrics across all test folds with confidence intervals
+    """
+
+    def __init__(self, backtest_engine, config: Optional[CPCVConfig] = None):
+        self.bt = backtest_engine
+        self.config = config or CPCVConfig()
+
+    def run(self, candles: list[dict], strategy: Optional[str] = None,
+            slippage_pips: float = 1.5, commission_pips: float = 0.7) -> EvalResult:
+        """
+        Run CPCV evaluation on candle data.
+
+        Args:
+            candles: List of candle dicts with OHLCV data
+            strategy: Strategy filter (None = all)
+            slippage_pips: Slippage per trade
+            commission_pips: Commission per trade
+
+        Returns:
+            EvalResult with aggregated metrics and fold-level details
+        """
+        total_bars = len(candles)
+        if total_bars < self.config.n_folds * (self.config.purge_bars + self.config.embargo_bars + 10):
+            return EvalResult(mode="cpcv", metrics=EvalMetrics(),
+                              metadata={"error": "insufficient data for CPCV configuration"})
+
+        splits = cpcv_splits(total_bars, self.config)
+        if not splits:
+            return EvalResult(mode="cpcv", metrics=EvalMetrics(),
+                              metadata={"error": "no splits generated"})
+
+        fold_results = []
+        all_trades = []
+        all_pnls = []
+        all_confidences = []
+
+        for fold_id, (train_idx, test_idx) in enumerate(splits):
+            test_candles = [candles[i] for i in test_idx if i < len(candles)]
+            if not test_candles:
+                continue
+
+            res = self.bt.run(test_candles, strategy_filter=strategy,
+                              slippage_pips=slippage_pips, commission_pips=commission_pips)
+
+            fold_pnls = [t.pnl_pips for t in res.trades]
+            fold_trades = []
+            for t in res.trades:
+                trade_dict = {
+                    "direction": t.direction,
+                    "entry_price": t.entry_price,
+                    "pnl_pips": t.pnl_pips,
+                    "strategy": t.strategy,
+                    "is_win": t.is_win,
+                    "entry_bar": t.entry_bar,
+                    "fold": fold_id,
+                }
+                fold_trades.append(trade_dict)
+                all_trades.append(trade_dict)
+                all_pnls.append(t.pnl_pips)
+
+            fold_core = _compute_core_metrics(fold_pnls) if fold_pnls else {}
+            fold_metrics = EvalMetrics(**{k: v for k, v in fold_core.items() if k in _EVAL_FIELDS})
+
+            fold_results.append(CPCVFoldResult(
+                fold_id=fold_id,
+                test_indices=test_idx,
+                metrics=fold_metrics,
+                trades=fold_trades,
+                train_size=len(train_idx),
+                test_size=len(test_idx),
+            ))
+
+        if not all_pnls:
+            return EvalResult(mode="cpcv", metrics=EvalMetrics(),
+                              metadata={"error": "no trades across all folds"})
+
+        core = _compute_core_metrics(all_pnls)
+        m = EvalMetrics(**{k: v for k, v in core.items() if k in _EVAL_FIELDS})
+
+        if all_confidences:
+            m.information_coefficient = _spearman_rank_corr(all_confidences, all_pnls)
+
+        m.session_breakdown = self._aggregate_session_breakdown(all_trades)
+        m.regime_breakdown = self._aggregate_regime_breakdown(fold_results)
+
+        stability = self._fold_stability(fold_results)
+        overfit_score = self._compute_overfit_score(fold_results)
+
+        return EvalResult(
+            mode="cpcv",
+            metrics=m,
+            trades=all_trades,
+            metadata={
+                "n_folds": self.config.n_folds,
+                "purge_bars": self.config.purge_bars,
+                "embargo_bars": self.config.embargo_bars,
+                "total_splits": len(splits),
+                "total_bars": total_bars,
+                "stability": stability,
+                "overfit_score": overfit_score,
+                "fold_details": [
+                    {
+                        "fold_id": f.fold_id,
+                        "trades": len(f.trades),
+                        "train_size": f.train_size,
+                        "test_size": f.test_size,
+                        "pnl": round(sum(t["pnl_pips"] for t in f.trades), 1),
+                        "win_rate": f.metrics.win_rate,
+                    }
+                    for f in fold_results
+                ],
+            },
+        )
+
+    def _aggregate_session_breakdown(self, trades: list[dict]) -> dict:
+        sessions: dict[str, list[float]] = {}
+        for t in trades:
+            session = t.get("session", "Unknown")
+            sessions.setdefault(session, []).append(t.get("pnl_pips", 0))
+        result = {}
+        for sess, pnls in sessions.items():
+            wins = [p for p in pnls if p > 0]
+            result[sess] = {
+                "trades": len(pnls),
+                "win_rate": round(len(wins) / len(pnls) * 100, 1) if pnls else 0,
+                "total_pnl": round(sum(pnls), 1),
+            }
+        return result
+
+    @staticmethod
+    def _aggregate_regime_breakdown(fold_results: list[CPCVFoldResult]) -> dict:
+        regime_trades: dict[str, list[float]] = {}
+        for fold in fold_results:
+            for t in fold.trades:
+                regime = t.get("regime", "unknown")
+                regime_trades.setdefault(regime, []).append(t.get("pnl_pips", 0))
+        result = {}
+        for regime, pnls in regime_trades.items():
+            wins = [p for p in pnls if p > 0]
+            result[regime] = {
+                "trades": len(pnls),
+                "win_rate": round(len(wins) / len(pnls) * 100, 1) if pnls else 0,
+                "total_pnl": round(sum(pnls), 1),
+            }
+        return result
+
+    @staticmethod
+    def _fold_stability(fold_results: list[CPCVFoldResult]) -> dict:
+        if not fold_results:
+            return {}
+        pnls_by_fold = [sum(t["pnl_pips"] for t in f.trades) for f in fold_results]
+        win_rates = [f.metrics.win_rate for f in fold_results if f.metrics.total_trades > 0]
+        profitable_folds = sum(1 for p in pnls_by_fold if p > 0)
+        mean_pnl = sum(pnls_by_fold) / len(pnls_by_fold) if pnls_by_fold else 0
+        var_pnl = sum((p - mean_pnl) ** 2 for p in pnls_by_fold) / len(pnls_by_fold) if pnls_by_fold else 0
+        std_pnl = math.sqrt(var_pnl)
+        return {
+            "total_folds": len(fold_results),
+            "profitable_folds": profitable_folds,
+            "fold_win_rate": round(profitable_folds / len(fold_results) * 100, 1),
+            "avg_pnl_per_fold": round(mean_pnl, 1),
+            "pnl_std_across_folds": round(std_pnl, 2),
+            "avg_win_rate": round(sum(win_rates) / len(win_rates), 1) if win_rates else 0,
+        }
+
+    @staticmethod
+    def _compute_overfit_score(fold_results: list[CPCVFoldResult]) -> dict:
+        if len(fold_results) < 2:
+            return {"score": 0.0, "grade": "insufficient_data"}
+        pnls = [sum(t["pnl_pips"] for t in f.trades) for f in fold_results]
+        mean_pnl = sum(pnls) / len(pnls)
+        std_pnl = math.sqrt(sum((p - mean_pnl) ** 2 for p in pnls) / len(pnls))
+        if mean_pnl <= 0:
+            return {"score": 1.0, "grade": "likely_overfit"}
+        cv = std_pnl / abs(mean_pnl) if mean_pnl != 0 else float("inf")
+        profitable = sum(1 for p in pnls if p > 0)
+        consistency = profitable / len(pnls)
+        score = min(1.0, cv * 0.5 + (1 - consistency) * 0.5)
+        if score < 0.2:
+            grade = "robust"
+        elif score < 0.4:
+            grade = "moderate"
+        elif score < 0.6:
+            grade = "caution"
+        else:
+            grade = "likely_overfit"
+        return {"score": round(score, 3), "grade": grade, "cv": round(cv, 3), "consistency": round(consistency, 3)}
 
 
 # ── ReplayEngine ───────────────────────────────────────────────
@@ -527,6 +814,9 @@ class EvalHarness:
     def walk_forward(self, backtest_engine) -> WalkForwardEvaluator:
         return WalkForwardEvaluator(backtest_engine)
 
+    def cpcv(self, backtest_engine, config: Optional[CPCVConfig] = None) -> CPCVEvaluator:
+        return CPCVEvaluator(backtest_engine, config)
+
     async def full_report(self, days: int = 30) -> str:
         """Generate a comprehensive evaluation report from stored data."""
         replay = self.replay_engine()
@@ -578,6 +868,28 @@ class EvalHarness:
             f"  Noise Ratio:     {m.noise_ratio}%",
             "═══════════════════════════════════════════",
         ])
+
+        if result.mode == "cpcv" and result.metadata:
+            stability = result.metadata.get("stability", {})
+            overfit = result.metadata.get("overfit_score", {})
+            lines.extend([
+                "",
+                "── CPCV Validation ──",
+                f"  Folds:           {result.metadata.get('total_splits', '?')}",
+                f"  Purge Bars:      {result.metadata.get('purge_bars', '?')}",
+                f"  Embargo Bars:    {result.metadata.get('embargo_bars', '?')}",
+                f"  Fold Win Rate:   {stability.get('fold_win_rate', '?')}%",
+                f"  Profitable:      {stability.get('profitable_folds', '?')}/{stability.get('total_folds', '?')} folds",
+                f"  PnL Std/Fold:    {stability.get('pnl_std_across_folds', '?')}",
+                f"  Overfit Score:   {overfit.get('score', '?')} ({overfit.get('grade', '?')})",
+            ])
+            fold_details = result.metadata.get("fold_details", [])
+            if fold_details:
+                lines.append("  Fold Details:")
+                for fd in fold_details:
+                    lines.append(f"    Fold {fd['fold_id']}: {fd['trades']} trades, "
+                                 f"{fd['win_rate']}% WR, {fd['pnl']:+.1f} pips "
+                                 f"(train={fd['train_size']}, test={fd['test_size']})")
 
         if result.metadata:
             lines.append(f"  Metadata: {json.dumps({k: v for k, v in result.metadata.items() if k != 'stability'}, indent=2)}")
