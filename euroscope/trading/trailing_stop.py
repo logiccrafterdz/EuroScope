@@ -10,6 +10,11 @@ Strategies:
     - Percentage: trails at a fixed percentage behind price
     - Chandelier: trails from the highest high (BUY) or lowest low (SELL)
     - Breakeven: moves to breakeven once price reaches a pip threshold
+
+Partial Exits:
+    - Close 50% at 1:1 R:R
+    - Trail remainder with chandelier
+    - Time-based: reduce after N bars
 """
 
 import logging
@@ -37,32 +42,54 @@ class TrailingState:
     initial_stop: float
     current_stop: float
     method: TrailMethod
-    highest_price: float = 0.0  # For BUY: highest since entry
-    lowest_price: float = 999.0  # For SELL: lowest since entry
-    trail_distance: float = 0.0  # Current trail distance in price
+    highest_price: float = 0.0
+    lowest_price: float = 999.0
+    trail_distance: float = 0.0
     moved_to_breakeven: bool = False
     updates: int = 0
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     last_updated: datetime = field(default_factory=lambda: datetime.now(UTC))
+    partial_exit_done: bool = False
+    partial_exit_pips: float = 0.0
+    time_reduce_done: bool = False
+    bars_held: int = 0
+
+
+@dataclass
+class PartialExitAction:
+    """Action to execute a partial exit."""
+    trade_id: str
+    close_fraction: float
+    reason: str
+    current_stop: float
 
 
 class TrailingStopEngine:
     """
     Manages trailing stops for active trades.
     Adapts trail distance based on the chosen method and market conditions.
+    Supports partial exits and time-based position reduction.
     """
 
     def __init__(
         self,
         default_method: TrailMethod = TrailMethod.ATR,
         atr_multiplier: float = 1.5,
-        trail_pct: float = 0.003,  # 0.3% for forex
+        trail_pct: float = 0.003,
         breakeven_pips: float = 15.0,
+        partial_exit_rr: float = 1.0,
+        partial_exit_fraction: float = 0.5,
+        time_reduce_bars: int = 0,
+        time_reduce_fraction: float = 0.5,
     ):
         self.default_method = default_method
         self.atr_multiplier = atr_multiplier
         self.trail_pct = trail_pct
         self.breakeven_pips = breakeven_pips
+        self.partial_exit_rr = partial_exit_rr
+        self.partial_exit_fraction = partial_exit_fraction
+        self.time_reduce_bars = time_reduce_bars
+        self.time_reduce_fraction = time_reduce_fraction
         self._tracking: dict[str, TrailingState] = {}
 
     # ── Registration ───────────────────────────────────────────
@@ -180,6 +207,85 @@ class TrailingStopEngine:
             if result:
                 moved.append(result)
         return moved
+
+    # ── Partial Exit ──────────────────────────────────────────
+
+    def check_partial_exit(self, trade_id: str, current_price: float,
+                           stop_pips: float = None) -> Optional[PartialExitAction]:
+        """
+        Check if partial exit should trigger (close 50% at 1:1 R:R).
+
+        Returns PartialExitAction if triggered, None otherwise.
+        """
+        state = self._tracking.get(trade_id)
+        if not state or state.partial_exit_done:
+            return None
+
+        if not stop_pips:
+            stop_pips = abs(state.entry_price - state.initial_stop) * 10000
+
+        is_buy = state.direction == "BUY"
+        if is_buy:
+            profit_pips = (current_price - state.entry_price) * 10000
+        else:
+            profit_pips = (state.entry_price - current_price) * 10000
+
+        target_pips = stop_pips * self.partial_exit_rr
+
+        if profit_pips >= target_pips - 0.1:
+            state.partial_exit_done = True
+            state.partial_exit_pips = profit_pips
+
+            new_stop = state.entry_price + (0.0001 if is_buy else -0.0001)
+            state.current_stop = round(new_stop, 5)
+            state.moved_to_breakeven = True
+
+            logger.info(
+                f"📍 Partial exit triggered for {trade_id}: "
+                f"close {self.partial_exit_fraction * 100:.0f}% at {profit_pips:+.1f} pips, "
+                f"stop moved to breakeven"
+            )
+
+            return PartialExitAction(
+                trade_id=trade_id,
+                close_fraction=self.partial_exit_fraction,
+                reason=f"1:{self.partial_exit_rr} R:R reached ({profit_pips:.1f} pips)",
+                current_stop=state.current_stop,
+            )
+
+        return None
+
+    # ── Time-Based Reduction ──────────────────────────────────
+
+    def tick_bar(self, trade_id: str) -> Optional[PartialExitAction]:
+        """
+        Increment bar count and check for time-based reduction.
+
+        After time_reduce_bars, closes fraction of position.
+        """
+        if self.time_reduce_bars <= 0:
+            return None
+
+        state = self._tracking.get(trade_id)
+        if not state or state.time_reduce_done:
+            return None
+
+        state.bars_held += 1
+
+        if state.bars_held >= self.time_reduce_bars:
+            state.time_reduce_done = True
+            logger.info(
+                f"📍 Time-based reduction for {trade_id}: "
+                f"close {self.time_reduce_fraction * 100:.0f}% after {state.bars_held} bars"
+            )
+            return PartialExitAction(
+                trade_id=trade_id,
+                close_fraction=self.time_reduce_fraction,
+                reason=f"Time-based: {state.bars_held} bars held",
+                current_stop=state.current_stop,
+            )
+
+        return None
 
     # ── Stop Calculation ───────────────────────────────────────
 
