@@ -51,11 +51,26 @@ class COTPositioningSkill(BaseSkill):
                 "confidence": confidence,
             }
 
-            self._positioning_cache = result_data
+            self._positioning_cache = {
+                "report_date": positioning["report_date"],
+                "non_commercial": {
+                    "long": positioning["non_commercial"].get("long", 0),
+                    "short": positioning["non_commercial"].get("short", 0),
+                    "net": net_positions,
+                    "bias": bias,
+                },
+                "commercial": positioning.get("commercial", {}),
+                "raw_timestamp": positioning.get("raw_timestamp", ""),
+            }
 
             if "fundamental" not in context.analysis:
                 context.analysis["fundamental"] = {}
-            context.analysis["fundamental"]["cot_positioning"] = result_data
+            context.analysis["fundamental"]["cot_positioning"] = {
+                "report_date": positioning["report_date"],
+                "net_positions": net_positions,
+                "bias": bias,
+                "confidence": confidence,
+            }
 
             return SkillResult(
                 success=True,

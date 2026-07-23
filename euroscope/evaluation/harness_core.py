@@ -220,23 +220,26 @@ def cpcv_splits(total_bars: int, config: CPCVConfig) -> list[tuple[list[int], li
     Unlike standard K-Fold, CPCV:
     1. Creates N equal folds
     2. For each combination of N-1 folds as train, the remaining fold is test
-    3. Applies purging: removes purge_bars from end of train set (prevents lookahead)
-    4. Applies embargo: skips embargo_bars after test set (prevents contamination)
+    3. Applies purging: removes purge_bars BEFORE test set from train (prevents lookahead)
+    4. Applies embargo: skips embargo_bars AFTER test set (prevents contamination)
 
     Args:
         total_bars: Total number of bars in the dataset
-        config: CPCV configuration
+        config: CPCV configuration (not mutated)
 
     Returns:
         List of (train_indices, test_indices) tuples
     """
     n = config.n_folds
+    purge = config.purge_bars
+    embargo = config.embargo_bars
+
     fold_size = total_bars // n
-    if fold_size < config.purge_bars + config.embargo_bars + 10:
-        logger.warning(f"CPCV: fold_size={fold_size} too small for purge={config.purge_bars} "
-                       f"+ embargo={config.embargo_bars}. Adjusting.")
-        config.purge_bars = max(0, fold_size // 4)
-        config.embargo_bars = max(0, fold_size // 8)
+    if fold_size < purge + embargo + 10:
+        logger.warning(f"CPCV: fold_size={fold_size} too small for purge={purge} "
+                       f"+ embargo={embargo}. Adjusting.")
+        purge = max(0, fold_size // 4)
+        embargo = max(0, fold_size // 8)
 
     folds = []
     for i in range(n):
@@ -263,14 +266,16 @@ def cpcv_splits(total_bars: int, config: CPCVConfig) -> list[tuple[list[int], li
                 continue
             train_indices.extend(folds[f_idx])
 
-        if config.purge_bars > 0:
+        if purge > 0:
+            test_min = min(test_indices)
+            test_max = max(test_indices)
             train_indices = [i for i in train_indices
-                             if i < min(test_indices) - config.purge_bars
-                             or i > max(test_indices) + config.purge_bars]
+                             if i < test_min - purge
+                             or i > test_max + purge]
 
-        if config.embargo_bars > 0:
+        if embargo > 0:
             embargo_start = max(test_indices) + 1
-            embargo_end = embargo_start + config.embargo_bars
+            embargo_end = embargo_start + embargo
             embargo_range = set(range(embargo_start, embargo_end))
             train_indices = [i for i in train_indices if i not in embargo_range]
 
@@ -308,9 +313,10 @@ class CPCVEvaluator:
             EvalResult with aggregated metrics and fold-level details
         """
         total_bars = len(candles)
-        if total_bars < self.config.n_folds * (self.config.purge_bars + self.config.embargo_bars + 10):
+        min_bars = self.config.n_folds * (self.config.purge_bars + self.config.embargo_bars + 10)
+        if total_bars < min_bars:
             return EvalResult(mode="cpcv", metrics=EvalMetrics(),
-                              metadata={"error": "insufficient data for CPCV configuration"})
+                              metadata={"error": f"insufficient data: {total_bars} bars, need {min_bars}"})
 
         splits = cpcv_splits(total_bars, self.config)
         if not splits:
@@ -341,6 +347,8 @@ class CPCVEvaluator:
                     "is_win": t.is_win,
                     "entry_bar": t.entry_bar,
                     "fold": fold_id,
+                    "session": getattr(t, "session", "Unknown"),
+                    "regime": getattr(t, "regime", "unknown"),
                 }
                 fold_trades.append(trade_dict)
                 all_trades.append(trade_dict)

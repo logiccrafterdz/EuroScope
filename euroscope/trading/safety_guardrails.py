@@ -286,10 +286,14 @@ class CircuitBreaker:
     def _reset(self):
         """Reset the circuit breaker after cooldown."""
         logger.info(f"CircuitBreaker RESET after {self.config.auto_reset_after_seconds}s cooldown")
+        reason = self._blocked_reason
         self._blocked = False
         self._blocked_reason = ""
-        self._llm_consecutive_failures = 0
-        self._api_errors.clear()
+        self._blocked_at = 0.0
+        if "LLM" in reason:
+            self._llm_consecutive_failures = 0
+        if "API" in reason:
+            self._api_errors.clear()
 
     def force_reset(self):
         """Manually reset the circuit breaker."""

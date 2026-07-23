@@ -112,9 +112,10 @@ class RiskManager:
                 self._monthly_pnl = 0.0
                 self._monthly_pnl_start = month_str
 
-            self._consecutive_losses = state.get("consecutive_losses", 0)
-            self._trade_history = state.get("trade_history", [])[-self._max_history:]
-            logger.info(f"RiskManager state loaded: PnL={self._daily_pnl:.2f}, W_PnL={self._weekly_pnl:.2f}, M_PnL={self._monthly_pnl:.2f}, Streak={self._consecutive_losses}, Trades={len(self._trade_history)}")
+        self._consecutive_losses = state.get("consecutive_losses", 0)
+        self._trade_history = state.get("trade_history", [])[-self._max_history:]
+        self._open_trade_count = state.get("open_trade_count", 0)
+        logger.info(f"RiskManager state loaded: PnL={self._daily_pnl:.2f}, W_PnL={self._weekly_pnl:.2f}, M_PnL={self._monthly_pnl:.2f}, Streak={self._consecutive_losses}, Trades={len(self._trade_history)}, Open={self._open_trade_count}")
 
     async def save_state(self):
         """Save risk state to storage."""
@@ -130,6 +131,7 @@ class RiskManager:
             "monthly_pnl_start": self._monthly_pnl_start,
             "consecutive_losses": self._consecutive_losses,
             "trade_history": self._trade_history[-self._max_history:],
+            "open_trade_count": self._open_trade_count,
             "updated_at": datetime.now(UTC).isoformat()
         }
         await self.storage.save_json("risk_manager_state", state)
@@ -194,8 +196,16 @@ class RiskManager:
             streak_factor = 0.75
 
         # ── Combined adaptive risk ──
-        adjusted_risk_pct = kelly_risk * vol_factor * atr_factor * regime_factor * streak_factor
-        adjusted_risk_pct = max(0.25, min(adjusted_risk_pct, self.config.risk_per_trade * 1.5))
+        # Kelly is primary when sufficient history exists; otherwise use config fallback
+        kelly_has_data = len(self._trade_history) >= 20
+        if kelly_has_data and kelly_risk > 0:
+            adjusted_risk_pct = kelly_risk * vol_factor * atr_factor * regime_factor * streak_factor
+            adjusted_risk_pct = max(0.10, min(adjusted_risk_pct, self.config.risk_per_trade * 1.5))
+        else:
+            # Fallback to config-based sizing until Kelly calibrates
+            base_risk_pct = self.config.risk_per_trade
+            adjusted_risk_pct = base_risk_pct * vol_factor * atr_factor * regime_factor * streak_factor
+            adjusted_risk_pct = max(0.25, min(adjusted_risk_pct, base_risk_pct * 1.5))
 
         risk_amount = self.config.account_balance * (adjusted_risk_pct / 100)
         pip_value = self.calculate_pip_value()
@@ -578,4 +588,14 @@ class RiskManager:
             return
 
         await self.save_state()
+
+    def on_trade_opened(self):
+        """Increment open trade counter."""
+        self._open_trade_count += 1
+        logger.debug(f"Trade opened: open_count={self._open_trade_count}")
+
+    def on_trade_closed(self):
+        """Decrement open trade counter."""
+        self._open_trade_count = max(0, self._open_trade_count - 1)
+        logger.debug(f"Trade closed: open_count={self._open_trade_count}")
 
