@@ -1,11 +1,16 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+import logging
+import time
+from collections import deque
+from dataclasses import dataclass, field
 from typing import Optional, Tuple
 
 from ..data.calendar import EconomicCalendar
 from ..data.storage import Storage
 from ..skills.base import SkillContext
+
+logger = logging.getLogger("euroscope.guardrails")
 
 
 @dataclass
@@ -190,3 +195,114 @@ class SafetyGuardrail:
         if val > 1.0:
             return max(0.0, min(1.0, val / 100.0))
         return max(0.0, min(1.0, val))
+
+
+# ── Circuit Breaker ────────────────────────────────────────────
+
+@dataclass
+class CircuitBreakerConfig:
+    """Circuit breaker configuration."""
+    llm_max_consecutive_failures: int = 3
+    api_error_window_seconds: int = 300
+    api_max_errors_in_window: int = 5
+    connectivity_timeout_seconds: float = 300.0
+    auto_reset_after_seconds: int = 600
+
+
+class CircuitBreaker:
+    """
+    Monitors system health and auto-pauses trading on error loops.
+
+    Tracks:
+    - LLM consecutive failures (blocks after N failures)
+    - API error rate (blocks if too many errors in time window)
+    - Connectivity status (blocks if data feed is stale)
+    """
+
+    def __init__(self, config: CircuitBreakerConfig = None):
+        self.config = config or CircuitBreakerConfig()
+        self._llm_consecutive_failures: int = 0
+        self._api_errors: deque = deque()
+        self._last_successful_data_fetch: float = time.time()
+        self._blocked: bool = False
+        self._blocked_reason: str = ""
+        self._blocked_at: float = 0.0
+
+    def record_llm_success(self):
+        """Record a successful LLM call."""
+        self._llm_consecutive_failures = 0
+
+    def record_llm_failure(self):
+        """Record a failed LLM call. Blocks trading after max consecutive failures."""
+        self._llm_consecutive_failures += 1
+        logger.warning(f"CircuitBreaker: LLM failure #{self._llm_consecutive_failures}")
+        if self._llm_consecutive_failures >= self.config.llm_max_consecutive_failures:
+            self._block(f"LLM: {self._llm_consecutive_failures} consecutive failures")
+
+    def record_api_error(self):
+        """Record an API error. Blocks if error rate exceeds threshold."""
+        now = time.time()
+        self._api_errors.append(now)
+        cutoff = now - self.config.api_error_window_seconds
+        while self._api_errors and self._api_errors[0] < cutoff:
+            self._api_errors.popleft()
+        if len(self._api_errors) >= self.config.api_max_errors_in_window:
+            self._block(f"API: {len(self._api_errors)} errors in {self.config.api_error_window_seconds}s")
+
+    def record_data_fetch(self):
+        """Record a successful data fetch."""
+        self._last_successful_data_fetch = time.time()
+
+    def is_blocked(self) -> Tuple[bool, str]:
+        """
+        Check if circuit breaker is active.
+
+        Returns:
+            (blocked, reason) tuple
+        """
+        if self._blocked:
+            elapsed = time.time() - self._blocked_at
+            if elapsed >= self.config.auto_reset_after_seconds:
+                self._reset()
+                return False, ""
+            return True, self._blocked_reason
+
+        now = time.time()
+        stale_seconds = now - self._last_successful_data_fetch
+        if stale_seconds > self.config.connectivity_timeout_seconds:
+            self._block(f"Connectivity: no data for {stale_seconds:.0f}s")
+            return True, self._blocked_reason
+
+        return False, ""
+
+    def _block(self, reason: str):
+        """Activate the circuit breaker."""
+        if not self._blocked:
+            self._blocked = True
+            self._blocked_reason = reason
+            self._blocked_at = time.time()
+            logger.error(f"CircuitBreaker ACTIVATED: {reason}")
+
+    def _reset(self):
+        """Reset the circuit breaker after cooldown."""
+        logger.info(f"CircuitBreaker RESET after {self.config.auto_reset_after_seconds}s cooldown")
+        self._blocked = False
+        self._blocked_reason = ""
+        self._llm_consecutive_failures = 0
+        self._api_errors.clear()
+
+    def force_reset(self):
+        """Manually reset the circuit breaker."""
+        self._reset()
+
+    def get_status(self) -> dict:
+        """Get current circuit breaker status."""
+        now = time.time()
+        return {
+            "blocked": self._blocked,
+            "reason": self._blocked_reason,
+            "llm_consecutive_failures": self._llm_consecutive_failures,
+            "api_errors_in_window": len(self._api_errors),
+            "seconds_since_last_data": round(now - self._last_successful_data_fetch, 1),
+            "auto_reset_in": round(max(0, self.config.auto_reset_after_seconds - (now - self._blocked_at)), 1) if self._blocked else 0,
+        }

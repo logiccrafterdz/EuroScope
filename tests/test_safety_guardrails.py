@@ -1,8 +1,9 @@
 import pytest
+import time
 
 from euroscope.config import Config
 from euroscope.skills.base import SkillContext
-from euroscope.trading.safety_guardrails import SafetyGuardrail
+from euroscope.trading.safety_guardrails import SafetyGuardrail, CircuitBreaker, CircuitBreakerConfig
 
 
 def _context():
@@ -84,3 +85,73 @@ async def test_reduces_position_size_on_uncertainty():
     guardrail = SafetyGuardrail(Config())
     await guardrail.enhance_signal_safety(ctx)
     assert ctx.risk["position_size"] == 0.7
+
+
+# ── Circuit Breaker Tests ────────────────────────────────────
+
+class TestCircuitBreaker:
+
+    def test_initial_state_not_blocked(self):
+        cb = CircuitBreaker()
+        blocked, reason = cb.is_blocked()
+        assert blocked is False
+        assert reason == ""
+
+    def test_llm_success_resets_failures(self):
+        cb = CircuitBreaker()
+        cb.record_llm_failure()
+        cb.record_llm_failure()
+        cb.record_llm_success()
+        assert cb._llm_consecutive_failures == 0
+
+    def test_llm_failure_blocks_after_max(self):
+        cb = CircuitBreaker(CircuitBreakerConfig(llm_max_consecutive_failures=3))
+        cb.record_llm_failure()
+        cb.record_llm_failure()
+        blocked, _ = cb.is_blocked()
+        assert blocked is False
+        cb.record_llm_failure()
+        blocked, reason = cb.is_blocked()
+        assert blocked is True
+        assert "LLM" in reason
+
+    def test_api_error_blocks_after_max(self):
+        cb = CircuitBreaker(CircuitBreakerConfig(api_max_errors_in_window=3))
+        cb.record_api_error()
+        cb.record_api_error()
+        blocked, _ = cb.is_blocked()
+        assert blocked is False
+        cb.record_api_error()
+        blocked, reason = cb.is_blocked()
+        assert blocked is True
+        assert "API" in reason
+
+    def test_data_stale_blocks(self):
+        cb = CircuitBreaker(CircuitBreakerConfig(connectivity_timeout_seconds=1.0))
+        cb._last_successful_data_fetch = time.time() - 2.0
+        blocked, reason = cb.is_blocked()
+        assert blocked is True
+        assert "Connectivity" in reason
+
+    def test_auto_reset_after_cooldown(self):
+        cb = CircuitBreaker(CircuitBreakerConfig(auto_reset_after_seconds=0.1))
+        cb._block("test")
+        assert cb.is_blocked()[0] is True
+        time.sleep(0.15)
+        blocked, _ = cb.is_blocked()
+        assert blocked is False
+
+    def test_force_reset(self):
+        cb = CircuitBreaker()
+        cb._block("test")
+        assert cb.is_blocked()[0] is True
+        cb.force_reset()
+        assert cb.is_blocked()[0] is False
+
+    def test_get_status(self):
+        cb = CircuitBreaker()
+        status = cb.get_status()
+        assert "blocked" in status
+        assert "llm_consecutive_failures" in status
+        assert "api_errors_in_window" in status
+        assert "seconds_since_last_data" in status
