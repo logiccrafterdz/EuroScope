@@ -53,7 +53,8 @@ class TradeRisk:
 class RiskManager:
     """
     Manages trade risk: position sizing, stop loss placement,
-    and drawdown control.
+    and drawdown control. Uses Kelly Criterion + Vol Targeting
+    for institutional-grade position sizing.
     """
 
     def __init__(self, config: RiskConfig = None, storage: Optional['Storage'] = None):
@@ -67,6 +68,8 @@ class RiskManager:
         self._monthly_pnl_start: str = ""
         self._consecutive_losses: int = 0
         self._open_trade_count: int = 0
+        self._trade_history: list[dict] = []
+        self._max_history: int = 50
 
     async def load_state(self):
         """Load risk state from storage."""
@@ -110,7 +113,8 @@ class RiskManager:
                 self._monthly_pnl_start = month_str
 
             self._consecutive_losses = state.get("consecutive_losses", 0)
-            logger.info(f"RiskManager state loaded: PnL={self._daily_pnl:.2f}, W_PnL={self._weekly_pnl:.2f}, M_PnL={self._monthly_pnl:.2f}, Streak={self._consecutive_losses}")
+            self._trade_history = state.get("trade_history", [])[-self._max_history:]
+            logger.info(f"RiskManager state loaded: PnL={self._daily_pnl:.2f}, W_PnL={self._weekly_pnl:.2f}, M_PnL={self._monthly_pnl:.2f}, Streak={self._consecutive_losses}, Trades={len(self._trade_history)}")
 
     async def save_state(self):
         """Save risk state to storage."""
@@ -125,6 +129,7 @@ class RiskManager:
             "monthly_pnl": self._monthly_pnl,
             "monthly_pnl_start": self._monthly_pnl_start,
             "consecutive_losses": self._consecutive_losses,
+            "trade_history": self._trade_history[-self._max_history:],
             "updated_at": datetime.now(UTC).isoformat()
         }
         await self.storage.save_json("risk_manager_state", state)
@@ -136,9 +141,11 @@ class RiskManager:
         self, stop_pips: float, *,
         atr: float = None, avg_atr: float = None,
         regime: str = None, regime_strength: float = 0.5,
+        realized_vol: float = None,
     ) -> float:
         """
-        Calculate position size with volatility and regime adaptation.
+        Calculate position size with Kelly Criterion, vol targeting,
+        and regime adaptation.
 
         Args:
             stop_pips: Distance to stop loss in pips
@@ -146,6 +153,7 @@ class RiskManager:
             avg_atr: Average ATR over lookback (for relative comparison)
             regime: Market regime ("trending", "ranging", "breakout")
             regime_strength: Confidence in regime classification (0-1)
+            realized_vol: Current realized volatility (for vol targeting)
 
         Returns:
             Position size in standard lots
@@ -153,13 +161,16 @@ class RiskManager:
         if stop_pips <= 0:
             return 0.0
 
-        base_risk_pct = self.config.risk_per_trade
+        # ── Kelly Criterion sizing (primary) ──
+        kelly_risk = self.kelly_fraction()
+
+        # ── Vol targeting (secondary) ──
+        vol_factor = self.vol_targeting_factor(realized_vol)
 
         # ── ATR volatility scaling ──
-        # High volatility → reduce size; low volatility → normal/slightly larger
         atr_factor = 1.0
         if atr and avg_atr and avg_atr > 0:
-            atr_ratio = avg_atr / atr  # < 1 when vol is high, > 1 when low
+            atr_ratio = avg_atr / atr
             atr_factor = max(0.5, min(1.5, atr_ratio))
             logger.debug(f"ATR scaling: ratio={atr_ratio:.2f}, factor={atr_factor:.2f}")
 
@@ -167,13 +178,11 @@ class RiskManager:
         regime_factor = 1.0
         if regime:
             regime_factors = {
-                "trending": 1.0,    # Full size in confirmed trends
-                "ranging": 0.8,     # Smaller in choppy conditions
-                "breakout": 0.7,    # Smaller on breakout attempts (higher risk)
+                "trending": 1.0,
+                "ranging": 0.8,
+                "breakout": 0.7,
             }
             base_factor = regime_factors.get(regime, 0.8)
-            # Stronger regime confidence → closer to base_factor
-            # Weak confidence → blend toward 0.8 (cautious)
             regime_factor = base_factor * regime_strength + 0.8 * (1 - regime_strength)
             logger.debug(f"Regime scaling: {regime} (str={regime_strength:.2f}), factor={regime_factor:.2f}")
 
@@ -185,8 +194,8 @@ class RiskManager:
             streak_factor = 0.75
 
         # ── Combined adaptive risk ──
-        adjusted_risk_pct = base_risk_pct * atr_factor * regime_factor * streak_factor
-        adjusted_risk_pct = max(0.25, min(adjusted_risk_pct, base_risk_pct * 1.5))  # Clamp
+        adjusted_risk_pct = kelly_risk * vol_factor * atr_factor * regime_factor * streak_factor
+        adjusted_risk_pct = max(0.25, min(adjusted_risk_pct, self.config.risk_per_trade * 1.5))
 
         risk_amount = self.config.account_balance * (adjusted_risk_pct / 100)
         pip_value = self.calculate_pip_value()
@@ -195,7 +204,8 @@ class RiskManager:
         result = round(max(0.01, min(lots, 10.0)), 2)
         logger.debug(
             f"Position size: {result} lots | risk={adjusted_risk_pct:.2f}% "
-            f"(base={base_risk_pct}% × atr={atr_factor:.2f} × regime={regime_factor:.2f} × streak={streak_factor:.2f})"
+            f"(kelly={kelly_risk:.4f} × vol={vol_factor:.2f} × atr={atr_factor:.2f} "
+            f"× regime={regime_factor:.2f} × streak={streak_factor:.2f})"
         )
         return result
 
@@ -210,6 +220,87 @@ class RiskManager:
         - Micro lot (0.01): $0.10 per pip
         """
         return lot_size * 10.0  # $10 per pip per standard lot for EUR/USD
+
+    # ─── Kelly Criterion ──────────────────────────────────────
+
+    def kelly_fraction(self) -> float:
+        """
+        Calculate optimal Kelly fraction from trade history.
+
+        Kelly formula: f* = (p * b - q) / b
+        Where:
+            p = win rate
+            q = 1 - p (loss rate)
+            b = average_win / average_loss (win/loss ratio)
+
+        Returns fractional Kelly (quarter-Kelly for safety), clamped to [0, 0.02].
+        Falls back to config.risk_per_trade if insufficient history.
+        """
+        min_trades = 20
+        if len(self._trade_history) < min_trades:
+            return self.config.risk_per_trade
+
+        wins = [t["pnl_pips"] for t in self._trade_history if t["pnl_pips"] > 0]
+        losses = [abs(t["pnl_pips"]) for t in self._trade_history if t["pnl_pips"] <= 0]
+
+        if not wins or not losses:
+            return self.config.risk_per_trade
+
+        p = len(wins) / len(self._trade_history)
+        q = 1 - p
+        avg_win = sum(wins) / len(wins)
+        avg_loss = sum(losses) / len(losses)
+
+        if avg_loss == 0:
+            return self.config.risk_per_trade
+
+        b = avg_win / avg_loss
+        kelly = (p * b - q) / b
+
+        quarter_kelly = max(0, kelly / 4)
+        result = min(quarter_kelly, 0.02)
+
+        logger.debug(
+            f"Kelly: p={p:.2f}, b={b:.2f}, full_kelly={kelly:.4f}, "
+            f"quarter_kelly={quarter_kelly:.4f}, final={result:.4f}"
+        )
+        return result
+
+    def vol_targeting_factor(self, realized_vol: float = None,
+                             target_vol: float = None) -> float:
+        """
+        Calculate vol targeting multiplier.
+
+        Scales position inversely with realized volatility to maintain
+        constant risk contribution. When vol is high, reduce size.
+
+        Args:
+            realized_vol: Current realized volatility (annualized)
+            target_vol: Target volatility (default: 10% for EUR/USD)
+
+        Returns:
+            Multiplier in [0.3, 2.0]. 1.0 = normal vol.
+        """
+        if not realized_vol or realized_vol <= 0:
+            return 1.0
+
+        if not target_vol:
+            target_vol = 0.10
+
+        ratio = target_vol / realized_vol
+        factor = max(0.3, min(2.0, ratio))
+
+        logger.debug(f"Vol targeting: realized={realized_vol:.4f}, target={target_vol:.4f}, factor={factor:.2f}")
+        return factor
+
+    def _record_trade(self, pnl_pips: float):
+        """Record a trade in history for Kelly calibration."""
+        self._trade_history.append({
+            "pnl_pips": pnl_pips,
+            "timestamp": datetime.now(UTC).isoformat(),
+        })
+        if len(self._trade_history) > self._max_history:
+            self._trade_history = self._trade_history[-self._max_history:]
 
     # ─── Stop Loss Calculation ───────────────────────────────
 
@@ -292,7 +383,8 @@ class RiskManager:
                      support: list[float] = None,
                      resistance: list[float] = None,
                      rr_ratio: float = None,
-                     regime: str = None) -> TradeRisk:
+                     regime: str = None,
+                     realized_vol: float = None) -> TradeRisk:
         """
         Full risk assessment for a proposed trade.
 
@@ -350,10 +442,11 @@ class RiskManager:
         tp_pips = abs(take_profit - entry_price) * 10000
         rr = round(tp_pips / stop_pips, 2) if stop_pips > 0 else 0
 
-        # ── Position sizing (volatility & regime adaptive) ──
+        # ── Position sizing (Kelly + vol targeting + regime adaptive) ──
         avg_atr_val = avg_atr if avg_atr else atr
         position_size = self.calculate_position_size(
-            stop_pips, atr=atr, avg_atr=avg_atr_val, regime=regime
+            stop_pips, atr=atr, avg_atr=avg_atr_val, regime=regime,
+            realized_vol=realized_vol,
         )
         risk_amount = round(self.config.account_balance * (self.config.risk_per_trade / 100), 2)
 
@@ -455,7 +548,7 @@ class RiskManager:
     # ─── Trade Result Tracking ───────────────────────────────
 
     async def record_trade_result(self, pnl: float):
-        """Record a closed trade's PnL for drawdown tracking."""
+        """Record a closed trade's PnL for drawdown tracking and Kelly calibration."""
         today = datetime.now(UTC)
         today_str = today.strftime("%Y-%m-%d")
         month_str = today.strftime("%Y-%m")
@@ -478,6 +571,9 @@ class RiskManager:
             self._consecutive_losses += 1
         else:
             self._consecutive_losses = 0
+
+        self._record_trade(pnl)
+
         if not self.storage:
             return
 

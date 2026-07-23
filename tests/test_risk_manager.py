@@ -292,3 +292,110 @@ class TestAdaptiveRiskManagement:
         )
         assert adaptive["buffer_pips"] == 15.0
         assert sizing["session_multiplier"] == 0.8
+
+
+# ── Kelly Criterion + Vol Targeting ───────────────────────
+
+class TestKellyCriterion:
+
+    def test_kelly_insufficient_history_falls_back(self):
+        rm = RiskManager(RiskConfig(risk_per_trade=1.5))
+        assert rm.kelly_fraction() == 1.5
+
+    def test_kelly_with_winning_history(self):
+        rm = RiskManager()
+        for _ in range(15):
+            rm._trade_history.append({"pnl_pips": 10.0, "timestamp": "2025-01-01T00:00:00"})
+        for _ in range(10):
+            rm._trade_history.append({"pnl_pips": -5.0, "timestamp": "2025-01-01T00:00:00"})
+        kelly = rm.kelly_fraction()
+        assert kelly > 0
+        assert kelly <= 0.02
+
+    def test_kelly_with_losing_history(self):
+        rm = RiskManager()
+        for _ in range(5):
+            rm._trade_history.append({"pnl_pips": 8.0, "timestamp": "2025-01-01T00:00:00"})
+        for _ in range(20):
+            rm._trade_history.append({"pnl_pips": -10.0, "timestamp": "2025-01-01T00:00:00"})
+        kelly = rm.kelly_fraction()
+        assert kelly >= 0
+
+    def test_kelly_all_wins(self):
+        rm = RiskManager()
+        for _ in range(25):
+            rm._trade_history.append({"pnl_pips": 5.0, "timestamp": "2025-01-01T00:00:00"})
+        kelly = rm.kelly_fraction()
+        assert kelly > 0
+
+    def test_kelly_all_losses(self):
+        rm = RiskManager()
+        for _ in range(25):
+            rm._trade_history.append({"pnl_pips": -5.0, "timestamp": "2025-01-01T00:00:00"})
+        kelly = rm.kelly_fraction()
+        assert kelly >= 0
+
+
+class TestVolTargeting:
+
+    def test_vol_targeting_no_data(self):
+        rm = RiskManager()
+        assert rm.vol_targeting_factor(None) == 1.0
+
+    def test_vol_targeting_zero_vol(self):
+        rm = RiskManager()
+        assert rm.vol_targeting_factor(0) == 1.0
+
+    def test_vol_targeting_high_vol_reduces(self):
+        rm = RiskManager()
+        factor = rm.vol_targeting_factor(0.20)
+        assert factor < 1.0
+
+    def test_vol_targeting_low_vol_increases(self):
+        rm = RiskManager()
+        factor = rm.vol_targeting_factor(0.05)
+        assert factor > 1.0
+
+    def test_vol_targeting_clamped(self):
+        rm = RiskManager()
+        factor_extreme_high = rm.vol_targeting_factor(1.0)
+        factor_extreme_low = rm.vol_targeting_factor(0.001)
+        assert factor_extreme_high >= 0.3
+        assert factor_extreme_low <= 2.0
+
+
+class TestTradeHistoryTracking:
+
+    @pytest.mark.asyncio
+    async def test_trade_recorded_in_history(self):
+        rm = RiskManager()
+        await rm.record_trade_result(15.0)
+        assert len(rm._trade_history) == 1
+        assert rm._trade_history[0]["pnl_pips"] == 15.0
+
+    @pytest.mark.asyncio
+    async def test_history_capped_at_max(self):
+        rm = RiskManager()
+        rm._max_history = 5
+        for i in range(10):
+            await rm.record_trade_result(float(i))
+        assert len(rm._trade_history) == 5
+
+    @pytest.mark.asyncio
+    async def test_kelly_improves_with_history(self):
+        rm = RiskManager(RiskConfig(risk_per_trade=1.0))
+        kelly_before = rm.kelly_fraction()
+        for _ in range(15):
+            await rm.record_trade_result(10.0)
+        for _ in range(10):
+            await rm.record_trade_result(-5.0)
+        kelly_after = rm.kelly_fraction()
+        assert kelly_after != kelly_before
+
+    def test_position_size_with_realized_vol(self):
+        rm = RiskManager(RiskConfig(account_balance=10000, risk_per_trade=1.0))
+        lots_normal = rm.calculate_position_size(30)
+        lots_high_vol = rm.calculate_position_size(30, realized_vol=0.20)
+        lots_low_vol = rm.calculate_position_size(30, realized_vol=0.05)
+        assert lots_high_vol < lots_normal
+        assert lots_low_vol >= lots_normal
