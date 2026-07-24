@@ -112,9 +112,9 @@ class RiskManager:
                 self._monthly_pnl = 0.0
                 self._monthly_pnl_start = month_str
 
-        self._consecutive_losses = state.get("consecutive_losses", 0)
-        self._trade_history = state.get("trade_history", [])[-self._max_history:]
-        self._open_trade_count = state.get("open_trade_count", 0)
+            self._consecutive_losses = state.get("consecutive_losses", 0)
+            self._trade_history = state.get("trade_history", [])[-self._max_history:]
+            self._open_trade_count = state.get("open_trade_count", 0)
         logger.info(f"RiskManager state loaded: PnL={self._daily_pnl:.2f}, W_PnL={self._weekly_pnl:.2f}, M_PnL={self._monthly_pnl:.2f}, Streak={self._consecutive_losses}, Trades={len(self._trade_history)}, Open={self._open_trade_count}")
 
     async def save_state(self):
