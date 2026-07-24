@@ -20,7 +20,7 @@ class LLMConfig(BaseModel):
     """LLM Provider Configuration - 3-tier failover chain.
     
     Primary: FreeTheAI (GLM 5.2)
-    Fallback: NVIDIA NIM (DeepSeek)
+    Fallback: OpenRouter (DeepSeek)
     Tertiary: OpenAI (GPT-4o-mini)
     """
     # Primary Provider - FreeTheAI (GLM 5.2)
@@ -30,10 +30,10 @@ class LLMConfig(BaseModel):
     max_tokens: int = 4096
     temperature: float = 0.4
     
-    # Fallback Provider - NVIDIA NIM (DeepSeek)
+    # Fallback Provider - OpenRouter (DeepSeek)
     fallback_api_key: str = ""
-    fallback_api_base: str = "https://integrate.api.nvidia.com/v1"
-    fallback_model: str = "deepseek-ai/deepseek-v4-flash"
+    fallback_api_base: str = "https://openrouter.ai/api/v1"
+    fallback_model: str = "deepseek/deepseek-chat"
     
     # Tertiary Provider - OpenAI (GPT-4o-mini)
     tertiary_api_key: str = ""

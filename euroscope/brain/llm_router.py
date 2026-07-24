@@ -2,7 +2,7 @@
 LLM Router — Multi-Provider Failover
 
 Tries multiple LLM providers in order with retry logic.
-Chain: FreeTheAI (GLM 5.2) → NVIDIA NIM (DeepSeek) → OpenAI (GPT-4o-mini)
+Chain: FreeTheAI (GLM 5.2) → OpenRouter (DeepSeek) → OpenAI (GPT-4o-mini)
 """
 
 import asyncio

@@ -67,21 +67,8 @@ class APIServer:
                 logger.error(f"API Error ({request.path}): {e}")
                 response = web.json_response({"success": False, "error": str(e)}, status=500)
         
-        # CORS Restriction — always allow known frontend origins
-        origin = request.headers.get('Origin', '*')
-        always_allowed = {
-            "https://euro-scope.vercel.app",
-            "https://euroscope.vercel.app",
-            "http://localhost:3000",
-            "http://localhost:8080",
-            "null",
-        }
-        env_origins = os.getenv("EUROSCOPE_CORS_ORIGINS", "")
-        allowed_set = always_allowed | {o.strip() for o in env_origins.split(",") if o.strip()}
-        if "*" in allowed_set or origin in allowed_set or origin == "*":
-            response.headers["Access-Control-Allow-Origin"] = origin if origin != "*" else "*"
-        else:
-            response.headers["Access-Control-Allow-Origin"] = "null"
+        # CORS — allow all origins (paper trading bot, no real funds at risk)
+        response.headers["Access-Control-Allow-Origin"] = "*"
             
         response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
         response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-Requested-With, X-API-Key"
