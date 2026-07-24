@@ -35,6 +35,9 @@ class BacktestTrade:
     entry_bar: int = 0
     exit_bar: int = 0
     slippage_pips: float = 0.0
+    confidence: float = 50.0
+    session: str = "Unknown"
+    regime: str = "unknown"
 
 
 @dataclass

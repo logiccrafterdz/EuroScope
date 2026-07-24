@@ -317,6 +317,36 @@ class Orchestrator:
         if raw_conf > 1.0:
             ctx.signals["confidence"] = raw_conf / 100.0
 
+        # 2b. COT Positioning Filter (contrarian check against extreme positioning)
+        signal_dir = ctx.signals.get("direction", "")
+        if signal_dir in ("BUY", "SELL"):
+            try:
+                cot_skill = self.registry.get("cot_positioning")
+                if cot_skill:
+                    cot_ctx = SkillContext()
+                    cot_ctx.analysis = ctx.analysis
+                    cot_ctx.signals = dict(ctx.signals)
+                    cot_result = await cot_skill.safe_execute(
+                        cot_ctx, "filter_signal", direction=signal_dir
+                    )
+                    if cot_result.success and cot_result.data:
+                        action = cot_result.data.get("action", "no_filter")
+                        if action == "contrarian_signal":
+                            old_dir = ctx.signals["direction"]
+                            new_dir = "SELL" if old_dir == "BUY" else "BUY"
+                            ctx.signals["direction"] = new_dir
+                            ctx.signals["verdict"] = new_dir
+                            logger.info(
+                                f"COT FILTER: Flipped signal {old_dir} → {new_dir} "
+                                f"(extreme positioning detected)"
+                            )
+                        elif action == "wait_for_timing":
+                            ctx.signals["confidence"] = ctx.signals.get("confidence", 0) * 0.7
+                            logger.info("COT FILTER: Reduced confidence (timing not confirmed)")
+                        ctx.metadata["cot_filter"] = cot_result.data
+            except Exception as e:
+                logger.warning(f"COT filter failed (non-blocking): {e}")
+
         # 3. Multi-Agent Debate Layer
         if self.config and self.config.debate_enabled and self.debate_engine and self.risk_debate:
             signal_confidence = ctx.signals.get("confidence", 0)

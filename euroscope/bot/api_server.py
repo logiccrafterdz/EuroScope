@@ -67,18 +67,21 @@ class APIServer:
                 logger.error(f"API Error ({request.path}): {e}")
                 response = web.json_response({"success": False, "error": str(e)}, status=500)
         
-        # CORS Restriction
-        allowed_origins = os.getenv("EUROSCOPE_CORS_ORIGINS", "*")
+        # CORS Restriction — always allow known frontend origins
         origin = request.headers.get('Origin', '*')
-        
-        if allowed_origins != "*":
-            origins_list = [o.strip() for o in allowed_origins.split(",")]
-            if origin in origins_list:
-                response.headers["Access-Control-Allow-Origin"] = origin
-            else:
-                response.headers["Access-Control-Allow-Origin"] = "null"
+        always_allowed = {
+            "https://euro-scope.vercel.app",
+            "https://euroscope.vercel.app",
+            "http://localhost:3000",
+            "http://localhost:8080",
+            "null",
+        }
+        env_origins = os.getenv("EUROSCOPE_CORS_ORIGINS", "")
+        allowed_set = always_allowed | {o.strip() for o in env_origins.split(",") if o.strip()}
+        if "*" in allowed_set or origin in allowed_set or origin == "*":
+            response.headers["Access-Control-Allow-Origin"] = origin if origin != "*" else "*"
         else:
-            response.headers["Access-Control-Allow-Origin"] = origin if origin != '*' else '*'
+            response.headers["Access-Control-Allow-Origin"] = "null"
             
         response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
         response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-Requested-With, X-API-Key"
@@ -143,12 +146,14 @@ class APIServer:
         mkt_data = result_mkt.data if result_mkt.success else {"status": "Closed"}
         res_session = await self.bot.orchestrator.run_skill("session_context", "detect", context=ctx)
         session_data = res_session.data if res_session.success else {"session_regime": "unknown"}
-        # Check WebSocket connection status
+        # Check data source status (BiQuote REST API — no WebSocket needed)
         ws_status = "DISCONNECTED"
-        if hasattr(self.bot, "ws_client") and self.bot.ws_client:
-            import websockets
-            if self.bot.ws_client.ws and self.bot.ws_client.ws.state.name == "OPEN":
+        try:
+            price_res = await self.bot.orchestrator.run_skill("market_data", "get_price")
+            if price_res.success and price_res.data and price_res.data.get("mid", 0) > 0:
                 ws_status = "CONNECTED"
+        except Exception:
+            pass
 
         return web.json_response({
             "success": True,

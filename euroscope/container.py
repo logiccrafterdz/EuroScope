@@ -18,6 +18,7 @@ from .data.storage import Storage
 from .forecast.engine import Forecaster
 from .trading.risk_manager import RiskManager
 from .trading.regime_adaptive import RegimeAdaptiveEngine
+from .trading.safety_guardrails import CircuitBreaker, CircuitBreakerConfig
 from .bot.rate_limiter import RateLimiter
 from .bot.user_settings import UserSettings
 from .bot.notification_manager import NotificationManager
@@ -142,6 +143,7 @@ class ServiceContainer:
         self.calendar = EconomicCalendar()
         self.macro_provider = FundamentalDataProvider(config.data.fred_api_key)
         self.risk_manager = RiskManager(storage=self.storage)
+        self.circuit_breaker = CircuitBreaker(CircuitBreakerConfig())
         
         # 5. Tracking & Analytics
         self.pattern_tracker = PatternTracker(storage=self.storage)

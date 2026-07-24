@@ -349,10 +349,12 @@ class CPCVEvaluator:
                     "fold": fold_id,
                     "session": getattr(t, "session", "Unknown"),
                     "regime": getattr(t, "regime", "unknown"),
+                    "confidence": getattr(t, "confidence", 50.0),
                 }
                 fold_trades.append(trade_dict)
                 all_trades.append(trade_dict)
                 all_pnls.append(t.pnl_pips)
+                all_confidences.append(getattr(t, "confidence", 50.0))
 
             fold_core = _compute_core_metrics(fold_pnls) if fold_pnls else {}
             fold_metrics = EvalMetrics(**{k: v for k, v in fold_core.items() if k in _EVAL_FIELDS})
