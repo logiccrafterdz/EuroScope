@@ -67,7 +67,7 @@ class APIServer:
                 response = await handler(request)
             except Exception as e:
                 logger.error(f"API Error ({request.path}): {e}")
-                response = web.json_response({"success": False, "error": str(e)}, status=500)
+                response = web.json_response({"success": False, "error": "Internal server error"}, status=500)
         
         # CORS — restrict to known frontend origins
         origin = request.headers.get("Origin", "")
@@ -223,7 +223,7 @@ class APIServer:
             logger.error(f"API forecast error: {e}")
             return web.json_response({
                 "success": False,
-                "error": str(e),
+                    "error": "Internal server error",
                 "data": {
                     "direction": "NEUTRAL",
                     "confidence": 0,
@@ -259,7 +259,7 @@ class APIServer:
             return web.json_response({"success": True, "signals": signals})
         except Exception as e:
             logger.error(f"API: Signals error: {e}")
-            return web.json_response({"success": False, "error": str(e), "signals": []})
+            return web.json_response({"success": False, "error": "Internal server error", "signals": []})
 
     async def _api_trades(self, request):
         """API endpoint for active open trades."""
@@ -368,7 +368,7 @@ class APIServer:
                 })
         except Exception as e:
             logger.error(f"API: Error scanning signals: {e}\n{traceback.format_exc()}")
-            return web.json_response({"success": False, "error": str(e)})
+            return web.json_response({"success": False, "error": "Internal server error"})
 
     async def _api_alerts(self, request):
         """API endpoint for active price alerts."""
@@ -380,7 +380,7 @@ class APIServer:
             return web.json_response({"success": True, "alerts": alerts})
         except Exception as e:
             logger.error(f"API: Alerts error: {e}")
-            return web.json_response({"success": False, "error": str(e), "alerts": []})
+            return web.json_response({"success": False, "error": "Internal server error", "alerts": []})
 
     async def _api_analysis(self, request):
         """API endpoint for technical analysis snapshot."""
@@ -447,7 +447,7 @@ class APIServer:
             return web.json_response({"success": True, "candles": candles, "count": len(candles)})
         except Exception as e:
             logger.error(f"API: Critical error in _api_candles: {e}")
-            return web.json_response({"success": False, "error": str(e), "candles": []})
+            return web.json_response({"success": False, "error": "Internal server error", "candles": []})
 
     async def _api_backtest(self, request):
         """API endpoint for backtesting dashboard data."""
@@ -548,7 +548,7 @@ class APIServer:
             return web.json_response({"success": False, "error": "Backtest timed out (45s limit). Try a shorter timeframe."})
         except Exception as e:
             logger.error(f"API: Backtest error: {e}", exc_info=True)
-            return web.json_response({"success": False, "error": str(e)})
+            return web.json_response({"success": False, "error": "Internal server error"})
 
     async def _api_performance(self, request):
         """API endpoint for trading performance dashboard."""
@@ -606,7 +606,7 @@ class APIServer:
             })
         except Exception as e:
             logger.error(f"API: Performance error: {e}")
-            return web.json_response({"success": False, "error": str(e)})
+            return web.json_response({"success": False, "error": "Internal server error"})
 
     async def _api_account(self, request):
         """API endpoint for account balance and equity."""
@@ -631,7 +631,7 @@ class APIServer:
             return web.json_response({"success": True, "data": engine.format_for_api(briefing)})
         except Exception as e:
             logger.error(f"API: Briefing error: {e}")
-            return web.json_response({"success": False, "error": str(e)})
+            return web.json_response({"success": False, "error": "Internal server error"})
 
     async def _api_patterns(self, request):
         """API endpoint for detected chart patterns."""
@@ -645,7 +645,7 @@ class APIServer:
             return web.json_response({"success": True, "data": result.data})
         except Exception as e:
             logger.error(f"API: Patterns error: {e}")
-            return web.json_response({"success": False, "error": str(e)})
+            return web.json_response({"success": False, "error": "Internal server error"})
 
     async def _api_levels(self, request):
         """API endpoint for support/resistance levels."""
@@ -659,7 +659,7 @@ class APIServer:
             return web.json_response({"success": True, "data": result.data})
         except Exception as e:
             logger.error(f"API: Levels error: {e}")
-            return web.json_response({"success": False, "error": str(e)})
+            return web.json_response({"success": False, "error": "Internal server error"})
             
     async def _api_settings(self, request):
         """API endpoint to get user settings/risk parameters."""
@@ -675,7 +675,7 @@ class APIServer:
                     data.update(json.load(f))
             return web.json_response({"success": True, "data": data})
         except Exception as e:
-            return web.json_response({"success": False, "error": str(e)})
+            return web.json_response({"success": False, "error": "Internal server error"})
 
     async def _api_settings_update(self, request):
         """API endpoint to update user settings/risk parameters."""
@@ -738,7 +738,7 @@ class APIServer:
 
             return web.json_response({"success": True, "data": data})
         except Exception as e:
-            return web.json_response({"success": False, "error": str(e)})
+            return web.json_response({"success": False, "error": "Internal server error"})
 
     async def _api_health(self, request):
         """Standard health check endpoint reporting subsystem states."""
@@ -849,7 +849,7 @@ class APIServer:
             return web.json_response({"success": True, "emergency_mode": is_active, "message": f"Emergency Mode {status}"})
         except Exception as e:
             logger.error(f"API: Emergency trigger failed: {e}")
-            return web.json_response({"success": False, "error": str(e)})
+            return web.json_response({"success": False, "error": "Internal server error"})
 
     async def _api_agent_state(self, request):
         """API endpoint for Agent Core state."""
@@ -1257,7 +1257,7 @@ class APIServer:
             return web.json_response({"success": True, "simulation": status})
         except Exception as e:
             logger.error(f"Simulation API error: {e}")
-            return web.json_response({"success": False, "error": str(e)})
+            return web.json_response({"success": False, "error": "Internal server error"})
 
     async def _api_simulation_start(self, request):
         """API endpoint to start simulation."""
@@ -1277,7 +1277,7 @@ class APIServer:
             return web.json_response({"success": True, "message": "Simulation started"})
         except Exception as e:
             logger.error(f"Simulation start error: {e}")
-            return web.json_response({"success": False, "error": str(e)})
+            return web.json_response({"success": False, "error": "Internal server error"})
 
     async def _api_simulation_stop(self, request):
         """API endpoint to stop simulation."""
@@ -1291,7 +1291,7 @@ class APIServer:
             return web.json_response({"success": True, "message": "Simulation stopped"})
         except Exception as e:
             logger.error(f"Simulation stop error: {e}")
-            return web.json_response({"success": False, "error": str(e)})
+            return web.json_response({"success": False, "error": "Internal server error"})
 
     async def _api_simulation_trade(self, request):
         """API endpoint to open a manual trade."""
@@ -1338,7 +1338,7 @@ class APIServer:
             })
         except Exception as e:
             logger.error(f"Simulation trade error: {e}")
-            return web.json_response({"success": False, "error": str(e)})
+            return web.json_response({"success": False, "error": "Internal server error"})
 
     async def start(self):
         """Run the AIOHTTP server as a background task."""

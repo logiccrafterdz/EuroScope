@@ -8,6 +8,7 @@ Primary: BiQuote (Free, No API Key) | Secondary: yfinance | Fallback: Alpha Vant
 import asyncio
 import logging
 import sqlite3
+import time
 from datetime import datetime, timedelta, UTC
 from pathlib import Path
 from typing import Optional
@@ -30,6 +31,7 @@ class CandleCache:
         Path(db_path).parent.mkdir(parents=True, exist_ok=True)
         self._db_path = db_path
         self._init_db()
+        self._prune_if_needed()
 
     def _init_db(self):
         conn = sqlite3.connect(self._db_path, timeout=5)
@@ -103,6 +105,24 @@ class CandleCache:
         finally:
             conn.close()
 
+    def _prune_if_needed(self):
+        """Remove old candles to keep DB size reasonable. Max 10k rows per timeframe."""
+        conn = sqlite3.connect(self._db_path, timeout=5)
+        try:
+            for tf in ("M1", "M5", "M15", "H1", "H4", "D1", "W1"):
+                count = conn.execute("SELECT COUNT(*) FROM candles WHERE timeframe = ?", (tf,)).fetchone()[0]
+                if count > 10000:
+                    conn.execute(
+                        "DELETE FROM candles WHERE timeframe = ? AND timestamp NOT IN "
+                        "(SELECT timestamp FROM candles WHERE timeframe = ? ORDER BY timestamp DESC LIMIT 10000)",
+                        (tf, tf),
+                    )
+            conn.commit()
+        except Exception:
+            pass
+        finally:
+            conn.close()
+
 
 class MultiSourceProvider:
     """
@@ -122,6 +142,12 @@ class MultiSourceProvider:
 
         self._last_source = "biquote"
 
+        # Simple circuit breaker for price fetching
+        self._price_failures = 0
+        self._price_circuit_open_until: float = 0.0
+        self._PRICE_FAIL_THRESHOLD = 5
+        self._PRICE_RECOVERY_TIMEOUT = 60.0  # seconds
+
     @property
     def last_source(self) -> str:
         """Which data source was used for the last successful call."""
@@ -129,11 +155,23 @@ class MultiSourceProvider:
 
     async def get_price(self) -> dict:
         """Get current EUR/USD price with automatic failover."""
+        # Circuit breaker check
+        if self._price_failures >= self._PRICE_FAIL_THRESHOLD:
+            if time.time() < self._price_circuit_open_until:
+                logger.warning("Price circuit breaker OPEN — returning last known price")
+                if self.biquote._last_known_price:
+                    return {**self.biquote._last_known_price, "source": "cached", "circuit_breaker": True}
+                return {"error": "All price sources down (circuit breaker open)"}
+            else:
+                logger.info("Price circuit breaker: attempting recovery")
+                self._price_failures = 0
+
         # Try BiQuote first (Free, No API Key)
         try:
             result = await self.biquote.get_price()
             if "error" not in result:
                 self._last_source = "biquote"
+                self._price_failures = 0  # Reset on success
                 result["source"] = "biquote"
                 return result
             logger.warning(f"BiQuote price failed: {result.get('error')}, trying OANDA...")
@@ -169,11 +207,19 @@ class MultiSourceProvider:
 
         # Try fallback (Alpha Vantage)
         if self.fallback:
-            result = self.fallback.get_price()
+            result = await self.fallback.get_price()
             if "error" not in result:
                 self._last_source = "alphavantage"
+                self._price_failures = 0
                 return result
             logger.error(f"Alpha Vantage also failed: {result.get('error')}")
+
+        # All sources failed — update circuit breaker
+        self._price_failures += 1
+        if self._price_failures >= self._PRICE_FAIL_THRESHOLD:
+            self._price_circuit_open_until = time.time() + self._PRICE_RECOVERY_TIMEOUT
+            logger.warning(f"Price circuit breaker OPENED after {self._price_failures} consecutive failures")
+        return {"error": "All price sources failed"}
 
     async def close(self):
         """Close all underlying provider sessions."""
@@ -241,7 +287,7 @@ class MultiSourceProvider:
 
         # 5) Alpha Vantage
         if self.fallback:
-            df = self.fallback.get_candles(tf, count)
+            df = await self.fallback.get_candles(tf, count)
             if df is not None and not df.empty:
                 df = self._validate_data(df)
                 if df is not None:

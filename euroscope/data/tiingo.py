@@ -5,6 +5,7 @@ High-fidelity historical and real-time EUR/USD data.
 Free tier: 1,000 requests per day, 50 per hour.
 """
 
+import asyncio
 import logging
 import time
 from datetime import datetime, timedelta, UTC
@@ -35,11 +36,11 @@ class TiingoProvider:
         self._cache_ttl = timedelta(minutes=5)
         self._last_call = 0.0
 
-    def _rate_limit(self):
+    async def _rate_limit(self):
         """Tiingo free tier has hourly/daily limits, but we add a small safety buffer."""
         elapsed = time.time() - self._last_call
         if elapsed < 1.0:  # 1 second between calls safety
-            time.sleep(1.0 - elapsed)
+            await asyncio.sleep(1.0 - elapsed)
         self._last_call = time.time()
 
     async def get_price(self) -> dict:
@@ -48,7 +49,7 @@ class TiingoProvider:
             return {"error": "Tiingo API key not configured"}
 
         try:
-            self._rate_limit()
+            await self._rate_limit()
             headers = {"Content-Type": "application/json", "Authorization": f"Token {self.api_key}"}
             async with httpx.AsyncClient(timeout=10) as client:
                 resp = await client.get(f"{BASE_URL}/top", params={"tickers": "eurusd"}, headers=headers)
@@ -96,7 +97,7 @@ class TiingoProvider:
                     return df.tail(count).copy()
 
         try:
-            self._rate_limit()
+            await self._rate_limit()
             headers = {"Content-Type": "application/json", "Authorization": f"Token {self.api_key}"}
             
             params = {

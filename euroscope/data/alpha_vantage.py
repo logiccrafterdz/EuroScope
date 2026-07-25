@@ -5,6 +5,7 @@ Fallback data source for EUR/USD OHLCV data using Alpha Vantage Forex API.
 Free tier: 5 API calls per minute, 500 per day.
 """
 
+import asyncio
 import logging
 import time
 from datetime import datetime, timedelta, UTC
@@ -36,20 +37,20 @@ class AlphaVantageProvider:
         self._cache_ttl = timedelta(minutes=10)
         self._last_call = 0.0  # rate limiting
 
-    def _rate_limit(self):
+    async def _rate_limit(self):
         """Enforce rate limit: minimum 12s between calls (5/min)."""
         elapsed = time.time() - self._last_call
         if elapsed < 12:
-            time.sleep(12 - elapsed)
+            await asyncio.sleep(12 - elapsed)
         self._last_call = time.time()
 
-    def get_price(self) -> dict:
+    async def get_price(self) -> dict:
         """Get current EUR/USD price via Alpha Vantage."""
         if not self.api_key:
             return {"error": "Alpha Vantage API key not configured"}
 
         try:
-            self._rate_limit()
+            await self._rate_limit()
             with httpx.Client(timeout=15) as client:
                 resp = client.get(BASE_URL, params={
                     "function": "CURRENCY_EXCHANGE_RATE",
@@ -82,7 +83,7 @@ class AlphaVantageProvider:
             logger.error(f"Alpha Vantage price error: {e}")
             return {"error": str(e)}
 
-    def get_candles(self, timeframe: str = "H1", count: int = 100) -> Optional[pd.DataFrame]:
+    async def get_candles(self, timeframe: str = "H1", count: int = 100) -> Optional[pd.DataFrame]:
         """Get OHLCV candle data from Alpha Vantage."""
         tf = timeframe.upper()
         if tf not in AV_TIMEFRAMES:
@@ -101,7 +102,7 @@ class AlphaVantageProvider:
                 return df.tail(count).copy()
 
         try:
-            self._rate_limit()
+            await self._rate_limit()
             params = AV_TIMEFRAMES[tf]
 
             request_params = {
