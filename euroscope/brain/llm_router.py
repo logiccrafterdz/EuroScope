@@ -14,6 +14,8 @@ from typing import Optional
 
 import httpx
 
+from .cost_tracker import CostTracker
+
 logger = logging.getLogger("euroscope.brain.llm_router")
 
 
@@ -47,6 +49,7 @@ class LLMRouter:
         self._call_count: int = 0
         self._failure_count: int = 0
         self._warned_identical_keys: bool = False
+        self.cost_tracker = CostTracker()
 
         # Log provider chain
         if self.providers:
@@ -248,6 +251,9 @@ class LLMRouter:
         if not self.providers:
             return "⚠️ No LLM providers configured. Set API keys in .env"
 
+        if self.cost_tracker.should_throttle():
+            return "⚠️ Daily LLM budget exceeded. Throttled until midnight UTC."
+
         self._call_count += 1
 
         async def call_fn(provider):
@@ -283,6 +289,9 @@ class LLMRouter:
         if not self.providers:
             return {"error": "No LLM providers configured"}
 
+        if self.cost_tracker.should_throttle():
+            return {"error": "Daily LLM budget exceeded. Throttled until midnight UTC."}
+
         self._call_count += 1
 
         async def call_fn(provider):
@@ -305,6 +314,9 @@ class LLMRouter:
     ) -> dict:
         if not self.providers:
             return {"content": "⚠️ No LLM providers configured. Set API keys in .env", "function_calls": []}
+
+        if self.cost_tracker.should_throttle():
+            return {"content": "⚠️ Daily LLM budget exceeded. Throttled until midnight UTC.", "function_calls": []}
 
         self._call_count += 1
         if not functions:
@@ -531,13 +543,19 @@ class LLMRouter:
         self._log_usage(provider.name, data)
         return data
 
-    @staticmethod
-    def _log_usage(provider_name: str, data: dict):
-        """Log token usage if available."""
+    def _log_usage(self, provider_name: str, data: dict):
+        """Log token usage and record to cost tracker."""
         usage = data.get("usage", {})
         if usage:
+            prompt_tokens = usage.get("prompt_tokens", 0) or 0
+            completion_tokens = usage.get("completion_tokens", 0) or 0
+            total_tokens = usage.get("total_tokens", prompt_tokens + completion_tokens)
             logger.debug(
-                f"{provider_name}: {usage.get('total_tokens', '?')} tokens "
-                f"(prompt: {usage.get('prompt_tokens', '?')}, "
-                f"completion: {usage.get('completion_tokens', '?')})"
+                f"{provider_name}: {total_tokens} tokens "
+                f"(prompt: {prompt_tokens}, completion: {completion_tokens})"
+            )
+            self.cost_tracker.record_call(
+                model=provider_name,
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
             )

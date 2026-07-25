@@ -40,9 +40,11 @@ class APIServer:
         self._RESP_TTL = 60  # 60 seconds for most endpoints
         
         # Security & Limits
-        self.api_secret = getattr(self.config, "api_secret_key", None)
+        self.api_secret = getattr(self.config, "api_secret_key", None) or ""
         if not self.api_secret or self.api_secret == "euroscope-zenith-v5":
-            logger.warning("Using default API secret. It is HIGHLY recommended to set EUROSCOPE_API_SECRET in your .env.")
+            import secrets
+            self.api_secret = secrets.token_hex(32)
+            logger.warning(f"API secret auto-generated. Add this to .env as EUROSCOPE_API_SECRET={self.api_secret}")
         self.rate_limits = {}  # Format: {"ip:endpoint": [timestamp1, timestamp2]}
         
         # Initialize WebhookDispatcher for outbound events
@@ -67,11 +69,21 @@ class APIServer:
                 logger.error(f"API Error ({request.path}): {e}")
                 response = web.json_response({"success": False, "error": str(e)}, status=500)
         
-        # CORS — allow all origins (paper trading bot, no real funds at risk)
-        response.headers["Access-Control-Allow-Origin"] = "*"
-            
-        response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
-        response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-Requested-With, X-API-Key"
+        # CORS — restrict to known frontend origins
+        origin = request.headers.get("Origin", "")
+        _allowed_origins = {
+            "https://euro-scope.vercel.app",
+            "https://euroscope.vercel.app",
+            "http://localhost:3000",
+            "http://localhost:8080",
+            "null",
+        }
+        env_origins = os.getenv("EUROSCOPE_CORS_ORIGINS", "")
+        allowed_set = _allowed_origins | {o.strip() for o in env_origins.split(",") if o.strip()}
+        if origin in allowed_set or not origin:
+            response.headers["Access-Control-Allow-Origin"] = origin or "*"
+            response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+            response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-Requested-With, X-API-Key"
         return response
 
     def _is_rate_limited(self, request, endpoint: str, limit: int, window: int) -> bool:
@@ -669,6 +681,36 @@ class APIServer:
         """API endpoint to update user settings/risk parameters."""
         try:
             new_data = await request.json()
+            
+            _ALLOWED_SETTINGS = {
+                "risk_per_trade": (float, 0.1, 5.0),
+                "max_daily_loss": (float, 0.5, 20.0),
+                "auto_trading_enabled": (bool, None, None),
+                "max_open_trades": (int, 1, 10),
+            }
+            validated = {}
+            for key, value in new_data.items():
+                if key not in _ALLOWED_SETTINGS:
+                    logger.warning(f"API: Rejected unknown setting key: {key}")
+                    continue
+                expected_type, min_val, max_val = _ALLOWED_SETTINGS[key]
+                if not isinstance(value, expected_type):
+                    return web.json_response(
+                        {"success": False, "error": f"Setting '{key}' must be {expected_type.__name__}"}, status=400
+                    )
+                if min_val is not None and value < min_val:
+                    return web.json_response(
+                        {"success": False, "error": f"Setting '{key}' must be >= {min_val}"}, status=400
+                    )
+                if max_val is not None and value > max_val:
+                    return web.json_response(
+                        {"success": False, "error": f"Setting '{key}' must be <= {max_val}"}, status=400
+                    )
+                validated[key] = value
+            
+            if not validated:
+                return web.json_response({"success": False, "error": "No valid settings provided"}, status=400)
+            
             settings_path = os.path.join(self.config.data_dir, "bot_settings.json")
             data = {
                 "risk_per_trade": 1.0,
@@ -679,7 +721,7 @@ class APIServer:
                 with open(settings_path, "r") as f:
                     data.update(json.load(f))
                     
-            data.update(new_data)
+            data.update(validated)
             self.bot.bot_settings.update(data)
             
             os.makedirs(self.config.data_dir, exist_ok=True)
@@ -758,7 +800,13 @@ class APIServer:
         return web.json_response(health_data, status=status_code)
 
     async def _api_emergency(self, request):
-        """API endpoint to trigger the Emergency Kill Switch."""
+        """API endpoint to trigger the Emergency Kill Switch. Requires admin-level auth."""
+        admin_key = request.headers.get("X-Admin-Key", "")
+        expected_admin = os.getenv("EUROSCOPE_ADMIN_KEY", self.api_secret)
+        if not admin_key or admin_key != expected_admin:
+            logger.warning(f"Unauthorized EMERGENCY access attempt from {request.remote}")
+            return web.json_response({"success": False, "error": "Admin authorization required"}, status=403)
+        
         logger.warning("🚨 EMERGENCY KILL SWITCH TRIGGERED VIA API 🚨")
         try:
             data = await request.json()

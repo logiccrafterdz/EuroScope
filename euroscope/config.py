@@ -62,7 +62,7 @@ class DataConfig(BaseModel):
 class Config(BaseSettings):
     model_config = SettingsConfigDict(extra="ignore")
 
-    api_secret_key: str = Field(default="euroscope-zenith-v5")
+    api_secret_key: str = Field(default="")
     llm: LLMConfig = Field(default_factory=LLMConfig)
     telegram: TelegramConfig = Field(default_factory=TelegramConfig)
     data: DataConfig = Field(default_factory=DataConfig)
