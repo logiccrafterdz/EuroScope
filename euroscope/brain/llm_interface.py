@@ -251,16 +251,22 @@ class LLMInterface:
         final_response = await self.router.chat(messages)
         return final_response
 
-    async def chat_with_react_loop(
+    async def _react_loop_core(
         self,
         user_message: str,
+        *,
+        fallback_chat_method,
         max_iterations: int = 5,
         max_tokens_per_iteration: int = 1500,
+        max_total_time: int = 60,
+        iteration_timeout: int = 15,
         custom_functions: Optional[list[dict]] = None,
         system_override: Optional[str] = None,
+        log_label: str = "iteration",
+        early_timeout_message: str = "",
     ) -> dict[str, Any]:
         if not self.router or not hasattr(self.router, "chat_with_functions"):
-            final_answer = await self.chat(user_message, system_override=self._get_system_prompt_with_tools())
+            final_answer = await fallback_chat_method(user_message, system_override=self._get_system_prompt_with_tools())
             return {
                 "final_answer": final_answer,
                 "reasoning_steps": [],
@@ -268,6 +274,7 @@ class LLMInterface:
                 "iterations": 0,
                 "confidence": self._calculate_confidence(final_answer, []),
             }
+
         system = system_override or self._get_react_system_prompt()
         if self.vector_memory:
             context = self.vector_memory.get_relevant_context(user_message)
@@ -284,7 +291,6 @@ class LLMInterface:
         tools_used: list[str] = []
         iteration = 0
         start_time = time.time()
-        max_total_time = 60
 
         while iteration < max_iterations:
             if time.time() - start_time > max_total_time:
@@ -308,10 +314,12 @@ class LLMInterface:
                         function_call="auto",
                         max_tokens=max_tokens_per_iteration,
                     ),
-                    timeout=15,
+                    timeout=iteration_timeout,
                 )
             except Exception as e:
                 final_answer = await self._force_final_answer(messages)
+                if early_timeout_message and not reasoning_steps and not tools_used:
+                    final_answer = early_timeout_message
                 confidence = self._calculate_confidence(final_answer, tools_used, incomplete=True)
                 return {
                     "final_answer": final_answer,
@@ -325,26 +333,21 @@ class LLMInterface:
             content = response.get("content")
             function_calls = response.get("function_calls") or []
 
-            # Check for pseudo-tool calls in text if no formal function calls
             if not function_calls and content:
                 function_calls = self._parse_text_tool_calls(content)
 
             if content:
-                # Anti-hallucination: if the model wrote "Observation:" itself, it's hallucinating result.
-                # Truncate content at the first sign of hallucination.
                 for trigger in ["Observation:", "OBSERVE:", "Result:", "RESULT:"]:
                     if trigger in content:
-                        logger.warning(f"Detected hallucinated {trigger} in iteration {iteration}")
+                        logger.warning(f"Detected hallucinated {trigger} in {log_label} {iteration}")
                         content = content.split(trigger)[0].strip()
                         break
-                
+
                 reasoning = self._extract_reasoning(content)
                 if reasoning:
                     reasoning_steps.append(f"Iteration {iteration}: {reasoning}")
 
-            # If the model provided a final answer without tools, or explicitly said it's finished
             if content and not function_calls:
-                # Check if it's actually a final answer or just reasoning without action
                 lowered = content.lower()
                 if (
                     "get_" not in lowered
@@ -362,11 +365,9 @@ class LLMInterface:
                         "confidence": confidence,
                     }
                 if any(x in lowered for x in ["final analysis:", "answer:", "comprehensive analysis", "summary:"]):
-                    # Clean up the final answer from any leftover ReAct markers
                     clean_content = content
                     for marker in ["REASON:", "ACT:", "THOUGHT:", "FINAL ANALYSIS:"]:
                         clean_content = clean_content.replace(marker, "").strip()
-                    
                     confidence = self._calculate_confidence(clean_content, tools_used)
                     return {
                         "final_answer": clean_content,
@@ -376,7 +377,6 @@ class LLMInterface:
                         "confidence": confidence,
                     }
                 else:
-                    # If it's just talking without taking action, prompt for action or final answer
                     messages.append({
                         "role": "user",
                         "content": "You provided reasoning but no action. Either call a tool or provide 'FINAL ANALYSIS:' if you are finished."
@@ -409,14 +409,10 @@ class LLMInterface:
                     "function_call_result": proactive_call.get("arguments") or {},
                 }
 
-            # Append assistant message with tool calls
-            # CRITICAL: If no formal tool_calls exist in the raw_message, we MUST create them
-            # so the API accepts the subsequent 'tool' role messages.
             raw_message = response.get("raw_message")
             if raw_message and raw_message.get("tool_calls"):
                 messages.append(raw_message)
             else:
-                # Create a synthetic assistant message with tool_calls for history
                 messages.append({
                     "role": "assistant",
                     "content": content,
@@ -436,7 +432,7 @@ class LLMInterface:
                 call_id = call.get("id") or f"call_{iteration}_{i}"
                 if name == "proactive_alert_decision":
                     continue
-                
+
                 try:
                     result = await asyncio.wait_for(
                         self._execute_tool(name, args),
@@ -454,9 +450,6 @@ class LLMInterface:
                     "content": observation,
                 })
 
-            # Removed the intermediate user message to maintain a clean sequence:
-            # assistant(tool_calls) -> tool(results) -> assistant(response)
-
         final_answer = await self._force_final_answer(messages)
         confidence = self._calculate_confidence(final_answer, tools_used, incomplete=True)
         return {
@@ -467,6 +460,26 @@ class LLMInterface:
             "confidence": confidence,
             "warning": "Reached max iterations — answer may be incomplete",
         }
+
+    async def chat_with_react_loop(
+        self,
+        user_message: str,
+        max_iterations: int = 5,
+        max_tokens_per_iteration: int = 1500,
+        custom_functions: Optional[list[dict]] = None,
+        system_override: Optional[str] = None,
+    ) -> dict[str, Any]:
+        return await self._react_loop_core(
+            user_message,
+            fallback_chat_method=self.chat,
+            max_iterations=max_iterations,
+            max_tokens_per_iteration=max_tokens_per_iteration,
+            max_total_time=60,
+            iteration_timeout=15,
+            custom_functions=custom_functions,
+            system_override=system_override,
+            log_label="iteration",
+        )
 
     async def stateless_chat_with_react_loop(
         self,
@@ -477,205 +490,18 @@ class LLMInterface:
         system_override: Optional[str] = None,
     ) -> dict[str, Any]:
         """A ReAct loop that does NOT include the user's conversational history."""
-        if not self.router or not hasattr(self.router, "chat_with_functions"):
-            final_answer = await self.stateless_chat(user_message, system_override=self._get_system_prompt_with_tools())
-            return {
-                "final_answer": final_answer,
-                "reasoning_steps": [],
-                "tools_used": [],
-                "iterations": 0,
-                "confidence": self._calculate_confidence(final_answer, []),
-            }
-        
-        system = system_override or self._get_react_system_prompt()
-        if self.vector_memory:
-            context = self.vector_memory.get_relevant_context(user_message)
-            if context:
-                system += f"\n\n### LONG-TERM MEMORY (PAST CONTEXT)\n{context}"
-
-        functions = custom_functions if custom_functions is not None else get_all_function_schemas()
-        # NOTICE: No self.conversation_history loaded here
-        messages = [
-            {"role": "system", "content": system},
-            {"role": "user", "content": user_message},
-        ]
-
-        reasoning_steps: list[str] = []
-        tools_used: list[str] = []
-        iteration = 0
-        start_time = time.time()
-        max_total_time = 75  # Slightly longer for background analysis
-
-        while iteration < max_iterations:
-            if time.time() - start_time > max_total_time:
-                final_answer = await self._force_final_answer(messages)
-                confidence = self._calculate_confidence(final_answer, tools_used, incomplete=True)
-                return {
-                    "final_answer": final_answer,
-                    "reasoning_steps": reasoning_steps,
-                    "tools_used": tools_used,
-                    "iterations": iteration,
-                    "confidence": confidence,
-                    "warning": "Reached max time — answer may be incomplete",
-                }
-
-            iteration += 1
-            try:
-                response = await asyncio.wait_for(
-                    self.router.chat_with_functions(
-                        messages=messages,
-                        functions=functions,
-                        function_call="auto",
-                        max_tokens=max_tokens_per_iteration,
-                    ),
-                    timeout=20, # Higher timeout for background processing
-                )
-            except Exception as e:
-                final_answer = await self._force_final_answer(messages)
-                if not reasoning_steps and not tools_used:
-                    # In case of early timeout
-                    final_answer = "Timeout during background task before any data was processed."
-                confidence = self._calculate_confidence(final_answer, tools_used, incomplete=True)
-                return {
-                    "final_answer": final_answer,
-                    "reasoning_steps": reasoning_steps,
-                    "tools_used": tools_used,
-                    "iterations": iteration,
-                    "confidence": confidence,
-                    "warning": f"Iteration timeout or error: {str(e)[:100]}",
-                }
-
-            content = response.get("content")
-            function_calls = response.get("function_calls") or []
-
-            if not function_calls and content:
-                function_calls = self._parse_text_tool_calls(content)
-
-            if content:
-                for trigger in ["Observation:", "OBSERVE:", "Result:", "RESULT:"]:
-                    if trigger in content:
-                        logger.warning(f"Detected hallucinated {trigger} in stateless iteration {iteration}")
-                        content = content.split(trigger)[0].strip()
-                        break
-                
-                reasoning = self._extract_reasoning(content)
-                if reasoning:
-                    reasoning_steps.append(f"Iteration {iteration}: {reasoning}")
-
-            if content and not function_calls:
-                lowered = content.lower()
-                if (
-                    "get_" not in lowered
-                    and not any(x in lowered for x in ["reason:", "act:", "thought:", "observation:", "observe:"])
-                ):
-                    clean_content = content
-                    for marker in ["REASON:", "ACT:", "THOUGHT:", "FINAL ANALYSIS:"]:
-                        clean_content = clean_content.replace(marker, "").strip()
-                    confidence = self._calculate_confidence(clean_content, tools_used)
-                    return {
-                        "final_answer": clean_content,
-                        "reasoning_steps": reasoning_steps,
-                        "tools_used": tools_used,
-                        "iterations": iteration,
-                        "confidence": confidence,
-                    }
-                if any(x in lowered for x in ["final analysis:", "answer:", "comprehensive analysis", "summary:"]):
-                    clean_content = content
-                    for marker in ["REASON:", "ACT:", "THOUGHT:", "FINAL ANALYSIS:"]:
-                        clean_content = clean_content.replace(marker, "").strip()
-                    
-                    confidence = self._calculate_confidence(clean_content, tools_used)
-                    return {
-                        "final_answer": clean_content,
-                        "reasoning_steps": reasoning_steps,
-                        "tools_used": tools_used,
-                        "iterations": iteration,
-                        "confidence": confidence,
-                    }
-                else:
-                    messages.append({
-                        "role": "user",
-                        "content": "You provided reasoning but no action. Either call a tool or provide 'FINAL ANALYSIS:' if you are finished."
-                    })
-                    continue
-
-            if not function_calls:
-                final_answer = await self._force_final_answer(messages)
-                confidence = self._calculate_confidence(final_answer, tools_used, incomplete=True)
-                return {
-                    "final_answer": final_answer,
-                    "reasoning_steps": reasoning_steps,
-                    "tools_used": tools_used,
-                    "iterations": iteration,
-                    "confidence": confidence,
-                    "warning": "No tools selected — answer may be incomplete",
-                }
-
-            proactive_call = next(
-                (call for call in function_calls if call.get("name") == "proactive_alert_decision"),
-                None,
-            )
-            if proactive_call:
-                return {
-                    "final_answer": content or "",
-                    "reasoning_steps": reasoning_steps,
-                    "tools_used": tools_used,
-                    "iterations": iteration,
-                    "confidence": self._calculate_confidence(content or "", tools_used),
-                    "function_call_result": proactive_call.get("arguments") or {},
-                }
-
-            raw_message = response.get("raw_message")
-            if raw_message and raw_message.get("tool_calls"):
-                messages.append(raw_message)
-            else:
-                messages.append({
-                    "role": "assistant",
-                    "content": content,
-                    "tool_calls": [
-                        {
-                            "id": call.get("id") or f"call_{iteration}_{i}",
-                            "type": "function",
-                            "function": {"name": call["name"], "arguments": json.dumps(call.get("arguments", {}))}
-                        } for i, call in enumerate(function_calls)
-                    ]
-                })
-
-            tool_results = []
-            for i, call in enumerate(function_calls):
-                name = call.get("name")
-                args = call.get("arguments") or {}
-                call_id = call.get("id") or f"call_{iteration}_{i}"
-                if name == "proactive_alert_decision":
-                    continue
-                
-                try:
-                    result = await asyncio.wait_for(
-                        self._execute_tool(name, args),
-                        timeout=self.tool_timeout,
-                    )
-                except Exception as e:
-                    result = {"success": False, "error": str(e)}
-
-                tools_used.append(name)
-                observation = self._format_tool_observation(name, result)
-                tool_results.append(observation)
-                messages.append({
-                    "role": "tool",
-                    "tool_call_id": call_id,
-                    "content": observation,
-                })
-
-        final_answer = await self._force_final_answer(messages)
-        confidence = self._calculate_confidence(final_answer, tools_used, incomplete=True)
-        return {
-            "final_answer": final_answer,
-            "reasoning_steps": reasoning_steps,
-            "tools_used": tools_used,
-            "iterations": iteration,
-            "confidence": confidence,
-            "warning": "Reached max iterations — answer may be incomplete",
-        }
+        return await self._react_loop_core(
+            user_message,
+            fallback_chat_method=self.stateless_chat,
+            max_iterations=max_iterations,
+            max_tokens_per_iteration=max_tokens_per_iteration,
+            max_total_time=75,
+            iteration_timeout=20,
+            custom_functions=custom_functions,
+            system_override=system_override,
+            log_label="stateless iteration",
+            early_timeout_message="Timeout during background task before any data was processed.",
+        )
 
     async def run_proactive_analysis(self) -> dict[str, Any]:
         """
