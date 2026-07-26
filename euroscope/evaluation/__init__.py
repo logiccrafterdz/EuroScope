@@ -18,6 +18,18 @@ from .harness_core import (
     CPCVFoldResult,
     EvalHarness,
 )
+from .llm_judge import (
+    GradeResult,
+    EvalSuiteResult,
+    grade_direction,
+    grade_confidence,
+    grade_forecast,
+    compute_pass_at_k,
+    compute_pass_pow_k,
+    run_evaluation_suite,
+    format_grade_report,
+    load_golden_dataset,
+)
 
 __all__ = [
     "EvalMetrics",
@@ -29,4 +41,14 @@ __all__ = [
     "CPCVConfig",
     "CPCVFoldResult",
     "EvalHarness",
+    "GradeResult",
+    "EvalSuiteResult",
+    "grade_direction",
+    "grade_confidence",
+    "grade_forecast",
+    "compute_pass_at_k",
+    "compute_pass_pow_k",
+    "run_evaluation_suite",
+    "format_grade_report",
+    "load_golden_dataset",
 ]

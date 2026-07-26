@@ -1,0 +1,874 @@
+[
+  {
+    "id": "golden_001",
+    "name": "Strong Trend Continuation — London Breakout",
+    "description": "EUR/USD in strong uptrend during London session with ADX > 30 and MACD bullish crossover",
+    "context": {
+      "price": 1.0892,
+      "bid": 1.0891,
+      "ask": 1.0893,
+      "spread_pips": 2,
+      "session": "london",
+      "regime": "trending",
+      "volatility": "normal",
+      "indicators": {
+        "overall_bias": "BULLISH",
+        "rsi": 62.5,
+        "adx": 33.2,
+        "macd_signal": "bullish_crossover",
+        "ema_20": 1.0870,
+        "ema_50": 1.0845,
+        "bb_position": "upper_half"
+      },
+      "mtf_bias": "BULLISH",
+      "liquidity_zones": [
+        {"type": "demand", "price_level": 1.0860, "strength": "strong"},
+        {"type": "supply", "price_level": 1.0920, "strength": "moderate"}
+      ]
+    },
+    "expected": {
+      "direction": "BUY",
+      "confidence_range": [0.65, 0.90],
+      "reasoning_keywords": ["trend", "momentum", "London"],
+      "risk_acceptable": true
+    }
+  },
+  {
+    "id": "golden_002",
+    "name": "Bear Reversal — Double Top at Resistance",
+    "description": "EUR/USD forming double top at key resistance with RSI divergence and volume decline",
+    "context": {
+      "price": 1.0948,
+      "bid": 1.0947,
+      "ask": 1.0949,
+      "spread_pips": 2,
+      "session": "london",
+      "regime": "ranging",
+      "volatility": "normal",
+      "indicators": {
+        "overall_bias": "BEARISH",
+        "rsi": 72.1,
+        "adx": 18.5,
+        "macd_signal": "bearish_divergence",
+        "ema_20": 1.0935,
+        "ema_50": 1.0910,
+        "bb_position": "upper_band",
+        "pattern": "double_top"
+      },
+      "mtf_bias": "NEUTRAL",
+      "liquidity_zones": [
+        {"type": "supply", "price_level": 1.0950, "strength": "very_strong"}
+      ]
+    },
+    "expected": {
+      "direction": "SELL",
+      "confidence_range": [0.60, 0.85],
+      "reasoning_keywords": ["divergence", "resistance", "overbought"],
+      "risk_acceptable": true
+    }
+  },
+  {
+    "id": "golden_003",
+    "name": "Asian Session Noise — No Trade",
+    "description": "Low-volatility Asian session with mixed signals, no clear direction",
+    "context": {
+      "price": 1.0855,
+      "bid": 1.0854,
+      "ask": 1.0856,
+      "spread_pips": 2,
+      "session": "asian",
+      "regime": "ranging",
+      "volatility": "low",
+      "indicators": {
+        "overall_bias": "NEUTRAL",
+        "rsi": 48.2,
+        "adx": 12.1,
+        "macd_signal": "flat",
+        "ema_20": 1.0854,
+        "ema_50": 1.0852,
+        "bb_position": "middle"
+      },
+      "mtf_bias": "NEUTRAL",
+      "liquidity_zones": []
+    },
+    "expected": {
+      "direction": "HOLD",
+      "confidence_range": [0.0, 0.30],
+      "reasoning_keywords": ["noise", "low volatility", "Asian", "no edge"],
+      "risk_acceptable": false
+    }
+  },
+  {
+    "id": "golden_004",
+    "name": "NFP Release — High Impact Volatility",
+    "description": "US NFP release with massive spike, system should recognize uncertainty and avoid",
+    "context": {
+      "price": 1.0910,
+      "bid": 1.0905,
+      "ask": 1.0915,
+      "spread_pips": 10,
+      "session": "new_york",
+      "regime": "volatile",
+      "volatility": "high",
+      "indicators": {
+        "overall_bias": "NEUTRAL",
+        "rsi": 55.0,
+        "adx": 45.0,
+        "macd_signal": "undefined",
+        "ema_20": 1.0895,
+        "ema_50": 1.0870,
+        "bb_position": "outside"
+      },
+      "mtf_bias": "BULLISH",
+      "news_events": [
+        {"title": "US Non-Farm Payrolls", "impact": "HIGH", "actual": 275000, "forecast": 180000}
+      ],
+      "liquidity_zones": []
+    },
+    "expected": {
+      "direction": "HOLD",
+      "confidence_range": [0.0, 0.25],
+      "reasoning_keywords": ["NFP", "volatility", "uncertainty", "spread"],
+      "risk_acceptable": false
+    }
+  },
+  {
+    "id": "golden_005",
+    "name": "ECB Rate Cut — Bearish Continuation",
+    "description": "ECB unexpectedly cut rates, EUR weakening against USD with strong momentum",
+    "context": {
+      "price": 1.0720,
+      "bid": 1.0719,
+      "ask": 1.0721,
+      "spread_pips": 2,
+      "session": "london",
+      "regime": "trending",
+      "volatility": "high",
+      "indicators": {
+        "overall_bias": "BEARISH",
+        "rsi": 28.5,
+        "adx": 38.7,
+        "macd_signal": "bearish_momentum",
+        "ema_20": 1.0780,
+        "ema_50": 1.0830,
+        "bb_position": "lower_band"
+      },
+      "mtf_bias": "BEARISH",
+      "macro_events": [
+        {"title": "ECB Rate Decision", "impact": "HIGH", "detail": "Rate cut 25bp to 3.50%"}
+      ],
+      "liquidity_zones": [
+        {"type": "demand", "price_level": 1.0700, "strength": "strong"}
+      ]
+    },
+    "expected": {
+      "direction": "SELL",
+      "confidence_range": [0.55, 0.80],
+      "reasoning_keywords": ["ECB", "rate cut", "weakening", "momentum"],
+      "risk_acceptable": true,
+      "note": "Confidence capped because RSI is oversold — potential bounce risk"
+    }
+  },
+  {
+    "id": "golden_006",
+    "name": "Bull Flag Continuation",
+    "description": "EUR/USD bull flag pattern in strong uptrend, ready for breakout",
+    "context": {
+      "price": 1.0905,
+      "bid": 1.0904,
+      "ask": 1.0906,
+      "spread_pips": 2,
+      "session": "new_york",
+      "regime": "trending",
+      "volatility": "normal",
+      "indicators": {
+        "overall_bias": "BULLISH",
+        "rsi": 58.3,
+        "adx": 28.9,
+        "macd_signal": "bullish_consolidation",
+        "ema_20": 1.0895,
+        "ema_50": 1.0860,
+        "bb_position": "upper_half",
+        "pattern": "bull_flag"
+      },
+      "mtf_bias": "BULLISH",
+      "liquidity_zones": [
+        {"type": "demand", "price_level": 1.0880, "strength": "moderate"},
+        {"type": "supply", "price_level": 1.0950, "strength": "weak"}
+      ]
+    },
+    "expected": {
+      "direction": "BUY",
+      "confidence_range": [0.65, 0.85],
+      "reasoning_keywords": ["flag", "continuation", "trend"],
+      "risk_acceptable": true
+    }
+  },
+  {
+    "id": "golden_007",
+    "name": "Divergence Trap — Fake-out Risk",
+    "description": "RSI divergence appears but price is still in strong trend — should avoid counter-trend",
+    "context": {
+      "price": 1.0935,
+      "bid": 1.0934,
+      "ask": 1.0936,
+      "spread_pips": 2,
+      "session": "london",
+      "regime": "trending",
+      "volatility": "normal",
+      "indicators": {
+        "overall_bias": "BULLISH",
+        "rsi": 68.9,
+        "adx": 32.1,
+        "macd_signal": "bearish_divergence",
+        "ema_20": 1.0915,
+        "ema_50": 1.0880,
+        "bb_position": "upper_band",
+        "note": "RSI divergence but strong trend"
+      },
+      "mtf_bias": "BULLISH",
+      "liquidity_zones": [
+        {"type": "demand", "price_level": 1.0900, "strength": "strong"}
+      ]
+    },
+    "expected": {
+      "direction": "BUY",
+      "confidence_range": [0.40, 0.65],
+      "reasoning_keywords": ["trend intact", "divergence caution", "wait"],
+      "risk_acceptable": true,
+      "note": "Reduced confidence due to divergence but trend is still dominant"
+    }
+  },
+  {
+    "id": "golden_008",
+    "name": "London-NY Overlap — Strong Liquidity Play",
+    "description": "High-probability setup during London-NY overlap with clear technical confluence",
+    "context": {
+      "price": 1.0870,
+      "bid": 1.0869,
+      "ask": 1.0871,
+      "spread_pips": 2,
+      "session": "overlap",
+      "regime": "trending",
+      "volatility": "normal",
+      "indicators": {
+        "overall_bias": "BULLISH",
+        "rsi": 55.0,
+        "adx": 26.5,
+        "macd_signal": "bullish_crossover",
+        "ema_20": 1.0855,
+        "ema_50": 1.0840,
+        "bb_position": "middle_to_upper",
+        "volume": "above_average"
+      },
+      "mtf_bias": "BULLISH",
+      "liquidity_zones": [
+        {"type": "demand", "price_level": 1.0850, "strength": "strong"},
+        {"type": "supply", "price_level": 1.0910, "strength": "moderate"}
+      ]
+    },
+    "expected": {
+      "direction": "BUY",
+      "confidence_range": [0.70, 0.90],
+      "reasoning_keywords": ["overlap", "confluence", "liquidity"],
+      "risk_acceptable": true
+    }
+  },
+  {
+    "id": "golden_009",
+    "name": "Whipsaw Protection — Mixed Signals",
+    "description": "Conflicting signals between technical and fundamental, should reduce size or HOLD",
+    "context": {
+      "price": 1.0880,
+      "bid": 1.0879,
+      "ask": 1.0881,
+      "spread_pips": 2,
+      "session": "london",
+      "regime": "ranging",
+      "volatility": "normal",
+      "indicators": {
+        "overall_bias": "BULLISH",
+        "rsi": 52.0,
+        "adx": 16.8,
+        "macd_signal": "flat",
+        "ema_20": 1.0878,
+        "ema_50": 1.0875,
+        "bb_position": "middle"
+      },
+      "fundamental_bias": "BEARISH",
+      "macro_events": [
+        {"title": "US CPI Higher Than Expected", "impact": "HIGH"}
+      ],
+      "mtf_bias": "NEUTRAL",
+      "liquidity_zones": []
+    },
+    "expected": {
+      "direction": "HOLD",
+      "confidence_range": [0.0, 0.35],
+      "reasoning_keywords": ["conflict", "mixed", "unclear", "whipsaw"],
+      "risk_acceptable": false
+    }
+  },
+  {
+    "id": "golden_010",
+    "name": "Emergency Mode — Flash Crash Recovery",
+    "description": "System detected flash crash, should be in emergency mode and suppress trading",
+    "context": {
+      "price": 1.0650,
+      "bid": 1.0645,
+      "ask": 1.0655,
+      "spread_pips": 10,
+      "session": "new_york",
+      "regime": "volatile",
+      "volatility": "extreme",
+      "emergency_mode": true,
+      "indicators": {
+        "overall_bias": "NEUTRAL",
+        "rsi": 15.2,
+        "adx": 55.0,
+        "macd_signal": "undefined",
+        "ema_20": 1.0750,
+        "ema_50": 1.0830,
+        "bb_position": "below_lower_band"
+      },
+      "mtf_bias": "BEARISH",
+      "liquidity_zones": []
+    },
+    "expected": {
+      "direction": "HOLD",
+      "confidence_range": [0.0, 0.0],
+      "reasoning_keywords": ["emergency", "flash crash", "halt"],
+      "risk_acceptable": false
+    }
+  },
+  {
+    "id": "golden_011",
+    "name": "COT Extreme Positioning — Contrarian Sell",
+    "description": "COT shows extreme long positioning, should flip to contrarian SELL",
+    "context": {
+      "price": 1.0920,
+      "bid": 1.0919,
+      "ask": 1.0921,
+      "spread_pips": 2,
+      "session": "london",
+      "regime": "trending",
+      "volatility": "normal",
+      "indicators": {
+        "overall_bias": "BULLISH",
+        "rsi": 71.0,
+        "adx": 25.0,
+        "macd_signal": "bullish_weakening",
+        "ema_20": 1.0900,
+        "ema_50": 1.0870,
+        "bb_position": "upper_band"
+      },
+      "cot_data": {
+        "speculators_long_pct": 85,
+        "speculators_short_pct": 15,
+        "extreme_level": "very_extreme"
+      },
+      "mtf_bias": "NEUTRAL",
+      "liquidity_zones": [
+        {"type": "supply", "price_level": 1.0930, "strength": "very_strong"}
+      ]
+    },
+    "expected": {
+      "direction": "SELL",
+      "confidence_range": [0.50, 0.75],
+      "reasoning_keywords": ["COT", "extreme", "crowded", "contrarian"],
+      "risk_acceptable": true,
+      "note": "Contrarian signal from extreme positioning"
+    }
+  },
+  {
+    "id": "golden_012",
+    "name": "Breakout Above Key Resistance",
+    "description": "Clean breakout above 1.0900 resistance with volume confirmation",
+    "context": {
+      "price": 1.0905,
+      "bid": 1.0904,
+      "ask": 1.0906,
+      "spread_pips": 2,
+      "session": "london",
+      "regime": "breakout",
+      "volatility": "increasing",
+      "indicators": {
+        "overall_bias": "BULLISH",
+        "rsi": 65.0,
+        "adx": 30.5,
+        "macd_signal": "bullish_momentum",
+        "ema_20": 1.0870,
+        "ema_50": 1.0850,
+        "bb_position": "above_upper_band",
+        "volume": "high"
+      },
+      "mtf_bias": "BULLISH",
+      "liquidity_zones": [
+        {"type": "demand", "price_level": 1.0900, "strength": "new_support"},
+        {"type": "supply", "price_level": 1.0950, "strength": "moderate"}
+      ]
+    },
+    "expected": {
+      "direction": "BUY",
+      "confidence_range": [0.60, 0.80],
+      "reasoning_keywords": ["breakout", "resistance", "volume"],
+      "risk_acceptable": true
+    }
+  },
+  {
+    "id": "golden_013",
+    "name": "Failed Breakout — Bull Trap",
+    "description": "Price broke above resistance but immediately reversed with high volume rejection",
+    "context": {
+      "price": 1.0890,
+      "bid": 1.0889,
+      "ask": 1.0891,
+      "spread_pips": 2,
+      "session": "new_york",
+      "regime": "ranging",
+      "volatility": "normal",
+      "indicators": {
+        "overall_bias": "BEARISH",
+        "rsi": 55.0,
+        "adx": 18.0,
+        "macd_signal": "bearish_reversal",
+        "ema_20": 1.0895,
+        "ema_50": 1.0870,
+        "bb_position": "middle",
+        "pattern": "bull_trap"
+      },
+      "mtf_bias": "NEUTRAL",
+      "liquidity_zones": [
+        {"type": "demand", "price_level": 1.0860, "strength": "moderate"}
+      ]
+    },
+    "expected": {
+      "direction": "SELL",
+      "confidence_range": [0.50, 0.70],
+      "reasoning_keywords": ["trap", "reversal", "rejection"],
+      "risk_acceptable": true
+    }
+  },
+  {
+    "id": "golden_014",
+    "name": "Pre-FOMC Caution — Await Decision",
+    "description": "30 minutes before FOMC decision, should avoid new positions",
+    "context": {
+      "price": 1.0875,
+      "bid": 1.0874,
+      "ask": 1.0876,
+      "spread_pips": 2,
+      "session": "new_york",
+      "regime": "ranging",
+      "volatility": "low",
+      "indicators": {
+        "overall_bias": "NEUTRAL",
+        "rsi": 50.5,
+        "adx": 14.2,
+        "macd_signal": "flat",
+        "ema_20": 1.0874,
+        "ema_50": 1.0870,
+        "bb_position": "middle"
+      },
+      "news_events": [
+        {"title": "FOMC Rate Decision", "impact": "HIGH", "minutes_until": 30}
+      ],
+      "mtf_bias": "NEUTRAL",
+      "liquidity_zones": []
+    },
+    "expected": {
+      "direction": "HOLD",
+      "confidence_range": [0.0, 0.20],
+      "reasoning_keywords": ["FOMC", "wait", "event risk", "pre-event"],
+      "risk_acceptable": false
+    }
+  },
+  {
+    "id": "golden_015",
+    "name": "Liquidity Sweep — Fake Move Before Real Move",
+    "description": "Price swept below key support but quickly recovered — smart money play",
+    "context": {
+      "price": 1.0865,
+      "bid": 1.0864,
+      "ask": 1.0866,
+      "spread_pips": 2,
+      "session": "london",
+      "regime": "volatile",
+      "volatility": "high",
+      "indicators": {
+        "overall_bias": "BULLISH",
+        "rsi": 35.0,
+        "adx": 30.0,
+        "macd_signal": "bullish_reversal",
+        "ema_20": 1.0870,
+        "ema_50": 1.0855,
+        "bb_position": "lower_band_bounce",
+        "pattern": "liquidity_sweep"
+      },
+      "mtf_bias": "BULLISH",
+      "liquidity_zones": [
+        {"type": "demand", "price_level": 1.0850, "strength": "swept_and_recovered"},
+        {"type": "supply", "price_level": 1.0900, "strength": "moderate"}
+      ]
+    },
+    "expected": {
+      "direction": "BUY",
+      "confidence_range": [0.55, 0.75],
+      "reasoning_keywords": ["sweep", "recovery", "smart money", "demand"],
+      "risk_acceptable": true
+    }
+  },
+  {
+    "id": "golden_016",
+    "name": "Mean Reversion — Oversold Bounce",
+    "description": "RSI deeply oversold at support with bullish divergence forming",
+    "context": {
+      "price": 1.0780,
+      "bid": 1.0779,
+      "ask": 1.0781,
+      "spread_pips": 2,
+      "session": "new_york",
+      "regime": "ranging",
+      "volatility": "normal",
+      "indicators": {
+        "overall_bias": "BULLISH",
+        "rsi": 25.0,
+        "adx": 15.0,
+        "macd_signal": "bullish_divergence",
+        "ema_20": 1.0810,
+        "ema_50": 1.0840,
+        "bb_position": "below_lower_band"
+      },
+      "mtf_bias": "RANGING",
+      "liquidity_zones": [
+        {"type": "demand", "price_level": 1.0775, "strength": "very_strong"}
+      ]
+    },
+    "expected": {
+      "direction": "BUY",
+      "confidence_range": [0.50, 0.70],
+      "reasoning_keywords": ["oversold", "bounce", "mean reversion", "support"],
+      "risk_acceptable": true,
+      "note": "Counter-trend but strong mean reversion setup"
+    }
+  },
+  {
+    "id": "golden_017",
+    "name": "Strong Downtrend Continuation",
+    "description": "EUR/USD in confirmed downtrend, lower highs and lower lows, sell the rally",
+    "context": {
+      "price": 1.0750,
+      "bid": 1.0749,
+      "ask": 1.0751,
+      "spread_pips": 2,
+      "session": "london",
+      "regime": "trending",
+      "volatility": "normal",
+      "indicators": {
+        "overall_bias": "BEARISH",
+        "rsi": 42.0,
+        "adx": 35.0,
+        "macd_signal": "bearish_momentum",
+        "ema_20": 1.0770,
+        "ema_50": 1.0810,
+        "bb_position": "lower_half"
+      },
+      "mtf_bias": "BEARISH",
+      "liquidity_zones": [
+        {"type": "demand", "price_level": 1.0700, "strength": "moderate"},
+        {"type": "supply", "price_level": 1.0780, "strength": "strong"}
+      ]
+    },
+    "expected": {
+      "direction": "SELL",
+      "confidence_range": [0.65, 0.85],
+      "reasoning_keywords": ["downtrend", "lower highs", "momentum", "sell"],
+      "risk_acceptable": true
+    }
+  },
+  {
+    "id": "golden_018",
+    "name": "Low Confidence — Uncertain Market",
+    "description": "All indicators pointing in different directions, no clear edge",
+    "context": {
+      "price": 1.0850,
+      "bid": 1.0849,
+      "ask": 1.0851,
+      "spread_pips": 2,
+      "session": "london",
+      "regime": "ranging",
+      "volatility": "low",
+      "indicators": {
+        "overall_bias": "NEUTRAL",
+        "rsi": 50.0,
+        "adx": 10.5,
+        "macd_signal": "flat",
+        "ema_20": 1.0849,
+        "ema_50": 1.0851,
+        "bb_position": "middle"
+      },
+      "mtf_bias": "NEUTRAL",
+      "liquidity_zones": []
+    },
+    "expected": {
+      "direction": "HOLD",
+      "confidence_range": [0.0, 0.25],
+      "reasoning_keywords": ["uncertain", "no edge", "flat", "wait"],
+      "risk_acceptable": false
+    }
+  },
+  {
+    "id": "golden_019",
+    "name": "Gap Fill Trade",
+    "description": "Weekend gap up, expecting gap fill back to Friday close",
+    "context": {
+      "price": 1.0920,
+      "bid": 1.0919,
+      "ask": 1.0921,
+      "spread_pips": 2,
+      "session": "asian",
+      "regime": "volatile",
+      "volatility": "high",
+      "indicators": {
+        "overall_bias": "BEARISH",
+        "rsi": 70.0,
+        "adx": 25.0,
+        "macd_signal": "overextended",
+        "ema_20": 1.0890,
+        "ema_50": 1.0860,
+        "bb_position": "above_upper_band",
+        "pattern": "gap"
+      },
+      "gap_info": {
+        "type": "gap_up",
+        "gap_size_pips": 40,
+        "friday_close": 1.0880
+      },
+      "mtf_bias": "NEUTRAL",
+      "liquidity_zones": [
+        {"type": "demand", "price_level": 1.0880, "strength": "gap_fill_target"}
+      ]
+    },
+    "expected": {
+      "direction": "SELL",
+      "confidence_range": [0.50, 0.70],
+      "reasoning_keywords": ["gap fill", "overextended", "reversion"],
+      "risk_acceptable": true
+    }
+  },
+  {
+    "id": "golden_020",
+    "name": "Strong Confluence — High Confidence Long",
+    "description": "Multiple timeframe alignment, all indicators bullish, strong demand zone",
+    "context": {
+      "price": 1.0860,
+      "bid": 1.0859,
+      "ask": 1.0861,
+      "spread_pips": 2,
+      "session": "overlap",
+      "regime": "trending",
+      "volatility": "normal",
+      "indicators": {
+        "overall_bias": "BULLISH",
+        "rsi": 58.0,
+        "adx": 30.0,
+        "macd_signal": "bullish_crossover",
+        "ema_20": 1.0845,
+        "ema_50": 1.0820,
+        "bb_position": "upper_half",
+        "stochastic": "bullish_cross",
+        "volume": "above_average"
+      },
+      "mtf_bias": "BULLISH",
+      "liquidity_zones": [
+        {"type": "demand", "price_level": 1.0840, "strength": "very_strong"},
+        {"type": "supply", "price_level": 1.0900, "strength": "moderate"}
+      ]
+    },
+    "expected": {
+      "direction": "BUY",
+      "confidence_range": [0.75, 0.92],
+      "reasoning_keywords": ["confluence", "alignment", "strong", "momentum"],
+      "risk_acceptable": true
+    }
+  },
+  {
+    "id": "golden_021",
+    "name": "Central Bank Divergence — Structural Shift",
+    "description": "Fed hawkish + ECB dovish = structural EUR weakness",
+    "context": {
+      "price": 1.0700,
+      "bid": 1.0699,
+      "ask": 1.0701,
+      "spread_pips": 2,
+      "session": "london",
+      "regime": "trending",
+      "volatility": "normal",
+      "indicators": {
+        "overall_bias": "BEARISH",
+        "rsi": 38.0,
+        "adx": 32.0,
+        "macd_signal": "bearish_momentum",
+        "ema_20": 1.0720,
+        "ema_50": 1.0760,
+        "bb_position": "lower_half"
+      },
+      "macro_context": {
+        "fed_stance": "hawkish",
+        "ecb_stance": "dovish",
+        "rate_differential": "widening_for_usd"
+      },
+      "mtf_bias": "BEARISH",
+      "liquidity_zones": [
+        {"type": "demand", "price_level": 1.0650, "strength": "moderate"}
+      ]
+    },
+    "expected": {
+      "direction": "SELL",
+      "confidence_range": [0.65, 0.85],
+      "reasoning_keywords": ["divergence", "structural", "hawkish", "dovish"],
+      "risk_acceptable": true
+    }
+  },
+  {
+    "id": "golden_022",
+    "name": "Consolidation Before Breakout",
+    "description": "Tight range compression, Bollinger squeeze, preparing for directional move",
+    "context": {
+      "price": 1.0855,
+      "bid": 1.0854,
+      "ask": 1.0856,
+      "spread_pips": 2,
+      "session": "asian",
+      "regime": "ranging",
+      "volatility": "low",
+      "indicators": {
+        "overall_bias": "NEUTRAL",
+        "rsi": 50.0,
+        "adx": 12.0,
+        "macd_signal": "flat",
+        "ema_20": 1.0854,
+        "ema_50": 1.0856,
+        "bb_position": "middle",
+        "bb_width": "squeezed"
+      },
+      "mtf_bias": "BULLISH",
+      "liquidity_zones": [
+        {"type": "supply", "price_level": 1.0880, "strength": "moderate"},
+        {"type": "demand", "price_level": 1.0830, "strength": "moderate"}
+      ]
+    },
+    "expected": {
+      "direction": "HOLD",
+      "confidence_range": [0.0, 0.30],
+      "reasoning_keywords": ["squeeze", "wait", "consolidation", "no edge yet"],
+      "risk_acceptable": false,
+      "note": "Correct to wait — MTF bullish bias suggests potential long on breakout"
+    }
+  },
+  {
+    "id": "golden_023",
+    "name": "Scalping Setup — Quick In/Out",
+    "description": "Tight range at session open with clear level, suitable for quick scalp",
+    "context": {
+      "price": 1.0872,
+      "bid": 1.0871,
+      "ask": 1.0873,
+      "spread_pips": 2,
+      "session": "london",
+      "regime": "ranging",
+      "volatility": "normal",
+      "indicators": {
+        "overall_bias": "BULLISH",
+        "rsi": 55.0,
+        "adx": 18.0,
+        "macd_signal": "mildly_bullish",
+        "ema_20": 1.0868,
+        "ema_50": 1.0860,
+        "bb_position": "middle_to_upper"
+      },
+      "mtf_bias": "NEUTRAL",
+      "liquidity_zones": [
+        {"type": "demand", "price_level": 1.0865, "strength": "moderate"},
+        {"type": "supply", "price_level": 1.0885, "strength": "moderate"}
+      ]
+    },
+    "expected": {
+      "direction": "BUY",
+      "confidence_range": [0.40, 0.60],
+      "reasoning_keywords": ["scalp", "small", "range"],
+      "risk_acceptable": true,
+      "note": "Low-moderate confidence — appropriate for small size"
+    }
+  },
+  {
+    "id": "golden_024",
+    "name": "Regime Shift Detection",
+    "description": "Market transitioning from ranging to trending, should adapt",
+    "context": {
+      "price": 1.0890,
+      "bid": 1.0889,
+      "ask": 1.0891,
+      "spread_pips": 2,
+      "session": "london",
+      "regime": "trending",
+      "volatility": "increasing",
+      "indicators": {
+        "overall_bias": "BULLISH",
+        "rsi": 60.0,
+        "adx": 24.0,
+        "macd_signal": "bullish_crossover",
+        "ema_20": 1.0875,
+        "ema_50": 1.0860,
+        "bb_position": "expanding"
+      },
+      "previous_regime": "ranging",
+      "mtf_bias": "BULLISH",
+      "liquidity_zones": [
+        {"type": "demand", "price_level": 1.0860, "strength": "strong"},
+        {"type": "supply", "price_level": 1.0920, "strength": "moderate"}
+      ]
+    },
+    "expected": {
+      "direction": "BUY",
+      "confidence_range": [0.55, 0.75],
+      "reasoning_keywords": ["regime shift", "trending", "early entry"],
+      "risk_acceptable": true
+    }
+  },
+  {
+    "id": "golden_025",
+    "name": "High Uncertainty — Multiple Risk Factors",
+    "description": "Geopolitical event + data conflict + wide spreads, should minimize exposure",
+    "context": {
+      "price": 1.0830,
+      "bid": 1.0825,
+      "ask": 1.0835,
+      "spread_pips": 10,
+      "session": "new_york",
+      "regime": "volatile",
+      "volatility": "high",
+      "indicators": {
+        "overall_bias": "NEUTRAL",
+        "rsi": 50.0,
+        "adx": 35.0,
+        "macd_signal": "undefined",
+        "ema_20": 1.0840,
+        "ema_50": 1.0860,
+        "bb_position": "wide"
+      },
+      "news_events": [
+        {"title": "Geopolitical Escalation", "impact": "HIGH"}
+      ],
+      "uncertainty_score": 0.85,
+      "mtf_bias": "BEARISH",
+      "liquidity_zones": []
+    },
+    "expected": {
+      "direction": "HOLD",
+      "confidence_range": [0.0, 0.20],
+      "reasoning_keywords": ["uncertainty", "geopolitical", "wide spread", "risk off"],
+      "risk_acceptable": false
+    }
+  }
+]
