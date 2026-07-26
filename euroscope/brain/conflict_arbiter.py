@@ -207,22 +207,21 @@ class ConflictArbiter:
             if elapsed < self._committee_cooldown_sec:
                 logger.info(f"Committee on cooldown ({int(self._committee_cooldown_sec - elapsed)}s remaining). Using statistical vote.")
             else:
-                # We attempt to use the Deliberation Committee
-                from euroscope.brain.multi_agent import DeliberationCommittee
+                from euroscope.brain.debate_engine import DebateEngine
                 from euroscope.container import get_container
                 container = get_container()
                 llm = self.llm_router or (container.router if container else None)
-                
+
                 if llm:
-                    committee = DeliberationCommittee(llm)
-                    committee_verdict = await committee.deliberate(context)
+                    debate = DebateEngine(llm)
+                    committee_verdict = await debate.run_conflict_deliberation(context)
                     self._last_committee_time = time.time()
-                    logger.info("Committee override applied.")
+                    logger.info("Committee override applied via DebateEngine.")
                     committee_verdict["conflicts_resolved"] = self._list_conflicts(committee_verdict["final_direction"], weighted_signals, context)
                     committee_verdict["evidence_diversity"] = evidence_diversity
                     return committee_verdict
                 else:
-                    logger.warning("Could not instantiate Multi-Agent Committee: No LLM router.")
+                    logger.warning("Could not instantiate debate committee: No LLM router.")
 
         # Context-conditional neutralization threshold
         # Higher in volatile/uncertain conditions (Asian, volatile regime, near events)

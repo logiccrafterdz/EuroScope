@@ -146,6 +146,86 @@ class DebateEngine:
             }
         }
 
+    async def run_conflict_deliberation(self, context: SkillContext) -> Dict[str, Any]:
+        """
+        Conflict escalation: Bull vs Bear vs Risk Manager debate.
+        Used when the ConflictArbiter detects high signal conflict.
+        Returns: {final_direction, confidence, primary_evidence, reasoning, committee_notes}
+        """
+        logger.info("Conflict escalation: convening debate committee...")
+
+        context_str = self._format_context(context)
+
+        # 1. Bull Advocate — argues why price goes UP
+        bull_prompt = (
+            "You are the BULL ADVOCATE for EUR/USD.\n"
+            f"Market Context:\n{context_str}\n\n"
+            "Argue the bullish case in 2-3 sentences. What data supports a long position?"
+        )
+        # 2. Bear Advocate — argues why price goes DOWN
+        bear_prompt = (
+            "You are the BEAR ADVOCATE for EUR/USD.\n"
+            f"Market Context:\n{context_str}\n\n"
+            "Argue the bearish case in 2-3 sentences. What data supports a short position?"
+        )
+        # 3. Risk Manager — points out risks and contradictions
+        risk_prompt = (
+            "You are the STRICT RISK MANAGER. You hate losing money.\n"
+            f"Market Context:\n{context_str}\n\n"
+            "Point out ONLY the risks, contradictions, and reasons NOT to trade. 2-3 sentences."
+        )
+
+        try:
+            import asyncio
+            bull_resp, bear_resp, risk_resp = await asyncio.wait_for(
+                asyncio.gather(
+                    self.llm.chat([{"role": "user", "content": bull_prompt}], temperature=0.7),
+                    self.llm.chat([{"role": "user", "content": bear_prompt}], temperature=0.7),
+                    self.llm.chat([{"role": "user", "content": risk_prompt}], temperature=0.1),
+                    return_exceptions=True,
+                ),
+                timeout=15.0,
+            )
+        except asyncio.TimeoutError:
+            logger.error("Conflict committee timed out after 15s")
+            return {"final_direction": "NEUTRAL", "confidence": 0, "reasoning": "Committee timed out."}
+        except Exception as e:
+            logger.error(f"Conflict committee crashed: {e}")
+            return {"final_direction": "NEUTRAL", "confidence": 0, "reasoning": "Committee failed."}
+
+        bull_resp = str(bull_resp) if not isinstance(bull_resp, Exception) else "Bull offline."
+        bear_resp = str(bear_resp) if not isinstance(bear_resp, Exception) else "Bear offline."
+        risk_resp = str(risk_resp) if not isinstance(risk_resp, Exception) else "Risk manager offline."
+
+        # Judge synthesizes all three
+        judge_prompt = (
+            "You are the CHIEF JUDGE of an AI Trading Committee for EUR/USD.\n"
+            f"BULL ADVOCATE:\n{bull_resp}\n\n"
+            f"BEAR ADVOCATE:\n{bear_resp}\n\n"
+            f"RISK MANAGER:\n{risk_resp}\n\n"
+            "Based on who presented the strongest, data-backed argument, decide: BUY, SELL, or NEUTRAL.\n"
+            'Return JSON: {"decision": "BUY|SELL|NEUTRAL", "confidence": 0.0-1.0, "reasoning": "..."}'
+            "\nIf the Risk Manager's concerns are overwhelming, rule NEUTRAL."
+        )
+
+        try:
+            import re, json
+            verdict = await self.llm.chat([{"role": "user", "content": judge_prompt}], temperature=0.3)
+            match = re.search(r'\{.*\}', verdict, re.DOTALL)
+            if match:
+                data = json.loads(match.group(0))
+                return {
+                    "final_direction": data.get("decision", "NEUTRAL"),
+                    "confidence": float(data.get("confidence", 0.0)),
+                    "primary_evidence": "Committee Deliberation Consensus",
+                    "reasoning": data.get("reasoning", ""),
+                    "committee_notes": {"bull": bull_resp, "bear": bear_resp, "risk": risk_resp},
+                }
+        except Exception as e:
+            logger.error(f"Conflict judge failed: {e}")
+
+        return {"final_direction": "NEUTRAL", "confidence": 0.0, "reasoning": "Judge could not parse verdict."}
+
     def _format_context(self, context: SkillContext) -> str:
         """Formats the SkillContext into a readable string for the LLM."""
         lines = []
