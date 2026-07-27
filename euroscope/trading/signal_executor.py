@@ -327,10 +327,6 @@ class SignalExecutor:
         # Mark transaction as completed
         await self.storage.update_transaction_status(tx_id, "completed")
         
-        # Notify Risk Manager
-        await self.risk_manager.record_trade_result(
-            pnl=0.0
-        )
         return signal_id
 
     async def create_pending_order(self, direction: str, trigger_price: float,
@@ -357,7 +353,7 @@ class SignalExecutor:
             source=strategy,
             reasoning=reasoning,
             risk_reward_ratio=rr,
-            # Using 'pending' status natively supported by storage
+            status="pending",
         )
         logger.info(f"Created pending order #{signal_id}: {direction.upper()} at {trigger_price}")
         return signal_id
