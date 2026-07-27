@@ -186,7 +186,7 @@ class EuroScopeAgent:
                     await asyncio.sleep(5)
                     continue
                 async with self._tick_lock:
-                    stats = await self._tick_inner()
+                    stats = await self._tick()
                 if stats.error:
                     self._total_errors += 1
                     logger.error(f"Agent tick error: {stats.error}")
