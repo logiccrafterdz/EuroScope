@@ -18,6 +18,7 @@ class WebhookDispatcher:
     def __init__(self, config):
         self.config = config
         self.client = httpx.AsyncClient(timeout=5.0)
+        self._background_tasks = set()
         
     def _get_urls(self) -> List[str]:
         """Fetch configured webhook URLs from bot settings or environment."""
@@ -48,7 +49,9 @@ class WebhookDispatcher:
             "data": payload,
         }
         
-        asyncio.create_task(self._send_all(urls, data, event_type))
+        task = asyncio.create_task(self._send_all(urls, data, event_type))
+        self._background_tasks.add(task)
+        task.add_done_callback(self._background_tasks.discard)
 
     async def _send_all(self, urls: List[str], payload: dict, event_type: str = "unknown"):
         for url in urls:

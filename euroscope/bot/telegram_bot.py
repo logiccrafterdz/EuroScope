@@ -38,6 +38,7 @@ class EuroScopeBot:
         self.alerts = container.alerts
         self.rate_limiter = container.rate_limiter
         self._app = None
+        self._background_tasks = set()
         
         # 2. Core Brain Components
         self.memory = container.memory
@@ -136,10 +137,13 @@ class EuroScopeBot:
             allowed = self.config.telegram.allowed_users or []
             targets = list(set(allowed + self.config.proactive_alert_chat_ids))
             if self._app:
-                self._app.create_task(self.notifications.broadcast_alert(alert, chat_ids=targets))
+                task = self._app.create_task(self.notifications.broadcast_alert(alert, chat_ids=targets))
             else:
                 loop = asyncio.get_running_loop()
-                loop.create_task(self.notifications.broadcast_alert(alert, chat_ids=targets))
+                task = loop.create_task(self.notifications.broadcast_alert(alert, chat_ids=targets))
+            
+            self._background_tasks.add(task)
+            task.add_done_callback(self._background_tasks.discard)
         except RuntimeError:
             logger.warning('Alert triggered outside event loop — skipped.')
 

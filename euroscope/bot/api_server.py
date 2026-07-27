@@ -49,6 +49,7 @@ class APIServer:
         
         # Initialize WebhookDispatcher for outbound events
         self.webhooks = WebhookDispatcher(self.config)
+        self._background_tasks = set()
 
     @web.middleware
     async def _cors_middleware(self, request, handler):
@@ -838,13 +839,15 @@ class APIServer:
             
             chat_ids = self.config.proactive_alert_chat_ids
             if chat_ids:
-                asyncio.create_task(
+                task = asyncio.create_task(
                     self.bot.notifications.broadcast_message(
                         f"⚠️ *EMERGENCY KILL SWITCH {status}*\nTriggered via Zenith Dashboard.",
                         chat_ids=chat_ids,
                         parse_mode="Markdown"
                     )
                 )
+                self._background_tasks.add(task)
+                task.add_done_callback(self._background_tasks.discard)
 
             return web.json_response({"success": True, "emergency_mode": is_active, "message": f"Emergency Mode {status}"})
         except Exception as e:
@@ -1272,7 +1275,9 @@ class APIServer:
             
             # Start simulation in background task
             if not container.simulator.is_running:
-                asyncio.create_task(container.simulator.start())
+                task = asyncio.create_task(container.simulator.start())
+                self._background_tasks.add(task)
+                task.add_done_callback(self._background_tasks.discard)
             
             return web.json_response({"success": True, "message": "Simulation started"})
         except Exception as e:

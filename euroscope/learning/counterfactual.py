@@ -24,6 +24,7 @@ class CounterfactualEngine:
     def __init__(self, data_provider=None, storage=None):
         self.data_provider = data_provider
         self.storage = storage
+        self._background_tasks = set()
         self.scenarios = [
             {"name": "No SL/TP Let Run 24H", "sl_mod": 0, "tp_mod": 0},
             {"name": "Wider Stop Loss (+10 pips)", "sl_mod": 0.0010, "tp_mod": 0},
@@ -156,8 +157,12 @@ class CounterfactualEngine:
         try:
             loop = asyncio.get_running_loop()
             if trade and trade.status == "CLOSED":
-                loop.create_task(self.analyze_trade(trade))
+                task = loop.create_task(self.analyze_trade(trade))
+                self._background_tasks.add(task)
+                task.add_done_callback(self._background_tasks.discard)
             else:
-                loop.create_task(self.analyze_rejected_trades())
+                task = loop.create_task(self.analyze_rejected_trades())
+                self._background_tasks.add(task)
+                task.add_done_callback(self._background_tasks.discard)
         except RuntimeError:
             logger.warning("Could not launch counterfactual engine (no event loop running).")

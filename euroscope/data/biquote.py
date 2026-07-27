@@ -57,7 +57,7 @@ class BiQuoteProvider:
                         "price": round(price, 5),
                         "bid": round(bid, 5),
                         "ask": round(ask, 5),
-                        "spread": round(spread * 10000, 1),  # in pips
+                        "spread_pips": round(spread * 10000, 1),  # in pips
                         "open": round(price, 5),  # BiQuote doesn't provide open directly
                         "high": round(day_high, 5),
                         "low": round(day_low, 5),

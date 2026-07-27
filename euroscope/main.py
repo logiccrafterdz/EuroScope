@@ -63,6 +63,8 @@ def main():
         logger.exception(f"EuroScope crashed during runtime: {e}")
         raise
     finally:
+        if hasattr(container, 'vector_memory') and container.vector_memory:
+            container.vector_memory.close()
         logger.info("EuroScope V5 shutdown complete.")
 
 
