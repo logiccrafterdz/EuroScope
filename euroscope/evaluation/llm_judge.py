@@ -138,6 +138,10 @@ def _grade_reasoning_keywords(
     """Grade reasoning quality using keyword matching against expected keywords."""
     if not keywords:
         return 0.5
+        
+    expected_direction = scenario.get("expected", {}).get("direction", "")
+    if predicted_direction.upper() != expected_direction.upper():
+        return 0.1
 
     context = scenario.get("context", {})
     indicators = context.get("indicators", {})
@@ -307,8 +311,8 @@ def run_evaluation_suite(
         result.mean_reasoning_score = sum(g.reasoning_score for g in grades) / len(grades)
         result.mean_overall_score = sum(g.overall_score for g in grades) / len(grades)
 
-    # pass@k and pass^k for k=1,3,5
-    for k in [1, 3, 5]:
+    # pass@k and pass^k for k=1 (removed k>1 as we only generate 1 forecast per scenario)
+    for k in [1]:
         if len(grades) >= k:
             result.pass_at_k[k] = compute_pass_at_k(grades, k)
             result.pass_pow_k[k] = compute_pass_pow_k(grades, k)
