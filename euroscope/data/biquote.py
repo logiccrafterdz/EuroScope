@@ -10,7 +10,7 @@ import logging
 from datetime import datetime, UTC
 from typing import Optional
 
-import requests
+import httpx
 
 logger = logging.getLogger("euroscope.data.biquote")
 
@@ -21,7 +21,7 @@ class BiQuoteProvider:
     def __init__(self):
         self.base_url = "https://biquote.io/api"
         self._last_known_price: Optional[dict] = None
-        self._session = requests.Session()
+        self._session = httpx.AsyncClient()
 
     async def get_price(self) -> dict:
         """Get current EUR/USD price from BiQuote API with retry."""
@@ -30,7 +30,7 @@ class BiQuoteProvider:
         for attempt in range(max_retries + 1):
             try:
                 url = f"{self.base_url}/EURUSD"
-                response = self._session.get(url, timeout=5)
+                response = await self._session.get(url, timeout=5)
                 
                 if response.status_code == 200:
                     data = response.json()
@@ -74,10 +74,10 @@ class BiQuoteProvider:
                     last_error = f"API returned status {response.status_code}"
                     logger.warning(f"BiQuote API returned status {response.status_code} (attempt {attempt+1})")
                     
-            except requests.exceptions.Timeout:
+            except httpx.TimeoutException:
                 last_error = "Request timeout"
                 logger.warning(f"BiQuote API timeout (attempt {attempt+1})")
-            except requests.exceptions.ConnectionError:
+            except httpx.RequestError:
                 last_error = "Connection error"
                 logger.warning(f"BiQuote API connection error (attempt {attempt+1})")
             except Exception as e:
@@ -116,7 +116,7 @@ class BiQuoteProvider:
             # Build a single candle representing the current live snapshot
             candle = pd.DataFrame(
                 [{
-                    "Open": round(low, 5),
+                    "Open": round(price, 5),
                     "High": round(high, 5),
                     "Low": round(low, 5),
                     "Close": round(price, 5),
@@ -134,4 +134,4 @@ class BiQuoteProvider:
 
     async def close(self):
         """Close the session."""
-        self._session.close()
+        await self._session.aclose()
