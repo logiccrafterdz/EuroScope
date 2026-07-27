@@ -761,7 +761,7 @@ class APIServer:
             else:
                 health_data["subsystems"]["database"] = "NOT_CONFIGURED"
         except Exception as e:
-            health_data["subsystems"]["database"] = f"DOWN ({str(e)})"
+            health_data["subsystems"]["database"] = "DOWN"
             health_data["status"] = "DEGRADED"
 
         # 2. Broker Health
@@ -771,7 +771,7 @@ class APIServer:
             else:
                 health_data["subsystems"]["broker"] = "NOT_CONFIGURED"
         except Exception as e:
-            health_data["subsystems"]["broker"] = f"DOWN ({str(e)})"
+            health_data["subsystems"]["broker"] = "DOWN"
             health_data["status"] = "DEGRADED"
             
         # 3. WebSocket Health
@@ -783,7 +783,7 @@ class APIServer:
                     health_data["subsystems"]["websocket"] = "DISCONNECTED"
                     health_data["status"] = "DEGRADED"
         except Exception as e:
-            health_data["subsystems"]["websocket"] = f"ERROR ({str(e)})"
+            health_data["subsystems"]["websocket"] = "ERROR"
 
         # 4. Agent Core Health
         try:
@@ -793,7 +793,7 @@ class APIServer:
             else:
                 health_data["subsystems"]["agent_core"] = "NOT_CONFIGURED"
         except Exception as e:
-            health_data["subsystems"]["agent_core"] = f"DOWN ({str(e)})"
+            health_data["subsystems"]["agent_core"] = "DOWN"
             health_data["status"] = "DEGRADED"
 
         status_code = 200 if health_data["status"] == "UP" else 503
