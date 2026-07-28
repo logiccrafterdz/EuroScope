@@ -453,11 +453,23 @@ class EuroScopeBot:
         logger.info('🌐 EuroScope Zenith starting...')
         app = self.build_app()
         self.notifications.set_bot(app.bot)
-        try:
-            app.run_polling(drop_pending_updates=True)
-        except Conflict as e:
-            logger.error(f"Telegram polling conflict: {e}")
-            return
-        except Exception as e:
-            logger.exception(f"Telegram polling crashed: {e}")
-            raise
+        max_retries = 5
+        base_delay = 5
+        for attempt in range(1, max_retries + 1):
+            try:
+                app.run_polling(drop_pending_updates=True)
+                return
+            except Conflict as e:
+                if attempt < max_retries:
+                    delay = base_delay * (2 ** (attempt - 1))
+                    logger.warning(f"Telegram polling conflict (attempt {attempt}/{max_retries}): {e}. Retrying in {delay}s...")
+                    app = self.build_app()
+                    self.notifications.set_bot(app.bot)
+                    import time
+                    time.sleep(delay)
+                else:
+                    logger.error(f"Telegram polling conflict after {max_retries} attempts: {e}")
+                    return
+            except Exception as e:
+                logger.exception(f"Telegram polling crashed: {e}")
+                raise

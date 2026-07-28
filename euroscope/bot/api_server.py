@@ -51,6 +51,7 @@ class APIServer:
         self.webhooks = WebhookDispatcher(self.config)
         self._background_tasks = set()
 
+    @web.middleware
     async def _cors_middleware(self, request, handler):
         """Middleware to handle CORS headers, preflight requests, and API Authentication."""
         # API Authentication for protected routes
