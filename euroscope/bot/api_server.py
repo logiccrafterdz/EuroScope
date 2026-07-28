@@ -51,26 +51,32 @@ class APIServer:
         self.webhooks = WebhookDispatcher(self.config)
         self._background_tasks = set()
 
-    @web.middleware
     async def _cors_middleware(self, request, handler):
         """Middleware to handle CORS headers, preflight requests, and API Authentication."""
-        if request.method == "OPTIONS":
-            response = web.Response()
-        else:
-            # API Authentication for protected routes
+        # API Authentication for protected routes
+        if request.method != "OPTIONS":
             if request.path.startswith("/api/") and request.path not in ("/api/status", "/api/v1/status"):
                 token = request.headers.get("X-API-Key", "")
                 if self.api_secret and token != self.api_secret:
                     logger.warning(f"Unauthorized API access attempt to {request.path} from {request.remote}")
-                    return web.json_response({"success": False, "error": "Unauthorized API Access"}, status=401)
-                    
+                    response = web.json_response({"success": False, "error": "Unauthorized API Access"}, status=401)
+                    self._add_cors_headers(request, response)
+                    return response
+
+        if request.method == "OPTIONS":
+            response = web.Response(status=204)
+        else:
             try:
                 response = await handler(request)
             except Exception as e:
                 logger.error(f"API Error ({request.path}): {e}")
                 response = web.json_response({"success": False, "error": "Internal server error"}, status=500)
-        
-        # CORS — restrict to known frontend origins
+
+        self._add_cors_headers(request, response)
+        return response
+
+    def _add_cors_headers(self, request, response):
+        """Set CORS headers on the response."""
         origin = request.headers.get("Origin", "")
         _allowed_origins = {
             "https://euro-scope.vercel.app",
@@ -83,9 +89,11 @@ class APIServer:
         allowed_set = _allowed_origins | {o.strip() for o in env_origins.split(",") if o.strip()}
         if origin in allowed_set or not origin:
             response.headers["Access-Control-Allow-Origin"] = origin or "*"
-            response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
-            response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-Requested-With, X-API-Key"
-        return response
+        else:
+            response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+        response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-Requested-With, X-API-Key"
+        response.headers["Access-Control-Max-Age"] = "86400"
 
     def _is_rate_limited(self, request, endpoint: str, limit: int, window: int) -> bool:
         """Memory-based rate limiter per IP and endpoint."""

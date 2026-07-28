@@ -6,6 +6,7 @@
     <meta name="viewport"
         content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Zenith Terminal v5.0</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='4' fill='%233B82F6'/><text x='16' y='23' font-size='20' text-anchor='middle' fill='white' font-family='monospace' font-weight='bold'>Z</text></svg>">
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
     <link
@@ -1348,8 +1349,6 @@
 
     <script>
         const tg = window.Telegram.WebApp;
-        tg.expand();
-        tg.ready();
 
         const VPS_URL = "https://site--euroscope--zyn6vtt48jxf.code.run";
         let API_ROOT = localStorage.getItem('ZENITH_API_OVERRIDE') || (location.origin.includes('code.run') ? '' : VPS_URL);
@@ -2524,12 +2523,18 @@
                 }
             } catch (e) { /* silent on init */ }
         }
+        function tgVersion() {
+            try { return parseFloat(tg.version) || 0; } catch (e) { return 0; }
+        }
+
         async function runInit() {
             try { 
                 tg.expand(); 
-                tg.ready(); 
-                tg.setHeaderColor('#020305');
-                tg.setBackgroundColor('#020305');
+                tg.ready();
+                if (tgVersion() >= 6.1) {
+                    tg.setHeaderColor('#020305');
+                    tg.setBackgroundColor('#020305');
+                }
             } catch (e) {
                 console.log("Not in Telegram environment");
             }
