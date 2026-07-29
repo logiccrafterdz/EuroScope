@@ -41,7 +41,7 @@ class APIServer:
         
         # Security & Limits
         self.api_secret = getattr(self.config, "api_secret_key", None) or ""
-        if not self.api_secret or self.api_secret == "euroscope-zenith-v5":
+        if not self.api_secret:
             import secrets
             self.api_secret = secrets.token_hex(32)
             logger.warning(f"API secret auto-generated. Add this to .env as EUROSCOPE_API_SECRET={self.api_secret}")
