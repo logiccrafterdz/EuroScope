@@ -78,6 +78,7 @@ class APIServer:
 
     def _add_cors_headers(self, request, response):
         """Set CORS headers on the response."""
+        from urllib.parse import urlparse
         origin = request.headers.get("Origin", "")
         _allowed_origins = {
             "https://euro-scope.vercel.app",
@@ -88,13 +89,30 @@ class APIServer:
         }
         env_origins = os.getenv("EUROSCOPE_CORS_ORIGINS", "")
         allowed_set = _allowed_origins | {o.strip() for o in env_origins.split(",") if o.strip()}
-        if origin in allowed_set or not origin:
-            response.headers["Access-Control-Allow-Origin"] = origin or "*"
-        else:
+
+        match = False
+        for allowed in allowed_set:
+            if origin == allowed:
+                match = True
+                break
+            try:
+                o = urlparse(origin)
+                a = urlparse(allowed)
+                if o.scheme and o.hostname and o.hostname == a.hostname and o.port == a.port:
+                    match = True
+                    break
+            except Exception:
+                pass
+
+        if match:
             response.headers["Access-Control-Allow-Origin"] = origin
-        response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
-        response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-Requested-With, X-API-Key"
+        elif not origin:
+            response.headers["Access-Control-Allow-Origin"] = "*"
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS, PUT, DELETE"
+        response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-Requested-With, X-API-Key, Origin, Accept"
         response.headers["Access-Control-Max-Age"] = "86400"
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+        response.headers["Vary"] = "Origin"
 
     def _is_rate_limited(self, request, endpoint: str, limit: int, window: int) -> bool:
         """Memory-based rate limiter per IP and endpoint."""
