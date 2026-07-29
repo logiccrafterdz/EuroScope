@@ -1832,7 +1832,7 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ auto_trading_enabled: _autoTradingEnabled })
                 });
-                try { tg.HapticFeedback.impactOccurred('light'); } catch (e) { }
+            try { if (tg.version && parseFloat(tg.version) >= 6.1) tg.HapticFeedback.impactOccurred('light'); } catch (e) { }
             } catch (e) {
                 log('Failed to update auto-trading setting', 'error');
             }
@@ -2268,7 +2268,10 @@
                         if (res.success && res.data) {
                             const d = res.data;
                             const zones = d.zones || [];
-                            const intent = (d.market_intent || '---').replace('_', ' ').toUpperCase();
+                            const mi = d.market_intent;
+                            const intent = (mi && typeof mi === 'object')
+                                ? ((mi.current_phase || mi.next_likely_move || '---').replace(/_/g, ' ').toUpperCase() + (mi.current_phase && mi.next_likely_move ? ' → ' + mi.next_likely_move.replace(/_/g, ' ').toUpperCase() : ''))
+                                : String(mi || '---').replace(/_/g, ' ').toUpperCase();
                             el.innerHTML = `
                                 <div class="info-row"><span class="label">INTENT</span><span class="val" style="font-weight:700; color:var(--accent-primary);">${intent}</span></div>
                                 <div class="info-row"><span class="label">ZONES</span><span class="val">${zones.length} detected</span></div>

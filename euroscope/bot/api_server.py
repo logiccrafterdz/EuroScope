@@ -1095,14 +1095,20 @@ class APIServer:
         """API endpoint for 3-layer Uncertainty Assessment."""
         cached = self._get_cached("uncertainty")
         if cached: return web.json_response(cached)
-        ctx = SkillContext()
-        res = await self.bot.orchestrator.run_skill(
-            "uncertainty_assessment", "assess", context=ctx
-        )
-        data = res.data if res.success and res.data else {}
-        resp = {"success": res.success, "data": data, "error": res.error if not res.success else None}
-        if res.success: self._set_cached("uncertainty", resp)
-        return web.json_response(resp)
+        if not self.bot or not self.bot.orchestrator:
+            return web.json_response({"success": False, "data": {}, "error": "Orchestrator not available"})
+        try:
+            ctx = SkillContext()
+            res = await self.bot.orchestrator.run_skill(
+                "uncertainty_assessment", "assess", context=ctx
+            )
+            data = res.data if res.success and res.data else {}
+            resp = {"success": res.success, "data": data, "error": res.error if not res.success else None}
+            if res.success: self._set_cached("uncertainty", resp)
+            return web.json_response(resp)
+        except Exception as e:
+            logger.error(f"Uncertainty skill error: {e}")
+            return web.json_response({"success": False, "data": {}, "error": str(e)})
 
     async def _api_correlation(self, request):
         """API endpoint for correlation monitor (DXY, US10Y, Gold)."""
