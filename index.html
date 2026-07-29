@@ -1615,7 +1615,7 @@
             view.classList.add('active');
             view.classList.add('animate-in'); // Add logic-based animation
             document.getElementById('tab-' + viewId).classList.add('active');
-            try { tg.HapticFeedback.impactOccurred('light'); } catch (e) { }
+            try { if (tg.version && parseFloat(tg.version) >= 6.1) tg.HapticFeedback.impactOccurred('light'); } catch (e) { }
             sync(viewId);
         }
 
