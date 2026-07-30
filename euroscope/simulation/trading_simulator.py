@@ -11,6 +11,7 @@ from datetime import datetime, UTC
 from typing import Optional, List, Dict, Callable
 from dataclasses import dataclass, field
 from enum import Enum
+from ..trading.execution_simulator import ExecutionSimulator
 
 logger = logging.getLogger("euroscope.simulation")
 
@@ -36,36 +37,52 @@ class Trade:
     stop_loss: float
     take_profit: float
     units: float = 10000  # 0.1 lot
+    entry_cost_pips: float = 0.0
+    exit_cost_pips: float = 0.0
     entry_time: datetime = field(default_factory=lambda: datetime.now(UTC))
     close_time: Optional[datetime] = None
     close_price: Optional[float] = None
     status: TradeStatus = TradeStatus.OPEN
     pnl: float = 0.0
     
+    def _execution_cost(self) -> float:
+        """Convert pip costs to dollar equivalent."""
+        return (self.entry_cost_pips + self.exit_cost_pips) * self.units * 0.0001
+    
     def update_pnl(self, current_price: float):
-        """Update PnL based on current price."""
+        """Update PnL based on current price and execution costs."""
         if self.direction == TradeDirection.BUY:
-            self.pnl = (current_price - self.entry_price) * self.units
+            self.pnl = (current_price - self.entry_price) * self.units - self._execution_cost()
         else:
-            self.pnl = (self.entry_price - current_price) * self.units
+            self.pnl = (self.entry_price - current_price) * self.units - self._execution_cost()
     
     def check_exit(self, current_price: float) -> bool:
-        """Check if trade should be closed (SL/TP hit)."""
+        """Check if trade should be closed (SL/TP hit). Returns True if exit triggered."""
         if self.direction == TradeDirection.BUY:
             if current_price <= self.stop_loss:
-                self.close(current_price, TradeStatus.CLOSED_LOSS)
                 return True
             if current_price >= self.take_profit:
-                self.close(current_price, TradeStatus.CLOSED_WIN)
                 return True
-        else:  # SELL
+        else:
             if current_price >= self.stop_loss:
-                self.close(current_price, TradeStatus.CLOSED_LOSS)
                 return True
             if current_price <= self.take_profit:
-                self.close(current_price, TradeStatus.CLOSED_WIN)
                 return True
         return False
+    
+    def exit_reason(self, current_price: float) -> Optional[str]:
+        """Determine exit reason without closing the trade."""
+        if self.direction == TradeDirection.BUY:
+            if current_price <= self.stop_loss:
+                return "stop_loss"
+            if current_price >= self.take_profit:
+                return "take_profit"
+        else:
+            if current_price >= self.stop_loss:
+                return "stop_loss"
+            if current_price <= self.take_profit:
+                return "take_profit"
+        return None
     
     def close(self, close_price: float, status: TradeStatus):
         """Close the trade."""
@@ -86,13 +103,15 @@ class TradingSimulator:
     - Performance tracking
     """
     
-    def __init__(self, initial_balance: float = 100000.0):
+    def __init__(self, initial_balance: float = 100000.0,
+                 execution_simulator: Optional[ExecutionSimulator] = None):
         self.initial_balance = initial_balance
         self.current_balance = initial_balance
         self.open_trades: List[Trade] = []
         self.closed_trades: List[Trade] = []
         self.trade_counter = 0
         self.is_running = False
+        self.execution_simulator = execution_simulator
         
         # Callbacks
         self.on_price_update: Optional[Callable] = None
@@ -135,17 +154,27 @@ class TradingSimulator:
                     f"For SELL: stop_loss ({stop_loss}) > entry_price ({entry_price}) > take_profit ({take_profit})"
                 )
 
+        # Apply execution simulation on entry
+        entry_cost_pips = 0.0
+        if self.execution_simulator and self.execution_simulator.config.enabled:
+            result = self.execution_simulator.simulate_entry(direction.value, entry_price)
+            if not result.filled:
+                logger.warning(f"Entry REJECTED: {direction.value} @ {entry_price} (simulated)")
+                raise RuntimeError(f"Entry not filled: {direction.value} @ {entry_price}")
+            entry_cost_pips = result.total_cost_pips
+
         trade = Trade(
             id=self._generate_trade_id(),
             direction=direction,
             entry_price=entry_price,
             stop_loss=stop_loss,
             take_profit=take_profit,
-            units=units
+            units=units,
+            entry_cost_pips=entry_cost_pips,
         )
         
         self.open_trades.append(trade)
-        logger.info(f"Trade opened: {direction.value} @ {entry_price}, SL: {stop_loss}, TP: {take_profit}")
+        logger.info(f"Trade opened: {direction.value} @ {entry_price}, SL: {stop_loss}, TP: {take_profit}, entry_cost={entry_cost_pips:.1f}pips")
         
         if self.on_trade_opened:
             self.on_trade_opened(trade)
@@ -158,17 +187,34 @@ class TradingSimulator:
         
         for trade in self.open_trades:
             trade.update_pnl(current_price)
-            
             if trade.check_exit(current_price):
                 trades_to_close.append(trade)
         
-        # Close trades that hit SL/TP
         for trade in trades_to_close:
             self.open_trades.remove(trade)
+            
+            reason = trade.exit_reason(current_price) or "manual"
+            is_loss = reason == "stop_loss"
+            exit_status = TradeStatus.CLOSED_LOSS if is_loss else TradeStatus.CLOSED_WIN
+            
+            # Apply execution simulation on exit
+            if self.execution_simulator and self.execution_simulator.config.enabled:
+                result = self.execution_simulator.simulate_exit(
+                    trade.direction.value, current_price, reason
+                )
+                if result.filled:
+                    trade.exit_cost_pips = result.total_cost_pips
+                    trade.close(result.fill_price, exit_status)
+                else:
+                    logger.warning(f"Exit NOT filled for trade {trade.id}, using raw price")
+                    trade.close(current_price, exit_status)
+            else:
+                trade.close(current_price, exit_status)
+            
             self.closed_trades.append(trade)
             self.current_balance += trade.pnl
             
-            logger.info(f"Trade closed: {trade.status.value}, PnL: {trade.pnl:.2f}")
+            logger.info(f"Trade closed: {trade.status.value}, PnL: {trade.pnl:.2f}, exit_cost={trade.exit_cost_pips:.1f}pips")
             
             if self.on_trade_closed:
                 self.on_trade_closed(trade)
@@ -210,7 +256,10 @@ class TradingSimulator:
             "pnl": round(trade.pnl, 2),
             "status": trade.status.value,
             "entry_time": trade.entry_time.isoformat(),
-            "close_time": trade.close_time.isoformat() if trade.close_time else None
+            "close_time": trade.close_time.isoformat() if trade.close_time else None,
+            "entry_cost_pips": trade.entry_cost_pips,
+            "exit_cost_pips": trade.exit_cost_pips,
+            "total_cost_pips": round(trade.entry_cost_pips + trade.exit_cost_pips, 1),
         }
     
     async def start(self, signal_generator: Optional[Callable] = None):
