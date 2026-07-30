@@ -104,9 +104,12 @@ class TradingSimulator:
     """
     
     def __init__(self, initial_balance: float = 100000.0,
-                 execution_simulator: Optional[ExecutionSimulator] = None):
+                 execution_simulator: Optional[ExecutionSimulator] = None,
+                 minimum_balance: float = 0.0):
         self.initial_balance = initial_balance
         self.current_balance = initial_balance
+        self.minimum_balance = minimum_balance
+        self.is_bankrupt = False
         self.open_trades: List[Trade] = []
         self.closed_trades: List[Trade] = []
         self.trade_counter = 0
@@ -117,6 +120,7 @@ class TradingSimulator:
         self.on_price_update: Optional[Callable] = None
         self.on_trade_opened: Optional[Callable] = None
         self.on_trade_closed: Optional[Callable] = None
+        self.on_bankruptcy: Optional[Callable] = None
         
         # Data provider
         self._provider = None
@@ -133,6 +137,8 @@ class TradingSimulator:
     def open_trade(self, direction: TradeDirection, entry_price: float,
                    stop_loss: float, take_profit: float, units: float = 10000) -> Trade:
         """Open a new trade."""
+        if self.is_bankrupt:
+            raise RuntimeError(f"Cannot open trade: bankrupt (balance={self.current_balance:.2f})")
         if direction not in (TradeDirection.BUY, TradeDirection.SELL):
             raise ValueError(f"Invalid direction: {direction}")
         if entry_price <= 0:
@@ -218,6 +224,16 @@ class TradingSimulator:
             
             if self.on_trade_closed:
                 self.on_trade_closed(trade)
+        
+        if self.current_balance <= self.minimum_balance:
+            self.is_bankrupt = True
+            self.is_running = False
+            logger.warning(
+                f"BANKRUPTCY: balance {self.current_balance:.2f} <= minimum {self.minimum_balance:.2f}. "
+                f"Simulation stopped."
+            )
+            if self.on_bankruptcy:
+                self.on_bankruptcy(self.current_balance)
     
     def get_status(self) -> Dict:
         """Get current simulation status."""
@@ -241,6 +257,7 @@ class TradingSimulator:
             "winning_trades": winning_trades,
             "losing_trades": losing_trades,
             "win_rate": round(win_rate, 1),
+            "is_bankrupt": self.is_bankrupt,
             "trades": [self._trade_to_dict(t) for t in self.open_trades + self.closed_trades]
         }
     
