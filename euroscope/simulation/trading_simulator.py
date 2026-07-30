@@ -7,6 +7,7 @@ Simulates trade execution, tracking, and performance reporting.
 
 import asyncio
 import logging
+import threading
 from datetime import datetime, UTC
 from typing import Optional, List, Dict, Callable
 from dataclasses import dataclass, field
@@ -124,6 +125,7 @@ class TradingSimulator:
         
         # Data provider
         self._provider = None
+        self._lock = threading.Lock()
     
     def set_provider(self, provider):
         """Set the data provider (BiQuoteProvider or MultiSourceProvider)."""
@@ -169,17 +171,19 @@ class TradingSimulator:
                 raise RuntimeError(f"Entry not filled: {direction.value} @ {entry_price}")
             entry_cost_pips = result.total_cost_pips
 
-        trade = Trade(
-            id=self._generate_trade_id(),
-            direction=direction,
-            entry_price=entry_price,
-            stop_loss=stop_loss,
-            take_profit=take_profit,
-            units=units,
-            entry_cost_pips=entry_cost_pips,
-        )
+        with self._lock:
+            trade = Trade(
+                id=self._generate_trade_id(),
+                direction=direction,
+                entry_price=entry_price,
+                stop_loss=stop_loss,
+                take_profit=take_profit,
+                units=units,
+                entry_cost_pips=entry_cost_pips,
+            )
+            
+            self.open_trades.append(trade)
         
-        self.open_trades.append(trade)
         logger.info(f"Trade opened: {direction.value} @ {entry_price}, SL: {stop_loss}, TP: {take_profit}, entry_cost={entry_cost_pips:.1f}pips")
         
         if self.on_trade_opened:
@@ -191,60 +195,63 @@ class TradingSimulator:
         """Update all open trades with current price."""
         trades_to_close = []
         
-        for trade in self.open_trades:
-            trade.update_pnl(current_price)
-            if trade.check_exit(current_price):
-                trades_to_close.append(trade)
+        with self._lock:
+            for trade in self.open_trades:
+                trade.update_pnl(current_price)
+                if trade.check_exit(current_price):
+                    trades_to_close.append(trade)
+            
+            for trade in trades_to_close:
+                self.open_trades.remove(trade)
+                
+                reason = trade.exit_reason(current_price) or "manual"
+                is_loss = reason == "stop_loss"
+                exit_status = TradeStatus.CLOSED_LOSS if is_loss else TradeStatus.CLOSED_WIN
+                
+                # Apply execution simulation on exit
+                if self.execution_simulator and self.execution_simulator.config.enabled:
+                    result = self.execution_simulator.simulate_exit(
+                        trade.direction.value, current_price, reason
+                    )
+                    if result.filled:
+                        trade.exit_cost_pips = result.total_cost_pips
+                        trade.close(result.fill_price, exit_status)
+                    else:
+                        logger.warning(f"Exit NOT filled for trade {trade.id}, using raw price")
+                        trade.close(current_price, exit_status)
+                else:
+                    trade.close(current_price, exit_status)
+                
+                self.closed_trades.append(trade)
+                self.current_balance += trade.pnl
+                
+                if self.on_trade_closed:
+                    self.on_trade_closed(trade)
+            
+            if self.current_balance <= self.minimum_balance:
+                self.is_bankrupt = True
+                self.is_running = False
+                if self.on_bankruptcy:
+                    self.on_bankruptcy(self.current_balance)
         
         for trade in trades_to_close:
-            self.open_trades.remove(trade)
-            
-            reason = trade.exit_reason(current_price) or "manual"
-            is_loss = reason == "stop_loss"
-            exit_status = TradeStatus.CLOSED_LOSS if is_loss else TradeStatus.CLOSED_WIN
-            
-            # Apply execution simulation on exit
-            if self.execution_simulator and self.execution_simulator.config.enabled:
-                result = self.execution_simulator.simulate_exit(
-                    trade.direction.value, current_price, reason
-                )
-                if result.filled:
-                    trade.exit_cost_pips = result.total_cost_pips
-                    trade.close(result.fill_price, exit_status)
-                else:
-                    logger.warning(f"Exit NOT filled for trade {trade.id}, using raw price")
-                    trade.close(current_price, exit_status)
-            else:
-                trade.close(current_price, exit_status)
-            
-            self.closed_trades.append(trade)
-            self.current_balance += trade.pnl
-            
             logger.info(f"Trade closed: {trade.status.value}, PnL: {trade.pnl:.2f}, exit_cost={trade.exit_cost_pips:.1f}pips")
-            
-            if self.on_trade_closed:
-                self.on_trade_closed(trade)
         
-        if self.current_balance <= self.minimum_balance:
-            self.is_bankrupt = True
-            self.is_running = False
+        if self.is_bankrupt:
             logger.warning(
                 f"BANKRUPTCY: balance {self.current_balance:.2f} <= minimum {self.minimum_balance:.2f}. "
                 f"Simulation stopped."
             )
-            if self.on_bankruptcy:
-                self.on_bankruptcy(self.current_balance)
     
     def get_status(self) -> Dict:
         """Get current simulation status."""
-        total_pnl = sum(t.pnl for t in self.closed_trades)
-        unrealized_pnl = sum(t.pnl for t in self.open_trades)
-        
-        winning_trades = len([t for t in self.closed_trades if t.pnl > 0])
-        losing_trades = len([t for t in self.closed_trades if t.pnl < 0])
-        total_closed = len(self.closed_trades)
-        
-        win_rate = (winning_trades / total_closed * 100) if total_closed > 0 else 0
+        with self._lock:
+            total_pnl = sum(t.pnl for t in self.closed_trades)
+            unrealized_pnl = sum(t.pnl for t in self.open_trades)
+            winning_trades = len([t for t in self.closed_trades if t.pnl > 0])
+            losing_trades = len([t for t in self.closed_trades if t.pnl < 0])
+            total_closed = len(self.closed_trades)
+            win_rate = (winning_trades / total_closed * 100) if total_closed > 0 else 0
         
         return {
             "balance": round(self.current_balance, 2),
