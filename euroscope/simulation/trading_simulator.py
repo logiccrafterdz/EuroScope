@@ -114,6 +114,27 @@ class TradingSimulator:
     def open_trade(self, direction: TradeDirection, entry_price: float,
                    stop_loss: float, take_profit: float, units: float = 10000) -> Trade:
         """Open a new trade."""
+        if direction not in (TradeDirection.BUY, TradeDirection.SELL):
+            raise ValueError(f"Invalid direction: {direction}")
+        if entry_price <= 0:
+            raise ValueError(f"entry_price must be > 0, got {entry_price}")
+        if stop_loss <= 0:
+            raise ValueError(f"stop_loss must be > 0, got {stop_loss}")
+        if take_profit <= 0:
+            raise ValueError(f"take_profit must be > 0, got {take_profit}")
+        if units <= 0:
+            raise ValueError(f"units must be > 0, got {units}")
+        if direction == TradeDirection.BUY:
+            if not (stop_loss < entry_price < take_profit):
+                raise ValueError(
+                    f"For BUY: stop_loss ({stop_loss}) < entry_price ({entry_price}) < take_profit ({take_profit})"
+                )
+        else:
+            if not (stop_loss > entry_price > take_profit):
+                raise ValueError(
+                    f"For SELL: stop_loss ({stop_loss}) > entry_price ({entry_price}) > take_profit ({take_profit})"
+                )
+
         trade = Trade(
             id=self._generate_trade_id(),
             direction=direction,
