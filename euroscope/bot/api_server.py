@@ -1283,11 +1283,14 @@ class APIServer:
         """API endpoint for simulation status."""
         try:
             from ..simulation.trading_simulator import TradingSimulator
+            from ..trading.execution_simulator import ExecutionSimulator
             from ..container import get_container
             
             container = get_container()
             if not hasattr(container, 'simulator'):
-                container.simulator = TradingSimulator()
+                container.simulator = TradingSimulator(
+                    execution_simulator=ExecutionSimulator()
+                )
             
             status = container.simulator.get_status()
             return web.json_response({"success": True, "simulation": status})
@@ -1299,11 +1302,14 @@ class APIServer:
         """API endpoint to start simulation."""
         try:
             from ..simulation.trading_simulator import TradingSimulator
+            from ..trading.execution_simulator import ExecutionSimulator
             from ..container import get_container
             
             container = get_container()
             if not hasattr(container, 'simulator'):
-                container.simulator = TradingSimulator()
+                container.simulator = TradingSimulator(
+                    execution_simulator=ExecutionSimulator()
+                )
                 container.simulator.set_provider(container.price_provider)
             
             # Start simulation in background task
@@ -1335,13 +1341,16 @@ class APIServer:
         """API endpoint to open a manual trade."""
         try:
             from ..simulation.trading_simulator import TradingSimulator, TradeDirection
+            from ..trading.execution_simulator import ExecutionSimulator
             from ..container import get_container
             
             data = await request.json()
             container = get_container()
             
             if not hasattr(container, 'simulator'):
-                container.simulator = TradingSimulator()
+                container.simulator = TradingSimulator(
+                    execution_simulator=ExecutionSimulator()
+                )
                 container.simulator.set_provider(container.price_provider)
             
             # Get current price
