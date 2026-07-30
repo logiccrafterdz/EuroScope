@@ -1364,6 +1364,7 @@ class APIServer:
             # Calculate SL/TP
             sl_pips = data.get("sl_pips", 20)
             tp_pips = data.get("tp_pips", 40)
+            units = data.get("units", 10000)
             
             if direction == TradeDirection.BUY:
                 stop_loss = current_price - (sl_pips * 0.0001)
@@ -1376,7 +1377,8 @@ class APIServer:
                 direction=direction,
                 entry_price=current_price,
                 stop_loss=stop_loss,
-                take_profit=take_profit
+                take_profit=take_profit,
+                units=units
             )
             
             return web.json_response({

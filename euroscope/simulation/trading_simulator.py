@@ -319,7 +319,8 @@ class TradingSimulator:
                             direction=direction,
                             entry_price=current_price,
                             stop_loss=signal["stop_loss"],
-                            take_profit=signal["take_profit"]
+                            take_profit=signal["take_profit"],
+                            units=signal.get("units", 10000)
                         )
                 
                 # Notify price update
