@@ -2,7 +2,7 @@
 LLM Router — Multi-Provider Failover
 
 Tries multiple LLM providers in order with retry logic.
-Chain: FreeTheAI (Gemini 3.1 Flash Light) → FreeTheAI (GLM 5.2) → OpenAI (GPT-4o-mini)
+Chain: Google Gemini (Gemini 3.1 Flash Lite) → FreeTheAI (GLM 5.2) → OpenAI (GPT-4o-mini)
 """
 
 import asyncio
@@ -85,7 +85,7 @@ class LLMRouter:
                     tertiary_model: str = "") -> "LLMRouter":
         """Create router from configuration values.
         
-        Provider chain: FreeTheAI (Gemini 3.1 Flash Light) → FreeTheAI (GLM 5.2) → OpenAI (GPT-4o-mini)
+        Provider chain: Google Gemini (Gemini 3.1 Flash Lite) → FreeTheAI (GLM 5.2) → OpenAI (GPT-4o-mini)
         """
         providers = []
 
@@ -93,8 +93,8 @@ class LLMRouter:
             providers.append(LLMProvider(
                 name="primary",
                 api_key=primary_key,
-                api_base=primary_base or "https://api.freetheai.xyz/v1",
-                model=primary_model or "bbl/gemini-3.1-flash-lite",
+                api_base=primary_base or "https://generativelanguage.googleapis.com/v1beta/openai",
+                model=primary_model or "gemini-3.1-flash-lite",
             ))
 
         if fallback_key:

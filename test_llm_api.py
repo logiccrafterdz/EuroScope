@@ -11,10 +11,10 @@ for line in open(".env", encoding="utf-8"):
 
 providers = [
     {
-        "name": "FreeTheAI (Gemini 3.1 Flash Light)",
+        "name": "Google Gemini (Gemini 3.1 Flash Lite)",
         "key": os.environ.get("EUROSCOPE_LLM_API_KEY", ""),
-        "base": os.environ.get("EUROSCOPE_LLM_API_BASE", "https://api.freetheai.xyz/v1"),
-        "model": os.environ.get("EUROSCOPE_LLM_MODEL", "bbl/gemini-3.1-flash-lite"),
+        "base": os.environ.get("EUROSCOPE_LLM_API_BASE", "https://generativelanguage.googleapis.com/v1beta/openai"),
+        "model": os.environ.get("EUROSCOPE_LLM_MODEL", "gemini-3.1-flash-lite"),
     },
     {
         "name": "FreeTheAI (GLM 5.2)",

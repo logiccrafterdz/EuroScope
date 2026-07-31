@@ -19,14 +19,14 @@ logger = logging.getLogger("euroscope.config")
 class LLMConfig(BaseModel):
     """LLM Provider Configuration - 3-tier failover chain.
     
-    Primary: FreeTheAI (Gemini 3.1 Flash Light)
+    Primary: Google Gemini (Gemini 3.1 Flash Lite)
     Fallback: FreeTheAI (GLM 5.2)
     Tertiary: OpenAI (GPT-4o-mini)
     """
-    # Primary Provider - FreeTheAI (Gemini 3.1 Flash Light)
+    # Primary Provider - Google Gemini (Gemini 3.1 Flash Lite)
     api_key: str = ""
-    api_base: str = "https://api.freetheai.xyz/v1"
-    model: str = "bbl/gemini-3.1-flash-lite"
+    api_base: str = "https://generativelanguage.googleapis.com/v1beta/openai"
+    model: str = "gemini-3.1-flash-lite"
     max_tokens: int = 4096
     temperature: float = 0.4
     
@@ -149,8 +149,8 @@ class Config(BaseSettings):
             api_secret_key=os.getenv("EUROSCOPE_API_SECRET", "euroscope-zenith-v5"),
             llm=LLMConfig(
                 api_key=primary_key,
-                api_base=os.getenv("EUROSCOPE_LLM_API_BASE", "https://api.freetheai.xyz/v1"),
-                model=os.getenv("EUROSCOPE_LLM_MODEL", "bbl/gemini-3.1-flash-lite"),
+                api_base=os.getenv("EUROSCOPE_LLM_API_BASE", "https://generativelanguage.googleapis.com/v1beta/openai"),
+                model=os.getenv("EUROSCOPE_LLM_MODEL", "gemini-3.1-flash-lite"),
                 max_tokens=int(os.getenv("EUROSCOPE_LLM_MAX_TOKENS", "4096")),
                 temperature=float(os.getenv("EUROSCOPE_LLM_TEMPERATURE", "0.4")),
                 fallback_api_key=fallback_key,
