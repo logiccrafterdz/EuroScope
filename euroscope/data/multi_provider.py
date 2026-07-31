@@ -8,6 +8,7 @@ Primary: BiQuote (Free, No API Key) | Secondary: yfinance | Fallback: Alpha Vant
 import asyncio
 import logging
 import sqlite3
+import threading
 import time
 from datetime import datetime, timedelta, UTC
 from pathlib import Path
@@ -27,6 +28,9 @@ logger = logging.getLogger("euroscope.data.multi")
 class CandleCache:
     """SQLite-backed candle cache that persists across restarts."""
 
+    # Serialize writes process-wide so concurrent put() calls never collide
+    _write_lock = threading.Lock()
+
     def __init__(self, db_path: str = "data/candle_cache.db"):
         Path(db_path).parent.mkdir(parents=True, exist_ok=True)
         self._db_path = db_path
@@ -34,8 +38,11 @@ class CandleCache:
         self._prune_if_needed()
 
     def _init_db(self):
-        conn = sqlite3.connect(self._db_path, timeout=5)
+        conn = sqlite3.connect(self._db_path, timeout=30)
         try:
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA synchronous=NORMAL")
+            conn.execute("PRAGMA busy_timeout=30000")
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS candles (
                     timeframe TEXT NOT NULL,
@@ -54,8 +61,9 @@ class CandleCache:
     def get(self, timeframe: str, count: int, max_age_seconds: int = 300) -> Optional[pd.DataFrame]:
         """Return cached candles if fresh enough."""
         cutoff = (datetime.now(UTC) - timedelta(seconds=max_age_seconds)).isoformat()
-        conn = sqlite3.connect(self._db_path, timeout=5)
+        conn = sqlite3.connect(self._db_path, timeout=30)
         try:
+            conn.execute("PRAGMA busy_timeout=30000")
             rows = conn.execute(
                 "SELECT timestamp, open, high, low, close, volume FROM candles "
                 "WHERE timeframe = ? AND cached_at >= ? ORDER BY timestamp DESC LIMIT ?",
@@ -74,54 +82,64 @@ class CandleCache:
             conn.close()
 
     def put(self, timeframe: str, df: pd.DataFrame, source: str = "unknown"):
-        """Store candles in cache."""
+        """Store candles in cache (batched, write-serialized)."""
         if df is None or df.empty:
             return
         now = datetime.now(UTC).isoformat()
-        conn = sqlite3.connect(self._db_path, timeout=5)
-        try:
-            for idx, row in df.iterrows():
-                ts = str(idx)
-                conn.execute(
+        rows = []
+        for idx, row in df.iterrows():
+            ts = str(idx)
+            rows.append(
+                (timeframe, ts, float(row["Open"]), float(row["High"]),
+                 float(row["Low"]), float(row["Close"]), float(row.get("Volume", 0)),
+                 source, now),
+            )
+        if not rows:
+            return
+        with self._write_lock:
+            conn = sqlite3.connect(self._db_path, timeout=30)
+            try:
+                conn.execute("PRAGMA busy_timeout=30000")
+                conn.executemany(
                     "INSERT OR REPLACE INTO candles (timeframe, timestamp, open, high, low, close, volume, source, cached_at) "
                     "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                    (timeframe, ts, float(row["Open"]), float(row["High"]),
-                     float(row["Low"]), float(row["Close"]), float(row.get("Volume", 0)),
-                     source, now),
+                    rows,
                 )
-            conn.commit()
-        finally:
-            conn.close()
+                conn.commit()
+            finally:
+                conn.close()
 
     def clear(self, timeframe: Optional[str] = None):
         """Clear cached candles."""
-        conn = sqlite3.connect(self._db_path, timeout=5)
-        try:
-            if timeframe:
-                conn.execute("DELETE FROM candles WHERE timeframe = ?", (timeframe,))
-            else:
-                conn.execute("DELETE FROM candles")
-            conn.commit()
-        finally:
-            conn.close()
+        with self._write_lock:
+            conn = sqlite3.connect(self._db_path, timeout=30)
+            try:
+                conn.execute("PRAGMA busy_timeout=30000")
+                if timeframe:
+                    conn.execute("DELETE FROM candles WHERE timeframe = ?", (timeframe,))
+                else:
+                    conn.execute("DELETE FROM candles")
+                conn.commit()
+            finally:
+                conn.close()
 
     def _prune_if_needed(self):
         """Remove old candles to keep DB size reasonable. Max 10k rows per timeframe."""
-        conn = sqlite3.connect(self._db_path, timeout=5)
-        try:
-            for tf in ("M1", "M5", "M15", "H1", "H4", "D1", "W1"):
-                count = conn.execute("SELECT COUNT(*) FROM candles WHERE timeframe = ?", (tf,)).fetchone()[0]
-                if count > 10000:
-                    conn.execute(
-                        "DELETE FROM candles WHERE timeframe = ? AND timestamp NOT IN "
-                        "(SELECT timestamp FROM candles WHERE timeframe = ? ORDER BY timestamp DESC LIMIT 10000)",
-                        (tf, tf),
-                    )
-            conn.commit()
-        except Exception:
-            pass
-        finally:
-            conn.close()
+        with self._write_lock:
+            conn = sqlite3.connect(self._db_path, timeout=30)
+            try:
+                conn.execute("PRAGMA busy_timeout=30000")
+                for tf in ("M1", "M5", "M15", "H1", "H4", "D1", "W1"):
+                    count = conn.execute("SELECT COUNT(*) FROM candles WHERE timeframe = ?", (tf,)).fetchone()[0]
+                    if count > 10000:
+                        conn.execute(
+                            "DELETE FROM candles WHERE timeframe = ? AND timestamp NOT IN "
+                            "(SELECT timestamp FROM candles WHERE timeframe = ? ORDER BY timestamp DESC LIMIT 10000)",
+                            (tf, tf),
+                        )
+                conn.commit()
+            finally:
+                conn.close()
 
 
 class MultiSourceProvider:
