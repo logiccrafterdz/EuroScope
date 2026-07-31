@@ -56,8 +56,8 @@ async def test_llm_config_defaults():
     lc = LLMConfig()
     checks = []
     if lc.api_base == "https://api.freetheai.xyz/v1": checks.append("primary_base")
-    if lc.model == "glm/glm-5.2": checks.append("primary_model")
-    if lc.fallback_model == "deepseek-ai/deepseek-v4-flash": checks.append("fallback_model")
+    if lc.model == "bbl/gemini-3.1-flash-lite": checks.append("primary_model")
+    if lc.fallback_model == "glm/glm-5.2": checks.append("fallback_model")
     if lc.tertiary_model == "gpt-4o-mini": checks.append("tertiary_model")
     if lc.max_tokens == 4096: checks.append("max_tokens=4096")
     if len(checks) == 5:

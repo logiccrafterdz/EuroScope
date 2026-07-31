@@ -11,16 +11,16 @@ for line in open(".env", encoding="utf-8"):
 
 providers = [
     {
-        "name": "FreeTheAI (GLM 5.2)",
+        "name": "FreeTheAI (Gemini 3.1 Flash Light)",
         "key": os.environ.get("EUROSCOPE_LLM_API_KEY", ""),
         "base": os.environ.get("EUROSCOPE_LLM_API_BASE", "https://api.freetheai.xyz/v1"),
-        "model": os.environ.get("EUROSCOPE_LLM_MODEL", "glm/glm-5.2"),
+        "model": os.environ.get("EUROSCOPE_LLM_MODEL", "bbl/gemini-3.1-flash-lite"),
     },
     {
-        "name": "OpenRouter (DeepSeek)",
+        "name": "FreeTheAI (GLM 5.2)",
         "key": os.environ.get("EUROSCOPE_LLM_FALLBACK_API_KEY", ""),
-        "base": os.environ.get("EUROSCOPE_LLM_FALLBACK_API_BASE", "https://openrouter.ai/api/v1"),
-        "model": os.environ.get("EUROSCOPE_LLM_FALLBACK_MODEL", "deepseek/deepseek-chat"),
+        "base": os.environ.get("EUROSCOPE_LLM_FALLBACK_API_BASE", "https://api.freetheai.xyz/v1"),
+        "model": os.environ.get("EUROSCOPE_LLM_FALLBACK_MODEL", "glm/glm-5.2"),
     },
 ]
 

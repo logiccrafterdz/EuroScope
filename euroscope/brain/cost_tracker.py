@@ -17,6 +17,9 @@ logger = logging.getLogger("euroscope.brain.cost_tracker")
 MODEL_PRICING = {
     # Format: (prompt_cost_per_1M, completion_cost_per_1M)
     "default": (1.0, 2.0),
+    # Gemini 3.1 Flash Light (FreeTheAI)
+    "bbl/gemini-3.1-flash-lite": (0.25, 1.50),
+    "gemini-3.1-flash-lite": (0.25, 1.50),
     # GLM 5.2 (FreeTheAI)
     "glm/glm-5.2": (0.5, 1.5),
     "glm-5.2": (0.5, 1.5),

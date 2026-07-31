@@ -2,7 +2,7 @@
 LLM Router — Multi-Provider Failover
 
 Tries multiple LLM providers in order with retry logic.
-Chain: FreeTheAI (GLM 5.2) → OpenRouter (DeepSeek) → OpenAI (GPT-4o-mini)
+Chain: FreeTheAI (Gemini 3.1 Flash Light) → FreeTheAI (GLM 5.2) → OpenAI (GPT-4o-mini)
 """
 
 import asyncio
@@ -85,7 +85,7 @@ class LLMRouter:
                     tertiary_model: str = "") -> "LLMRouter":
         """Create router from configuration values.
         
-        Provider chain: FreeTheAI (GLM 5.2) → OpenRouter (DeepSeek) → OpenAI (GPT-4o-mini)
+        Provider chain: FreeTheAI (Gemini 3.1 Flash Light) → FreeTheAI (GLM 5.2) → OpenAI (GPT-4o-mini)
         """
         providers = []
 
@@ -94,15 +94,15 @@ class LLMRouter:
                 name="primary",
                 api_key=primary_key,
                 api_base=primary_base or "https://api.freetheai.xyz/v1",
-                model=primary_model or "glm/glm-5.2",
+                model=primary_model or "bbl/gemini-3.1-flash-lite",
             ))
 
         if fallback_key:
             providers.append(LLMProvider(
                 name="fallback",
                 api_key=fallback_key,
-                api_base=fallback_base or "https://openrouter.ai/api/v1",
-                model=fallback_model or "deepseek/deepseek-chat",
+                api_base=fallback_base or "https://api.freetheai.xyz/v1",
+                model=fallback_model or "glm/glm-5.2",
             ))
 
         if tertiary_key:
@@ -398,7 +398,7 @@ class LLMRouter:
         data = response.json()
 
         reply = data["choices"][0]["message"]["content"]
-        self._log_usage(provider.name, data)
+        self._log_usage(provider.model, data)
         return reply
 
     async def _call_provider_json(
@@ -457,7 +457,7 @@ class LLMRouter:
                 raise
 
         raw = data["choices"][0]["message"]["content"] or ""
-        self._log_usage(provider.name, data)
+        self._log_usage(provider.model, data)
 
         # Try to parse as JSON directly
         try:
@@ -540,11 +540,11 @@ class LLMRouter:
                 logger.error(f"{provider.name} provider error: {e.response.status_code} - {e.response.text[:500]}")
                 raise
 
-        self._log_usage(provider.name, data)
+        self._log_usage(provider.model, data)
         return data
 
     def _log_usage(self, provider_name: str, data: dict):
-        """Log token usage and record to cost tracker."""
+        """Log token usage and record to cost tracker (provider_name = model alias)."""
         usage = data.get("usage", {})
         if usage:
             prompt_tokens = usage.get("prompt_tokens", 0) or 0

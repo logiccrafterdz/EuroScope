@@ -19,21 +19,21 @@ logger = logging.getLogger("euroscope.config")
 class LLMConfig(BaseModel):
     """LLM Provider Configuration - 3-tier failover chain.
     
-    Primary: FreeTheAI (GLM 5.2)
-    Fallback: OpenRouter (DeepSeek)
+    Primary: FreeTheAI (Gemini 3.1 Flash Light)
+    Fallback: FreeTheAI (GLM 5.2)
     Tertiary: OpenAI (GPT-4o-mini)
     """
-    # Primary Provider - FreeTheAI (GLM 5.2)
+    # Primary Provider - FreeTheAI (Gemini 3.1 Flash Light)
     api_key: str = ""
     api_base: str = "https://api.freetheai.xyz/v1"
-    model: str = "glm/glm-5.2"
+    model: str = "bbl/gemini-3.1-flash-lite"
     max_tokens: int = 4096
     temperature: float = 0.4
     
-    # Fallback Provider - OpenRouter (DeepSeek)
+    # Fallback Provider - FreeTheAI (GLM 5.2)
     fallback_api_key: str = ""
-    fallback_api_base: str = "https://openrouter.ai/api/v1"
-    fallback_model: str = "deepseek/deepseek-chat"
+    fallback_api_base: str = "https://api.freetheai.xyz/v1"
+    fallback_model: str = "glm/glm-5.2"
     
     # Tertiary Provider - OpenAI (GPT-4o-mini)
     tertiary_api_key: str = ""
@@ -150,12 +150,12 @@ class Config(BaseSettings):
             llm=LLMConfig(
                 api_key=primary_key,
                 api_base=os.getenv("EUROSCOPE_LLM_API_BASE", "https://api.freetheai.xyz/v1"),
-                model=os.getenv("EUROSCOPE_LLM_MODEL", "glm/glm-5.2"),
+                model=os.getenv("EUROSCOPE_LLM_MODEL", "bbl/gemini-3.1-flash-lite"),
                 max_tokens=int(os.getenv("EUROSCOPE_LLM_MAX_TOKENS", "4096")),
                 temperature=float(os.getenv("EUROSCOPE_LLM_TEMPERATURE", "0.4")),
                 fallback_api_key=fallback_key,
-                fallback_api_base=os.getenv("EUROSCOPE_LLM_FALLBACK_API_BASE", "https://openrouter.ai/api/v1"),
-                fallback_model=os.getenv("EUROSCOPE_LLM_FALLBACK_MODEL", "deepseek/deepseek-chat"),
+                fallback_api_base=os.getenv("EUROSCOPE_LLM_FALLBACK_API_BASE", "https://api.freetheai.xyz/v1"),
+                fallback_model=os.getenv("EUROSCOPE_LLM_FALLBACK_MODEL", "glm/glm-5.2"),
                 tertiary_api_key=tertiary_key,
                 tertiary_api_base=os.getenv("EUROSCOPE_LLM_TERTIARY_API_BASE", "https://api.openai.com/v1"),
                 tertiary_model=os.getenv("EUROSCOPE_LLM_TERTIARY_MODEL", "gpt-4o-mini"),
@@ -251,7 +251,7 @@ class Config(BaseSettings):
     def print_startup_summary(self):
         """Print a concise startup summary to the console."""
         warnings = self.validate()
-        total = 7  # LLM Primary, LLM Fallback, LLM Tertiary, Telegram, AlphaVantage, Tiingo, FRED
+        total = 8  # LLM Primary, LLM Fallback, LLM Tertiary, Telegram, AlphaVantage, Tiingo, FRED, OANDA
         configured = total - len(warnings)
 
         print(f"  ✅ {configured}/{total} API keys configured")
