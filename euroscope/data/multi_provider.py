@@ -21,6 +21,7 @@ from .alpha_vantage import AlphaVantageProvider
 from .tiingo import TiingoProvider
 from .oanda import OandaProvider
 from .biquote import BiQuoteProvider
+from .forexfeed import ForexFeedProvider
 
 logger = logging.getLogger("euroscope.data.multi")
 
@@ -146,11 +147,12 @@ class MultiSourceProvider:
     """
     Unified price provider that tries multiple data sources.
 
-    Price: BiQuote → OANDA → Tiingo → yfinance → Alpha Vantage
+    Price: ForexFeed (TrueFX+Swissquote, verified) → BiQuote → OANDA → Tiingo → yfinance → Alpha Vantage
     Candles: yfinance (cached) → OANDA → Tiingo → BiQuote (live) → Alpha Vantage
     """
 
     def __init__(self, alphavantage_key: str = "", tiingo_key: str = "", oanda_key: str = "", oanda_account: str = "", oanda_practice: bool = True):
+        self.forexfeed = ForexFeedProvider()  # Verified institutional feed, no API key
         self.biquote = BiQuoteProvider()  # Free, no API key needed
         self.oanda = OandaProvider(oanda_key, oanda_account, oanda_practice) if oanda_key else None
         self.tiingo = TiingoProvider(tiingo_key) if tiingo_key else None
@@ -158,7 +160,7 @@ class MultiSourceProvider:
         self.fallback = AlphaVantageProvider(alphavantage_key) if alphavantage_key else None
         self._candle_cache = CandleCache()
 
-        self._last_source = "biquote"
+        self._last_source = "forexfeed"
 
         # Simple circuit breaker for price fetching
         self._price_failures = 0
@@ -184,7 +186,20 @@ class MultiSourceProvider:
                 logger.info("Price circuit breaker: attempting recovery")
                 self._price_failures = 0
 
-        # Try BiQuote first (Free, No API Key)
+        # Try ForexFeed first (verified TrueFX + Swissquote, no API key)
+        try:
+            result = await self.forexfeed.get_price()
+            if "error" not in result:
+                self._last_source = "forexfeed"
+                self._price_failures = 0  # Reset on success
+                result["source"] = "forexfeed"
+                self._enrich_day_stats(result)
+                return result
+            logger.warning(f"ForexFeed price failed: {result.get('error')}, trying BiQuote...")
+        except Exception as e:
+            logger.warning(f"ForexFeed exception: {e}, trying BiQuote...")
+
+        # Try BiQuote second (Free, No API Key)
         try:
             result = await self.biquote.get_price()
             if "error" not in result:
@@ -239,9 +254,29 @@ class MultiSourceProvider:
             logger.warning(f"Price circuit breaker OPENED after {self._price_failures} consecutive failures")
         return {"error": "All price sources failed"}
 
+    def _enrich_day_stats(self, result: dict):
+        """Best-effort: derive day open/high/low/change from locally cached D1 candles (no network)."""
+        try:
+            df = self._candle_cache.get("D1", 3, max_age_seconds=86400)
+            if df is None or len(df) < 2:
+                return
+            current = df.iloc[-1]
+            prev_close = float(df.iloc[-2]["Close"])
+            price = float(result["price"])
+            result["open"] = round(float(current["Open"]), 5)
+            result["high"] = round(float(current["High"]), 5)
+            result["low"] = round(float(current["Low"]), 5)
+            change = price - prev_close
+            result["change"] = round(change, 5)
+            result["change_pct"] = round((change / prev_close) * 100, 3) if prev_close else 0.0
+            result["direction"] = "🟢" if change >= 0 else "🔴"
+        except Exception as e:
+            logger.debug(f"Day stats enrichment skipped: {e}")
+
     async def close(self):
         """Close all underlying provider sessions."""
         tasks = []
+        if self.forexfeed: tasks.append(self.forexfeed.close())
         if self.biquote: tasks.append(self.biquote.close())
         if self.oanda: tasks.append(self.oanda.close())
         if self.tiingo: # Tiingo uses context managers per call, but we can add close() for future-proofing
@@ -249,6 +284,17 @@ class MultiSourceProvider:
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
         logger.info("MultiSourceProvider: All sessions closed.")
+
+    async def _fetch_candles(self, coro, name: str, timeout: float = 25.0) -> Optional[pd.DataFrame]:
+        """Run a candle fetch with a hard deadline so hangs can never stall a tick."""
+        try:
+            return await asyncio.wait_for(coro, timeout=timeout)
+        except asyncio.TimeoutError:
+            logger.warning(f"{name} candles timed out after {timeout:.0f}s")
+            return None
+        except Exception as e:
+            logger.debug(f"{name} candles failed: {e}")
+            return None
 
     async def get_candles(self, timeframe: str = "H1", count: int = 100, symbol: str = "EURUSD", **kwargs) -> Optional[pd.DataFrame]:
         """Get OHLCV candles with automatic failover + local SQLite cache.
@@ -265,8 +311,8 @@ class MultiSourceProvider:
             logger.debug(f"Candle cache hit for {tf}: {len(cached)} candles")
             return cached
 
-        # 1) yfinance — only real historical source
-        df = await self.legacy.get_candles(tf, count)
+        # 1) yfinance — only real historical source (hard 25s deadline)
+        df = await self._fetch_candles(self.legacy.get_candles(tf, count), "yfinance", timeout=25.0)
         if df is not None and not df.empty:
             df = self._validate_data(df)
             if df is not None:
@@ -277,7 +323,7 @@ class MultiSourceProvider:
 
         # 2) OANDA
         if self.oanda:
-            df = await self.oanda.get_candles(tf, count)
+            df = await self._fetch_candles(self.oanda.get_candles(tf, count), "OANDA", timeout=12.0)
             if df is not None and not df.empty:
                 df = self._validate_data(df)
                 if df is not None:
@@ -288,7 +334,7 @@ class MultiSourceProvider:
 
         # 3) Tiingo
         if self.tiingo:
-            df = await self.tiingo.get_candles(tf, count)
+            df = await self._fetch_candles(self.tiingo.get_candles(tf, count), "Tiingo", timeout=12.0)
             if df is not None and not df.empty:
                 df = self._validate_data(df)
                 if df is not None:
@@ -298,14 +344,14 @@ class MultiSourceProvider:
             logger.debug(f"Tiingo candles failed for {tf}")
 
         # 4) BiQuote — live snapshot only (single candle)
-        df = await self.biquote.get_candles(tf, count)
+        df = await self._fetch_candles(self.biquote.get_candles(tf, count), "BiQuote", timeout=10.0)
         if df is not None and not df.empty:
             self._last_source = "biquote"
             return df
 
         # 5) Alpha Vantage
         if self.fallback:
-            df = await self.fallback.get_candles(tf, count)
+            df = await self._fetch_candles(self.fallback.get_candles(tf, count), "Alpha Vantage", timeout=15.0)
             if df is not None and not df.empty:
                 df = self._validate_data(df)
                 if df is not None:
