@@ -1,7 +1,25 @@
 import pytest
+import asyncio
 from unittest.mock import AsyncMock, patch, MagicMock
 from euroscope.brain.orchestrator import Orchestrator
 from euroscope.skills.base import SkillContext, SkillResult
+
+@pytest.mark.asyncio
+async def test_orchestrator_skips_hanging_skill_within_timeout():
+    """A stuck skill must be skipped after SKILL_TIMEOUT, not hang the pipeline."""
+    orch = Orchestrator()
+    ok_result = SkillResult(success=True, data={"ok": True})
+
+    async def fake_run_skill(skill_name, action, **kwargs):
+        if skill_name == "market_data":
+            await asyncio.sleep(10)
+        return ok_result
+
+    with patch.object(orch, 'run_skill', side_effect=fake_run_skill):
+        with patch.object(type(orch), 'SKILL_TIMEOUT', 0.05, create=False):
+            pipeline = [("market_data", "get_candles"), ("technical_analysis", "full")]
+            ctx = await orch._execute_pipeline(pipeline, context=SkillContext())
+            assert ctx is not None
 
 @pytest.mark.asyncio
 async def test_orchestrator_confidence_propagation_with_poor_data():

@@ -5,6 +5,7 @@ Replaces hard-coded specialists with SkillsRegistry-driven
 dynamic tool calling and skills chaining.
 """
 
+import asyncio
 import logging
 import time
 from datetime import datetime, timedelta, UTC
@@ -69,6 +70,8 @@ class Orchestrator:
     V2: Uses SkillsRegistry for dynamic skill discovery and SkillChain
     for pipeline execution. Purely skills-based.
     """
+
+    SKILL_TIMEOUT = 30.0
 
     def __init__(self, storage=None, registry=None, config=None, llm_router=None,
                  forecast_tracker=None, regime_engine=None, adaptive_tuner=None):
@@ -151,7 +154,7 @@ class Orchestrator:
         if context is None:
             context = SkillContext()
         params = params or {}
-        
+
         for skill_name, action in pipeline:
             # Dependency Validation: Risk Management requires signal direction
             if skill_name == "risk_management":
@@ -159,8 +162,15 @@ class Orchestrator:
                 if not direction or direction == "NEUTRAL":
                     logger.error("Risk management requires signal direction — ensure trading_strategy runs first")
                     continue
-            
-            result = await self.run_skill(skill_name, action, context=context, **params.get(skill_name, {}))
+
+            try:
+                result = await asyncio.wait_for(
+                    self.run_skill(skill_name, action, context=context, **params.get(skill_name, {})),
+                    timeout=self.SKILL_TIMEOUT,
+                )
+            except asyncio.TimeoutError:
+                logger.error(f"Skill {skill_name}.{action} exceeded {self.SKILL_TIMEOUT}s — skipping")
+                result = SkillResult(success=False, error=f"Skill {skill_name} timed out")
             
             # Handle skill rejection (e.g., insufficient data)
             if result.status == "rejected":

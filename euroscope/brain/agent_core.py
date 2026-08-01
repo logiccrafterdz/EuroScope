@@ -91,7 +91,7 @@ class EuroScopeAgent:
     CONVICTION_REVIEW_INTERVAL = 180 # Review convictions every 3 min
     MONITORING_INTERVAL = 30         # Monitor open trades every 30s
     IDLE_CHECK_INTERVAL = 120        # Check if should wake up every 2 min
-    MAX_TICK_DURATION = 45.0         # Max execution time for a single tick
+    MAX_TICK_DURATION = 90.0         # Max execution time for a single tick
 
     def __init__(
         self,
