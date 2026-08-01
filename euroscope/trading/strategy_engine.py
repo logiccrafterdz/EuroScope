@@ -68,17 +68,20 @@ class StrategyEngine:
     def detect_strategy(self, indicators: dict, levels: dict,
                         patterns: list = None, uncertainty: Optional[dict] = None,
                         macro_data: Optional[dict] = None,
-                        user_prefs: Optional[dict] = None) -> StrategySignal:
+                        user_prefs: Optional[dict] = None,
+                        session: Optional[str] = None) -> StrategySignal:
         """
         Analyze market conditions and recommend a strategy.
 
         Args:
-            indicators: Technical indicator data (RSI, MACD, EMA, ADX, BB, ATR)
+            indicators: Technical indicator data (RSI, MACD, EMA, ADX, BB, ATR, zscore)
             levels: {"current_price", "support", "resistance"}
             patterns: Detected chart patterns
             uncertainty: Uncertainty data
             macro_data: Macroeconomic data
             user_prefs: Dynamically tuned parameters from tuning.json
+            session: Trading session ("asian", "london", "overlap", "newyork",
+                     "closing", "weekend", "holiday", "unknown")
 
         Returns:
             StrategySignal with recommended action
@@ -87,7 +90,7 @@ class StrategyEngine:
             self._tuning_params.update(user_prefs)
         regime_info = self._detect_regime(indicators)
         patterns = patterns or []
-        if regime_info.regime != "breakout" and self._has_breakout_trigger(indicators, levels):
+        if regime_info.regime not in ("breakout", "volatile") and self._has_breakout_trigger(indicators, levels):
             regime_info = RegimeInfo(
                 regime="breakout",
                 strength=max(regime_info.strength, 0.6),
@@ -99,6 +102,8 @@ class StrategyEngine:
             sig = self._trend_following(indicators, levels, patterns)
         elif regime_info.regime == "breakout":
             sig = self._breakout_strategy(indicators, levels, patterns)
+        elif regime_info.regime == "volatile":
+            sig = self._volatile_defensive(indicators, levels)
         else:
             sig = self._mean_reversion(indicators, levels, patterns)
 
@@ -107,8 +112,46 @@ class StrategyEngine:
         if regime_info.strength < 0.4:
             sig.confidence *= 0.85  # Lower confidence in ambiguous regimes
 
+        # Session-aware gating (institutional: trade the right hours)
+        sig = self._apply_session_gating(sig, session)
+
         if uncertainty:
             sig = self._apply_uncertainty(sig, uncertainty, macro_data or {})
+
+        return sig
+
+    _NO_TRADE_SESSIONS = {"closing", "weekend", "holiday"}
+    _SESSION_MULTIPLIERS = {
+        "asian": 0.90,
+        "london": 1.00,
+        "overlap": 1.05,
+        "newyork": 1.00,
+    }
+
+    def _apply_session_gating(self, sig: StrategySignal, session: Optional[str]) -> StrategySignal:
+        """Gate signals by session: no-trade sessions block, quiet sessions penalize."""
+        if not session:
+            return sig
+
+        if session in self._NO_TRADE_SESSIONS:
+            return StrategySignal(
+                strategy=sig.strategy,
+                direction="WAIT",
+                confidence=0,
+                entry_rules=[],
+                exit_rules=sig.exit_rules,
+                reasoning=f"{sig.reasoning} | Session '{session}' closed for trading",
+                regime=sig.regime,
+                regime_strength=sig.regime_strength,
+            )
+
+        multiplier = self._SESSION_MULTIPLIERS.get(session, 1.0)
+        if sig.direction in ("BUY", "SELL"):
+            # Breakout needs a live session; fade trades (MR) thrive in overlap/London
+            if sig.strategy == "breakout" and session == "asian":
+                sig.confidence = min(95, sig.confidence * 0.7)
+                sig.reasoning += f" | Breakout penalized in {session} session"
+            sig.confidence = min(95, sig.confidence * multiplier)
 
         return sig
 
@@ -176,9 +219,12 @@ class StrategyEngine:
             
         # Map StrategyEngine indicators to the format expected by RegimeAdaptiveEngine
         bb = indicators.get("bollinger", {})
+        raw_atr = indicators.get("atr", 0)
+        atr_val = raw_atr.get("value") if isinstance(raw_atr, dict) else raw_atr
+        atr_avg = raw_atr.get("sma") if isinstance(raw_atr, dict) else indicators.get("atr_avg")
         mapped_inds = {
             "ADX": {"value": indicators.get("adx", 20)},
-            "ATR": {"value": indicators.get("atr", 0), "average": indicators.get("atr_avg", 0)},
+            "ATR": {"value": atr_val or 0, "average": atr_avg or 0},
             "BB": {
                 "upper": bb.get("upper", 0),
                 "lower": bb.get("lower", 0),
@@ -201,6 +247,8 @@ class StrategyEngine:
         outside_band = (bb_upper and bb_price and bb_price > bb_upper) or (bb_lower and bb_price and bb_price < bb_lower)
         if regime_name == "ranging" and rsi_extreme and (outside_band or (bb_bandwidth and bb_bandwidth <= 0.08)):
             regime_name = "breakout"
+        if regime_name == "volatile" and rsi_extreme and outside_band:
+            regime_name = "breakout"
         
         # Determine direction
         overall_bias = indicators.get("overall_bias", "neutral")
@@ -214,9 +262,20 @@ class StrategyEngine:
         else:
             direction = "neutral"
             
-        # Proxy strength from ADX (0-50 normalized to 0.1-1.0)
+        # Strength: confidence in the regime classification, strategy-appropriate
         adx = indicators.get("adx", 20)
-        strength = min(1.0, max(0.1, adx / 50.0))
+        if regime_name == "trending":
+            strength = min(1.0, max(0.4, adx / 50.0))
+        elif regime_name == "breakout":
+            strength = max(0.6, min(1.0, 0.5 + adx / 100.0))
+        elif regime_name == "volatile":
+            strength = 0.5
+        else:
+            # Ranging strength reflects how stretched price is (reversion potential)
+            zscore = indicators.get("zscore")
+            z_abs = abs(zscore) if isinstance(zscore, (int, float)) else 0.0
+            stretch = max(abs(rsi - 50) / 50.0, min(1.0, z_abs / 2.0))
+            strength = min(0.8, 0.35 + stretch * 0.9)
         
         logger.debug(f"Regime detection via RegimeAdaptiveEngine: {regime_name} (strength={strength:.2f})")
         
@@ -227,6 +286,35 @@ class StrategyEngine:
             details={"source": "RegimeAdaptiveEngine"}
         )
 
+    # ─── Volatile (Defensive) ────────────────────────────────
+
+    def _volatile_defensive(self, indicators: dict, levels: dict) -> StrategySignal:
+        """
+        Defensive posture during volatility spikes.
+
+        Fading extremes in a volatile market is dangerous. We stand aside
+        unless a strong trend (ADX >= 30) is present — then we ride it with
+        reduced confidence.
+        """
+        adx = indicators.get("adx", 0)
+        reasoning = "Elevated volatility — standing aside (defensive)"
+        if adx and adx >= 30:
+            sig = self._trend_following(indicators, levels, [])
+            sig.confidence = min(60.0, sig.confidence * 0.7)
+            sig.reasoning += " | Volatile regime: reduced confidence"
+            sig.regime = "volatile"
+            return sig
+
+        return StrategySignal(
+            strategy="volatile_defensive",
+            direction="WAIT",
+            confidence=15.0,
+            entry_rules=[],
+            exit_rules=["Stand aside until volatility normalizes (ATR ratio < 1.5)"],
+            reasoning=reasoning,
+            regime="volatile",
+        )
+
     # ─── Trend Following ─────────────────────────────────────
 
     def _trend_following(self, indicators: dict, levels: dict,
@@ -234,13 +322,15 @@ class StrategyEngine:
         """
         Trend Following strategy — ride the trend with Market Structure & Momentum.
 
-        Entry: Break of Structure (BOS) / Moving Averages alignment + Volume + ADX.
+        Entry: Break of Structure (BOS) / Moving Average alignment + pullback
+               (not chasing extended price) + ADX confirmation.
         Exit: CHoCH (Change of Character) or trailing stop.
         """
         bias = indicators.get("overall_bias", "neutral")
         adx = indicators.get("adx", 0)
         rsi = indicators.get("rsi", 50)
         macd = indicators.get("macd", {})
+        zscore = indicators.get("zscore")
 
         confidence = 40.0
         entry_rules = []
@@ -259,13 +349,11 @@ class StrategyEngine:
 
         # Volume/Volatility Expansion Confirmation (ATR proxy instead of pseudo-volume)
         atr_data = indicators.get("atr", {})
-        current_atr = atr_data.get("current", 0)
-        avg_atr = atr_data.get("avg_14", 1)  # Using 14-period avg as baseline
-        
-        atr_expansion = False
+        current_atr = atr_data.get("current") or atr_data.get("value", 0) if isinstance(atr_data, dict) else 0
+        avg_atr = atr_data.get("avg_14") or atr_data.get("sma", 1) if isinstance(atr_data, dict) else 1
+
         if current_atr and avg_atr and avg_atr > 0:
             if current_atr / avg_atr > 1.25:
-                atr_expansion = True
                 entry_rules.append("ATR Expansion: High momentum supports trend")
                 confidence += 10
             elif current_atr / avg_atr < 0.75:
@@ -292,6 +380,17 @@ class StrategyEngine:
         if 35 < rsi < 65:
             entry_rules.append(f"RSI has room to move ({rsi:.0f})")
             confidence += 5
+
+        # Pullback / no-chase filter (institutional: buy strength on the dip)
+        if direction in ("BUY", "SELL") and isinstance(zscore, (int, float)):
+            overextended = (direction == "BUY" and zscore > 2.0) or (direction == "SELL" and zscore < -2.0)
+            pullback_zone = (direction == "BUY" and -0.5 <= zscore <= 1.5) or (direction == "SELL" and -1.5 <= zscore <= 0.5)
+            if overextended:
+                entry_rules.append(f"Z-score {zscore:+.2f}: overextended — avoid chasing")
+                confidence -= 20
+            elif pullback_zone:
+                entry_rules.append(f"Z-score {zscore:+.2f}: healthy pullback zone")
+                confidence += 10
 
         # Bullish patterns in uptrend
         for p in patterns:
@@ -320,13 +419,21 @@ class StrategyEngine:
     def _mean_reversion(self, indicators: dict, levels: dict,
                         patterns: list) -> StrategySignal:
         """
-        Mean Reversion — fade extremes at key levels.
+        Mean Reversion — fade statistical extremes at key levels.
 
-        Entry: RSI extreme + price at support/resistance + BB band touch
-        Exit: RSI returns to 50 or price reaches mid-BB
+        Institutional entry rules:
+          - Statistical stretch: RSI extreme AND/OR z-score >= 1.25 (std devs)
+          - Price at/through a Bollinger band (deviation from mean)
+          - No strong trend (ADX < 25) — never fade an established trend
+          - Preferably at support (long) / resistance (short)
+
+        Exit: price returns to the mean (mid-band / RSI 45-55), time-stop
+              (3× reversion half-life), or stop beyond the extreme.
         """
         rsi = indicators.get("rsi", 50)
         bb = indicators.get("bollinger", {})
+        zscore = indicators.get("zscore")
+        adx = indicators.get("adx", 20)
         current_price = levels.get("current_price", 0)
         support = levels.get("support", [])
         resistance = levels.get("resistance", [])
@@ -334,15 +441,47 @@ class StrategyEngine:
         confidence = 35.0
         entry_rules = []
         direction = "WAIT"
-        
+
         rsi_os = self._tuning_params.get("rsi_oversold", 30.0)
         rsi_ob = self._tuning_params.get("rsi_overbought", 70.0)
 
-        # Oversold at support → BUY
-        if rsi < rsi_os:
+        # ── Trend filter: never fade a strong trend ──
+        if adx and adx >= 25:
+            return StrategySignal(
+                strategy="mean_reversion",
+                direction="WAIT",
+                confidence=20.0,
+                entry_rules=["Trend filter: ADX >= 25 — do not fade the trend"],
+                exit_rules=[
+                    "Price returns to middle Bollinger Band (mean)",
+                    "RSI returns to 45-55 range",
+                    "Stop loss: below nearest support / above nearest resistance",
+                ],
+                reasoning=f"Ranging regime but ADX {adx:.0f} >= 25 — mean reversion suppressed (no trend fading)",
+                regime="ranging",
+            )
+
+        z_abs = abs(zscore) if isinstance(zscore, (int, float)) else 0.0
+        rsi_buy = rsi < rsi_os
+        rsi_sell = rsi > rsi_ob
+        z_buy = isinstance(zscore, (int, float)) and zscore <= -1.25
+        z_sell = isinstance(zscore, (int, float)) and zscore >= 1.25
+
+        # ── Oversold → BUY ──
+        if rsi_buy or z_buy:
             direction = "BUY"
-            entry_rules.append(f"RSI oversold ({rsi:.0f} < {rsi_os})")
+            entry_rules.append(f"Stretch: RSI {rsi:.0f} < {rsi_os}" if rsi_buy else f"Stretch: z-score {zscore:+.2f} <= -1.25")
             confidence += 15
+
+            if rsi_buy and z_buy:
+                entry_rules.append("Double confirmation: RSI + z-score")
+                confidence += 8
+            if z_abs >= 2.0:
+                entry_rules.append(f"Deep z-score {zscore:+.2f}: strong reversion potential")
+                confidence += 10
+            elif z_abs >= 1.5:
+                entry_rules.append(f"z-score {zscore:+.2f} beyond 1.5σ")
+                confidence += 5
 
             if support and current_price:
                 nearest_s = support[0]
@@ -356,11 +495,21 @@ class StrategyEngine:
                 entry_rules.append("Price at/below lower Bollinger Band")
                 confidence += 10
 
-        # Overbought at resistance → SELL
-        elif rsi > rsi_ob:
+        # ── Overbought → SELL ──
+        elif rsi_sell or z_sell:
             direction = "SELL"
-            entry_rules.append(f"RSI overbought ({rsi:.0f} > {rsi_ob})")
+            entry_rules.append(f"Stretch: RSI {rsi:.0f} > {rsi_ob}" if rsi_sell else f"Stretch: z-score {zscore:+.2f} >= 1.25")
             confidence += 15
+
+            if rsi_sell and z_sell:
+                entry_rules.append("Double confirmation: RSI + z-score")
+                confidence += 8
+            if z_abs >= 2.0:
+                entry_rules.append(f"Deep z-score {zscore:+.2f}: strong reversion potential")
+                confidence += 10
+            elif z_abs >= 1.5:
+                entry_rules.append(f"z-score {zscore:+.2f} beyond 1.5σ")
+                confidence += 5
 
             if resistance and current_price:
                 nearest_r = resistance[0]
@@ -374,6 +523,16 @@ class StrategyEngine:
                 entry_rules.append("Price at/above upper Bollinger Band")
                 confidence += 10
 
+        # ── Volatility sanity: don't fade in a dead market ──
+        bb_upper = bb.get("upper")
+        bb_lower = bb.get("lower")
+        bb_mid = bb.get("middle")
+        if bb_upper and bb_lower and bb_mid and bb_mid > 0:
+            bandwidth = (bb_upper - bb_lower) / bb_mid
+            if 0 < bandwidth < 0.0012:
+                entry_rules.append("Narrow bands: low reversion energy")
+                confidence -= 8
+
         # Reversal patterns
         for p in patterns:
             p_bias = p.get("bias", "")
@@ -385,18 +544,20 @@ class StrategyEngine:
                 confidence += 10
 
         exit_rules = [
+            "Price returns to middle Bollinger Band (the mean)",
             "RSI returns to 45-55 range",
-            "Price reaches middle Bollinger Band",
+            "Time stop: exit if no reversion within ~3× half-life (≈ 18-24 bars)",
             "Stop loss: below nearest support / above nearest resistance",
         ]
 
+        z_str = f"{zscore:+.2f}" if isinstance(zscore, (int, float)) else "n/a"
         return StrategySignal(
             strategy="mean_reversion",
             direction=direction,
             confidence=min(confidence, 90),
             entry_rules=entry_rules,
             exit_rules=exit_rules,
-            reasoning=f"Ranging market, RSI at {rsi:.0f} — looking for mean reversion",
+            reasoning=f"Ranging market, RSI at {rsi:.0f}, z-score {z_str} — fading the extreme",
             regime="ranging",
         )
 
@@ -431,13 +592,13 @@ class StrategyEngine:
                 # Momentum & Volatility confirmation
                 hist = macd.get("histogram_latest")
                 atr_data = indicators.get("atr", {})
-                current_atr = atr_data.get("current", 0)
-                avg_atr = atr_data.get("avg_14", 1)
-                
+                current_atr = atr_data.get("current") or atr_data.get("value", 0) if isinstance(atr_data, dict) else 0
+                avg_atr = atr_data.get("avg_14") or atr_data.get("sma", 1) if isinstance(atr_data, dict) else 1
+
                 if hist and hist > 0:
                     entry_rules.append("MACD momentum confirms breakout")
                     confidence += 10
-                
+
                 if current_atr and avg_atr and avg_atr > 0 and current_atr / avg_atr > 1.25:
                     entry_rules.append("ATR Expansion validates breakout momentum")
                     confidence += 15
@@ -461,13 +622,13 @@ class StrategyEngine:
 
                 hist = macd.get("histogram_latest")
                 atr_data = indicators.get("atr", {})
-                current_atr = atr_data.get("current", 0)
-                avg_atr = atr_data.get("avg_14", 1)
-                
+                current_atr = atr_data.get("current") or atr_data.get("value", 0) if isinstance(atr_data, dict) else 0
+                avg_atr = atr_data.get("avg_14") or atr_data.get("sma", 1) if isinstance(atr_data, dict) else 1
+
                 if hist and hist < 0:
                     entry_rules.append("MACD momentum confirms breakdown")
                     confidence += 10
-                
+
                 if current_atr and avg_atr and avg_atr > 0 and current_atr / avg_atr > 1.25:
                     entry_rules.append("ATR Expansion validates breakdown momentum")
                     confidence += 15

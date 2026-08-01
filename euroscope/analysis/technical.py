@@ -90,6 +90,13 @@ def stochastic(high: pd.Series, low: pd.Series, close: pd.Series,
     return {"k": k_line, "d": d_line}
 
 
+def zscore(close: pd.Series, period: int = 20) -> pd.Series:
+    """Rolling z-score: how many std devs price is from its rolling mean."""
+    mean = sma(close, period)
+    std = close.rolling(window=period).std()
+    return (close - mean) / std
+
+
 class TechnicalAnalyzer:
     """Runs full technical analysis on EUR/USD candle data."""
 
@@ -118,6 +125,8 @@ class TechnicalAnalyzer:
         bb_upper = float(bb["upper"].iloc[-1])
         bb_lower = float(bb["lower"].iloc[-1])
         bb_middle = float(bb["middle"].iloc[-1])
+        bb_bandwidth = ((bb_upper - bb_lower) / bb_middle) if bb_middle else 0.0
+        zscore_val = float(zscore(close).iloc[-1])
 
         ema20 = float(ema(close, 20).iloc[-1])
         ema50 = float(ema(close, 50).iloc[-1])
@@ -149,7 +158,12 @@ class TechnicalAnalyzer:
                     "upper": round(bb_upper, 5),
                     "middle": round(bb_middle, 5),
                     "lower": round(bb_lower, 5),
+                    "bandwidth": round(bb_bandwidth, 5),
                     "position": self._bb_position(current_price, bb_upper, bb_lower, bb_middle),
+                },
+                "ZScore": {
+                    "value": round(zscore_val, 3) if zscore_val is not None else None,
+                    "period": 20,
                 },
                 "EMA": {
                     "ema20": round(ema20, 5),

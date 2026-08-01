@@ -50,6 +50,7 @@ class TradingStrategySkill(BaseSkill):
             "ema": indicators.get("indicators", {}).get("EMA", {}),
             "atr": indicators.get("indicators", {}).get("ATR", {}),
             "stochastic": indicators.get("indicators", {}).get("Stochastic", {}),
+            "zscore": indicators.get("indicators", {}).get("ZScore", {}).get("value"),
             "tick_volume_5m": context.market_data.get("tick_volume_5m", 0),
         }
 
@@ -75,7 +76,8 @@ class TradingStrategySkill(BaseSkill):
             macro_data = context.analysis.get("macro_data", {})
             signal = self.engine.detect_strategy(
                 ind, levels, patterns, uncertainty=uncertainty, macro_data=macro_data,
-                user_prefs=context.user_prefs
+                user_prefs=context.user_prefs,
+                session=context.metadata.get("session_regime")
             )
 
             # --- Phase 2: MTF Confirmation Check ---
