@@ -46,6 +46,7 @@ class TrailingState:
     lowest_price: float = 999.0
     trail_distance: float = 0.0
     moved_to_breakeven: bool = False
+    trail_active: bool = False
     updates: int = 0
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     last_updated: datetime = field(default_factory=lambda: datetime.now(UTC))
@@ -81,6 +82,7 @@ class TrailingStopEngine:
         partial_exit_fraction: float = 0.5,
         time_reduce_bars: int = 0,
         time_reduce_fraction: float = 0.5,
+        trail_activation_pips: float = 0.0,
     ):
         self.default_method = default_method
         self.atr_multiplier = atr_multiplier
@@ -90,6 +92,7 @@ class TrailingStopEngine:
         self.partial_exit_fraction = partial_exit_fraction
         self.time_reduce_bars = time_reduce_bars
         self.time_reduce_fraction = time_reduce_fraction
+        self.trail_activation_pips = trail_activation_pips
         self._tracking: dict[str, TrailingState] = {}
 
     # ── Registration ───────────────────────────────────────────
@@ -148,12 +151,28 @@ class TrailingStopEngine:
         Update a trailing stop with the latest price.
 
         Returns updated state if stop moved, None if unchanged.
+
+        Trail activation: when trail_activation_pips > 0 the stop is left
+        untouched (no trailing, no breakeven) until the trade shows at least
+        that much favorable progress — institutional practice to let the
+        trade prove itself before locking anything.
         """
         state = self._tracking.get(trade_id)
         if not state:
             return None
 
         is_buy = state.direction == "BUY"
+
+        # Trail activation gate
+        if not state.trail_active:
+            profit_pips = (
+                (current_price - state.entry_price) * 10000 if is_buy
+                else (state.entry_price - current_price) * 10000
+            )
+            if profit_pips < self.trail_activation_pips:
+                return None
+            state.trail_active = True
+
         moved = False
 
         # Update high/low watermarks
@@ -334,7 +353,7 @@ class TrailingStopEngine:
         self, method: TrailMethod, entry: float, stop: float, atr: float = None
     ) -> float:
         """Calculate initial trail distance."""
-        if method == TrailMethod.ATR and atr:
+        if method in (TrailMethod.ATR, TrailMethod.CHANDELIER) and atr:
             return atr * self.atr_multiplier
         elif method == TrailMethod.PERCENTAGE:
             return entry * self.trail_pct
