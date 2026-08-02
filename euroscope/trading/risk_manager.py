@@ -5,7 +5,6 @@ Calculates position sizes, stop losses, take profits, and enforces
 drawdown limits for disciplined EUR/USD trading.
 """
 
-import asyncio
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, UTC
@@ -144,6 +143,7 @@ class RiskManager:
         atr: float = None, avg_atr: float = None,
         regime: str = None, regime_strength: float = 0.5,
         realized_vol: float = None,
+        balance: float = None, risk_pct: float = None,
     ) -> float:
         """
         Calculate position size with Kelly Criterion, vol targeting,
@@ -156,12 +156,17 @@ class RiskManager:
             regime: Market regime ("trending", "ranging", "breakout")
             regime_strength: Confidence in regime classification (0-1)
             realized_vol: Current realized volatility (for vol targeting)
+            balance: Account balance override (defaults to config)
+            risk_pct: Risk % per trade override (defaults to config)
 
         Returns:
             Position size in standard lots
         """
         if stop_pips <= 0:
             return 0.0
+
+        account_balance = balance if balance and balance > 0 else self.config.account_balance
+        base_risk_pct = self.config.risk_per_trade if risk_pct is None else float(risk_pct)
 
         # ── Kelly Criterion sizing (primary) ──
         kelly_risk = self.kelly_fraction()
@@ -177,6 +182,8 @@ class RiskManager:
             logger.debug(f"ATR scaling: ratio={atr_ratio:.2f}, factor={atr_factor:.2f}")
 
         # ── Regime-aware scaling ──
+        # Base factor scales by regime riskiness; weak regime confidence
+        # (uncertain classification) must scale size DOWN, never up.
         regime_factor = 1.0
         if regime:
             regime_factors = {
@@ -185,8 +192,9 @@ class RiskManager:
                 "breakout": 0.7,
             }
             base_factor = regime_factors.get(regime, 0.8)
-            regime_factor = base_factor * regime_strength + 0.8 * (1 - regime_strength)
-            logger.debug(f"Regime scaling: {regime} (str={regime_strength:.2f}), factor={regime_factor:.2f}")
+            strength = max(0.0, min(1.0, regime_strength))
+            regime_factor = base_factor * (0.5 + 0.5 * strength)
+            logger.debug(f"Regime scaling: {regime} (str={strength:.2f}), factor={regime_factor:.2f}")
 
         # ── Streak-based de-risking ──
         streak_factor = 1.0
@@ -200,14 +208,12 @@ class RiskManager:
         kelly_has_data = len(self._trade_history) >= 20
         if kelly_has_data and kelly_risk > 0:
             adjusted_risk_pct = kelly_risk * vol_factor * atr_factor * regime_factor * streak_factor
-            adjusted_risk_pct = max(0.10, min(adjusted_risk_pct, self.config.risk_per_trade * 1.5))
+            adjusted_risk_pct = max(0.10, min(adjusted_risk_pct, base_risk_pct * 1.5))
         else:
-            # Fallback to config-based sizing until Kelly calibrates
-            base_risk_pct = self.config.risk_per_trade
             adjusted_risk_pct = base_risk_pct * vol_factor * atr_factor * regime_factor * streak_factor
             adjusted_risk_pct = max(0.25, min(adjusted_risk_pct, base_risk_pct * 1.5))
 
-        risk_amount = self.config.account_balance * (adjusted_risk_pct / 100)
+        risk_amount = account_balance * (adjusted_risk_pct / 100)
         pip_value = self.calculate_pip_value()
         lots = risk_amount / (stop_pips * pip_value)
 
@@ -361,6 +367,22 @@ class RiskManager:
 
         return None
 
+    def calculate_stop_loss(self, direction: str, entry_price: float,
+                            atr: float, multiplier: float = 1.5) -> float:
+        """
+        Compute an ATR-based stop loss (used by the risk skill's stop_loss action).
+
+        Args:
+            direction: "BUY" or "SELL"
+            entry_price: Entry price
+            atr: Current ATR value
+            multiplier: ATR multiplier (default 1.5)
+
+        Returns:
+            Stop loss price
+        """
+        return self.calculate_atr_stop(atr, direction, entry_price, multiplier)
+
     # ─── Take Profit ─────────────────────────────────────────
 
     def calculate_take_profit(self, entry_price: float, stop_loss: float,
@@ -394,6 +416,7 @@ class RiskManager:
                      resistance: list[float] = None,
                      rr_ratio: float = None,
                      regime: str = None,
+                     regime_strength: float = 0.5,
                      realized_vol: float = None) -> TradeRisk:
         """
         Full risk assessment for a proposed trade.
@@ -452,13 +475,19 @@ class RiskManager:
         tp_pips = abs(take_profit - entry_price) * 10000
         rr = round(tp_pips / stop_pips, 2) if stop_pips > 0 else 0
 
+        # Institutional: never accept a trade that risks more than it rewards
+        if rr < 1.0:
+            warnings.append(f"⚠️ Poor risk-reward ({rr:.1f}:1 < 1.0) — not institutional")
+
         # ── Position sizing (Kelly + vol targeting + regime adaptive) ──
         avg_atr_val = avg_atr if avg_atr else atr
         position_size = self.calculate_position_size(
             stop_pips, atr=atr, avg_atr=avg_atr_val, regime=regime,
+            regime_strength=regime_strength,
             realized_vol=realized_vol,
         )
-        risk_amount = round(self.config.account_balance * (self.config.risk_per_trade / 100), 2)
+        # Report the actual dollar risk of the sized position, not the nominal config risk
+        risk_amount = round(position_size * stop_pips * self.calculate_pip_value(), 2)
 
         # ── Drawdown checks ──
         today = datetime.now(UTC)

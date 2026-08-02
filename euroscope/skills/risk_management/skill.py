@@ -436,10 +436,14 @@ class RiskManagementSkill(BaseSkill):
 
     async def _position_size(self, **params) -> SkillResult:
         balance = params.get("balance", 10000)
-        risk_pct = params.get("risk_pct", 0.01)
+        risk_pct = params.get("risk_pct", 0.01)  # decimal fraction (0.01 = 1%)
         stop_pips = params.get("stop_pips", 30)
         try:
-            size = self.manager.calculate_position_size(balance, risk_pct, stop_pips)
+            # Convert decimal fraction to percentage points (manager expects 1.0 = 1%)
+            risk_pct_pct = risk_pct * 100 if risk_pct < 1.0 else risk_pct
+            size = self.manager.calculate_position_size(
+                stop_pips=stop_pips, balance=balance, risk_pct=risk_pct_pct
+            )
             return SkillResult(success=True, data={"position_size": size})
         except Exception as e:
             return SkillResult(success=False, error=str(e))

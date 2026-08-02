@@ -399,3 +399,80 @@ class TestTradeHistoryTracking:
         lots_low_vol = rm.calculate_position_size(30, realized_vol=0.05)
         assert lots_high_vol < lots_normal
         assert lots_low_vol >= lots_normal
+
+
+# ── Institutional risk fixes ─────────────────────────────
+
+class TestInstitutionalRiskFixes:
+
+    def test_weak_regime_reduces_position(self):
+        """Regime uncertainty must scale size DOWN, never up."""
+        rm = RiskManager(RiskConfig(account_balance=10000, risk_per_trade=1.0))
+        strong = rm.calculate_position_size(30, regime="breakout", regime_strength=0.9)
+        weak = rm.calculate_position_size(30, regime="breakout", regime_strength=0.2)
+        assert weak < strong
+        assert weak < rm.calculate_position_size(30)
+
+    def test_balance_and_risk_override(self):
+        rm = RiskManager(RiskConfig(account_balance=10000, risk_per_trade=1.0))
+        lots_default = rm.calculate_position_size(30)
+        lots_big = rm.calculate_position_size(30, balance=20000)
+        lots_risky = rm.calculate_position_size(30, risk_pct=2.0)
+        assert lots_big == pytest.approx(2 * lots_default, abs=0.02)
+        assert lots_risky == pytest.approx(2 * lots_default, abs=0.02)
+
+    def test_risk_amount_reflects_sized_position(self):
+        rm = RiskManager(RiskConfig(account_balance=10000, risk_per_trade=1.0))
+        trade = rm.assess_trade("BUY", 1.0900, atr=0.0050)
+        expected = trade.position_size * trade.stop_pips * 10
+        assert trade.risk_amount == pytest.approx(expected, abs=1.0)
+        assert trade.risk_amount <= 100.0  # never above nominal config risk
+
+    def test_streak_de_risking_reflected_in_risk_amount(self):
+        rm = RiskManager(RiskConfig(account_balance=10000, risk_per_trade=1.0))
+        rm._consecutive_losses = 3
+        trade = rm.assess_trade("BUY", 1.0900, atr=0.0050)
+        expected = trade.position_size * trade.stop_pips * 10
+        assert trade.risk_amount == pytest.approx(expected, abs=1.0)
+        assert trade.risk_amount < 60.0  # de-risked well below $100
+
+    def test_poor_rr_warns(self):
+        rm = RiskManager()
+        trade = rm.assess_trade("BUY", 1.0900, atr=0.0050, rr_ratio=0.5)
+        assert trade.risk_reward < 1.0
+        assert any("risk-reward" in w.lower() for w in trade.warnings)
+
+    def test_calculate_stop_loss_alias(self):
+        rm = RiskManager()
+        assert rm.calculate_stop_loss("BUY", 1.0900, 0.0050) == pytest.approx(1.0825, abs=0.0001)
+        assert rm.calculate_stop_loss("SELL", 1.0900, 0.0050) > 1.0900
+
+    def test_assess_trade_passes_regime_strength(self):
+        rm = RiskManager(RiskConfig(account_balance=10000, risk_per_trade=1.0))
+        trade_weak = rm.assess_trade(
+            "BUY", 1.0900, atr=0.0050, regime="breakout", regime_strength=0.2
+        )
+        trade_strong = rm.assess_trade(
+            "BUY", 1.0900, atr=0.0050, regime="breakout", regime_strength=0.9
+        )
+        assert trade_weak.position_size < trade_strong.position_size
+
+
+@pytest.mark.asyncio
+async def test_risk_skill_position_size_action():
+    skill = RiskManagementSkill()
+    result = await skill.execute(
+        SkillContext(), "position_size", balance=10000, risk_pct=0.01, stop_pips=30
+    )
+    assert result.success
+    assert result.data["position_size"] == pytest.approx(0.33, abs=0.01)
+
+
+@pytest.mark.asyncio
+async def test_risk_skill_stop_loss_action():
+    skill = RiskManagementSkill()
+    result = await skill.execute(
+        SkillContext(), "stop_loss", direction="BUY", entry_price=1.0900, atr=0.0050
+    )
+    assert result.success
+    assert result.data["stop_loss"] == pytest.approx(1.0825, abs=0.0001)
