@@ -193,14 +193,13 @@ class StrategyEngine:
             return True
         return False
 
-    @staticmethod
-    def _has_breakout_trigger(indicators: dict, levels: dict) -> bool:
+    def _has_breakout_trigger(self, indicators: dict, levels: dict) -> bool:
         current_price = levels.get("current_price")
         support = levels.get("support", [])
         resistance = levels.get("resistance", [])
         if not current_price:
             return False
-        hist = indicators.get("macd", {}).get("histogram_latest")
+        hist = self._macd_histogram(indicators.get("macd"))
         above_resistance = bool(resistance) and current_price > resistance[0]
         below_support = bool(support) and current_price < support[0]
         if above_resistance and (hist is None or hist > 0):
@@ -208,6 +207,16 @@ class StrategyEngine:
         if below_support and (hist is None or hist < 0):
             return True
         return False
+
+    @staticmethod
+    def _macd_histogram(macd) -> Optional[float]:
+        """Extract the MACD histogram value, tolerant of both key conventions."""
+        if not isinstance(macd, dict):
+            return None
+        hist = macd.get("histogram_latest")
+        if hist is None:
+            hist = macd.get("histogram")
+        return hist
 
     def _detect_regime(self, indicators: dict) -> RegimeInfo:
         """
@@ -228,7 +237,7 @@ class StrategyEngine:
             "BB": {
                 "upper": bb.get("upper", 0),
                 "lower": bb.get("lower", 0),
-                "current_price": bb.get("current_price", 0),
+                "current_price": bb.get("current_price") or indicators.get("price", 0),
             }
         }
         
@@ -251,9 +260,14 @@ class StrategyEngine:
             regime_name = "breakout"
         
         # Determine direction
-        overall_bias = indicators.get("overall_bias", "neutral")
+        overall_bias = str(indicators.get("overall_bias", "neutral")).lower()
+        ema_data = indicators.get("ema")
         ema_20 = indicators.get("ema_20")
         ema_50 = indicators.get("ema_50")
+        if ema_20 is None and isinstance(ema_data, dict):
+            ema_20 = ema_data.get("ema20")
+        if ema_50 is None and isinstance(ema_data, dict):
+            ema_50 = ema_data.get("ema50")
         
         if overall_bias == "bullish" or (ema_20 and ema_50 and ema_20 > ema_50):
             direction = "bullish"
@@ -326,7 +340,7 @@ class StrategyEngine:
                (not chasing extended price) + ADX confirmation.
         Exit: CHoCH (Change of Character) or trailing stop.
         """
-        bias = indicators.get("overall_bias", "neutral")
+        bias = str(indicators.get("overall_bias", "neutral")).lower()
         adx = indicators.get("adx", 0)
         rsi = indicators.get("rsi", 50)
         macd = indicators.get("macd", {})
@@ -370,7 +384,7 @@ class StrategyEngine:
             confidence += 8
 
         # MACD alignment
-        hist = macd.get("histogram_latest")
+        hist = self._macd_histogram(macd)
         if hist is not None:
             if (direction == "BUY" and hist > 0) or (direction == "SELL" and hist < 0):
                 entry_rules.append("MACD histogram confirms direction")
@@ -590,7 +604,7 @@ class StrategyEngine:
                 confidence += 20
 
                 # Momentum & Volatility confirmation
-                hist = macd.get("histogram_latest")
+                hist = self._macd_histogram(macd)
                 atr_data = indicators.get("atr", {})
                 current_atr = atr_data.get("current") or atr_data.get("value", 0) if isinstance(atr_data, dict) else 0
                 avg_atr = atr_data.get("avg_14") or atr_data.get("sma", 1) if isinstance(atr_data, dict) else 1
@@ -620,7 +634,7 @@ class StrategyEngine:
                 entry_rules.append(f"Price broke below support {nearest_s}")
                 confidence += 20
 
-                hist = macd.get("histogram_latest")
+                hist = self._macd_histogram(macd)
                 atr_data = indicators.get("atr", {})
                 current_atr = atr_data.get("current") or atr_data.get("value", 0) if isinstance(atr_data, dict) else 0
                 avg_atr = atr_data.get("avg_14") or atr_data.get("sma", 1) if isinstance(atr_data, dict) else 1
@@ -678,7 +692,7 @@ class StrategyEngine:
         strat_name = strategy_names.get(sig.strategy, sig.strategy)
 
         lines = [
-            f"🧠 *Strategy Recommendation*\n",
+            "🧠 *Strategy Recommendation*\n",
             f"📊 Regime: *{sig.regime.title()}*",
             f"🎯 Strategy: *{strat_name}*",
             f"{dir_icon} Direction: *{sig.direction}* ({sig.confidence:.0f}% confidence)\n",

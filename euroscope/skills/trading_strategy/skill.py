@@ -2,11 +2,10 @@
 Trading Strategy Skill — Wraps StrategyEngine for the skills framework.
 """
 
-import asyncio
 import re
 
 from ...data.models import TradingSignal
-from ...trading.strategy_engine import StrategyEngine, StrategySignal
+from ...trading.strategy_engine import StrategyEngine
 from ..base import BaseSkill, SkillCategory, SkillContext, SkillResult
 
 
@@ -41,16 +40,23 @@ class TradingStrategySkill(BaseSkill):
         patterns = params.get("patterns") or context.analysis.get("patterns", [])
 
         # Build indicator dict for StrategyEngine
+        raw_ind = indicators.get("indicators", {})
+        bollinger = raw_ind.get("Bollinger", {})
+        if bollinger and "current_price" not in bollinger:
+            bollinger = {**bollinger, "current_price": levels_data.get("current_price", 0)}
+        macd = raw_ind.get("MACD", {})
+        if isinstance(macd, dict) and "histogram" in macd and "histogram_latest" not in macd:
+            macd = {**macd, "histogram_latest": macd["histogram"]}
         ind = {
-            "adx": self._to_float(indicators.get("indicators", {}).get("ADX", {}).get("value")),
-            "rsi": self._to_float(indicators.get("indicators", {}).get("RSI", {}).get("value")),
-            "overall_bias": indicators.get("overall_bias"),
-            "macd": indicators.get("indicators", {}).get("MACD", {}),
-            "bollinger": indicators.get("indicators", {}).get("Bollinger", {}),
-            "ema": indicators.get("indicators", {}).get("EMA", {}),
-            "atr": indicators.get("indicators", {}).get("ATR", {}),
-            "stochastic": indicators.get("indicators", {}).get("Stochastic", {}),
-            "zscore": indicators.get("indicators", {}).get("ZScore", {}).get("value"),
+            "adx": self._to_float(raw_ind.get("ADX", {}).get("value")),
+            "rsi": self._to_float(raw_ind.get("RSI", {}).get("value")),
+            "overall_bias": str(indicators.get("overall_bias") or "neutral").lower(),
+            "macd": macd,
+            "bollinger": bollinger,
+            "ema": raw_ind.get("EMA", {}),
+            "atr": raw_ind.get("ATR", {}),
+            "stochastic": raw_ind.get("Stochastic", {}),
+            "zscore": raw_ind.get("ZScore", {}).get("value"),
             "tick_volume_5m": context.market_data.get("tick_volume_5m", 0),
         }
 

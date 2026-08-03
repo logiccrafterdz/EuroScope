@@ -11,6 +11,8 @@ import numpy as np
 
 from euroscope.trading.strategy_engine import StrategyEngine
 from euroscope.analysis.technical import TechnicalAnalyzer, zscore
+from euroscope.skills.base import SkillContext
+from euroscope.skills.trading_strategy.skill import TradingStrategySkill
 
 
 @pytest.fixture
@@ -212,3 +214,121 @@ class TestZScoreExposure:
         z = zscore(close)
         assert not z.isna().all()
         assert z.iloc[-1] > 0
+
+
+# ── Production contract: TechnicalAnalyzer output shape ─────
+# The live pipeline feeds TechnicalAnalyzer output (capitalized bias,
+# "histogram" key, Bollinger without current_price) into StrategyEngine.
+# The engine must be tolerant of that contract — otherwise the bot can
+# never produce BUY/SELL in production even though backtests pass.
+
+class TestProductionContract:
+
+    def test_capitalized_bias_bullish_produces_buy(self, engine):
+        indicators = {
+            "adx": 35, "rsi": 60, "overall_bias": "Bullish",
+            "macd": {"histogram": 0.0004},
+            "atr": {"value": 0.0012, "sma": 0.0010},
+            "zscore": 0.4,
+            "bollinger": {"upper": 1.0965, "middle": 1.0945, "lower": 1.0925},
+        }
+        levels = {"current_price": 1.0950, "support": [1.0930], "resistance": [1.0970]}
+        sig = engine.detect_strategy(indicators, levels)
+        assert sig.strategy == "trend_following"
+        assert sig.direction == "BUY"
+
+    def test_capitalized_bias_bearish_produces_sell(self, engine):
+        indicators = {
+            "adx": 35, "rsi": 40, "overall_bias": "Bearish",
+            "macd": {"histogram": -0.0004},
+            "atr": {"value": 0.0012, "sma": 0.0010},
+            "zscore": -0.4,
+            "bollinger": {"upper": 1.0965, "middle": 1.0945, "lower": 1.0925},
+        }
+        levels = {"current_price": 1.0950, "support": [1.0930], "resistance": [1.0970]}
+        sig = engine.detect_strategy(indicators, levels)
+        assert sig.strategy == "trend_following"
+        assert sig.direction == "SELL"
+
+    def test_macd_histogram_key_confirms(self, engine):
+        """TechnicalAnalyzer emits 'histogram' (not 'histogram_latest'); engine must read it."""
+        indicators = {
+            "adx": 35, "rsi": 55, "overall_bias": "bullish",
+            "macd": {"histogram": 0.002},
+            "atr": {"value": 0.003, "sma": 0.002},
+            "zscore": 0.5,
+        }
+        levels = {"current_price": 1.0950, "support": [1.0900], "resistance": [1.1000]}
+        sig = engine.detect_strategy(indicators, levels)
+        assert sig.direction == "BUY"
+        assert any("MACD histogram confirms" in r for r in sig.entry_rules)
+
+    def test_bb_bandwidth_from_price_fallback_enables_breakout(self, engine):
+        """Bollinger without current_price must still allow squeeze detection via indicators['price']."""
+        indicators = {
+            "adx": 15, "rsi": 80, "overall_bias": "neutral",
+            "price": 1.0908,
+            "bollinger": {"upper": 1.0910, "lower": 1.0905},
+        }
+        levels = {"current_price": 1.0908, "support": [1.0890], "resistance": [1.0920]}
+        sig = engine.detect_strategy(indicators, levels)
+        assert sig.regime == "breakout"
+
+    @pytest.mark.asyncio
+    async def test_skill_accepts_technical_analyzer_format_buy(self):
+        """End-to-end: TechnicalAnalyzer-shaped indicators through TradingStrategySkill must signal BUY."""
+        ctx = SkillContext()
+        ctx.analysis["indicators"] = {
+            "price": 1.0950,
+            "overall_bias": "Bullish",
+            "indicators": {
+                "RSI": {"value": 60.0, "signal": "x"},
+                "MACD": {"macd": 0.0005, "signal": 0.0001, "histogram": 0.0004, "signal_text": "Bullish"},
+                "Bollinger": {"upper": 1.0965, "middle": 1.0945, "lower": 1.0925,
+                              "bandwidth": 0.0027, "position": "x"},
+                "ZScore": {"value": 0.5, "period": 20},
+                "EMA": {"ema20": 1.0948, "ema50": 1.0940, "ema200": 1.0910, "trend": "x"},
+                "ATR": {"value": 0.0012, "sma": 0.0010, "pips": 12.0},
+                "ADX": {"value": 35.0, "strength": "x"},
+                "Stochastic": {"k": 60.0, "d": 55.0, "signal": "x"},
+            },
+        }
+        ctx.analysis["levels"] = {"current_price": 1.0950, "support": [1.0930], "resistance": [1.0970]}
+        ctx.analysis["patterns"] = []
+        ctx.metadata["session_regime"] = "london"
+
+        skill = TradingStrategySkill()
+        skill.set_agent(object())
+        result = await skill._detect(ctx)
+        assert result.success
+        assert result.data["direction"] == "BUY"
+        assert result.data["strategy"] == "trend_following"
+
+    @pytest.mark.asyncio
+    async def test_skill_accepts_technical_analyzer_format_sell(self):
+        ctx = SkillContext()
+        ctx.analysis["indicators"] = {
+            "price": 1.0950,
+            "overall_bias": "Bearish",
+            "indicators": {
+                "RSI": {"value": 40.0, "signal": "x"},
+                "MACD": {"macd": 0.0001, "signal": 0.0005, "histogram": -0.0004, "signal_text": "Bearish"},
+                "Bollinger": {"upper": 1.0965, "middle": 1.0945, "lower": 1.0925,
+                              "bandwidth": 0.0027, "position": "x"},
+                "ZScore": {"value": -0.5, "period": 20},
+                "EMA": {"ema20": 1.0948, "ema50": 1.0940, "ema200": 1.0910, "trend": "x"},
+                "ATR": {"value": 0.0012, "sma": 0.0010, "pips": 12.0},
+                "ADX": {"value": 35.0, "strength": "x"},
+                "Stochastic": {"k": 40.0, "d": 45.0, "signal": "x"},
+            },
+        }
+        ctx.analysis["levels"] = {"current_price": 1.0950, "support": [1.0930], "resistance": [1.0970]}
+        ctx.analysis["patterns"] = []
+        ctx.metadata["session_regime"] = "london"
+
+        skill = TradingStrategySkill()
+        skill.set_agent(object())
+        result = await skill._detect(ctx)
+        assert result.success
+        assert result.data["direction"] == "SELL"
+        assert result.data["strategy"] == "trend_following"
