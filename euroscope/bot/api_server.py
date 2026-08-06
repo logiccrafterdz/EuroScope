@@ -59,7 +59,12 @@ class APIServer:
         if request.method != "OPTIONS":
             if request.path.startswith("/api/") and request.path not in ("/api/status", "/api/v1/status"):
                 token = request.headers.get("X-API-Key", "")
-                if self.api_secret and token != self.api_secret:
+                init_data = request.headers.get("X-Telegram-Init-Data", "")
+                
+                is_valid_api_key = bool(self.api_secret and token == self.api_secret)
+                is_valid_tma = self._verify_telegram_init_data(init_data)
+                
+                if not (is_valid_api_key or is_valid_tma):
                     logger.warning(f"Unauthorized API access attempt to {request.path} from {request.remote}")
                     response = web.json_response({"success": False, "error": "Unauthorized API Access"}, status=401)
                     self._add_cors_headers(request, response)
@@ -76,6 +81,27 @@ class APIServer:
 
         self._add_cors_headers(request, response)
         return response
+
+    def _verify_telegram_init_data(self, init_data: str) -> bool:
+        """Verify the Telegram Mini App initData signature."""
+        if not init_data or not self.config.telegram.token:
+            return False
+        import urllib.parse
+        import hashlib
+        import hmac
+        try:
+            parsed = urllib.parse.parse_qsl(init_data)
+            hash_val = next((v for k, v in parsed if k == "hash"), None)
+            if not hash_val: 
+                return False
+            
+            data_check_string = "\n".join(f"{k}={v}" for k, v in sorted(parsed) if k != "hash")
+            secret_key = hmac.new(b"WebAppData", self.config.telegram.token.encode(), hashlib.sha256).digest()
+            calc_hash = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
+            return hmac.compare_digest(calc_hash, hash_val)
+        except Exception as e:
+            logger.error(f"Error validating initData: {e}")
+            return False
 
     def _add_cors_headers(self, request, response):
         """Set CORS headers on the response."""

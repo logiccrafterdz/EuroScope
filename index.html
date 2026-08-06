@@ -1567,7 +1567,7 @@
             try {
                 // Merge default headers with any custom headers passed in options
                 const headers = {
-                    'X-API-Key': 'euroscope-zenith-v5',
+                    'X-Telegram-Init-Data': window.Telegram?.WebApp?.initData || '',
                     ...(options.headers || {})
                 };
 
