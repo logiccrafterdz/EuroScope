@@ -265,8 +265,6 @@ class EuroScopeBot:
             numeric = float(value)
         except (TypeError, ValueError):
             return '0%'
-        if numeric <= 1.0:
-            numeric *= 100
         return f'{numeric:.0f}%'
 
     @staticmethod
