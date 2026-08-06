@@ -1449,7 +1449,7 @@ class APIServer:
         """Run the AIOHTTP server as a background task."""
         asyncio.create_task(self._cleaner_task())
         try:
-            app = web.Application(middlewares=[self._cors_middleware])
+            app = web.Application(client_max_size=2097152, middlewares=[self._cors_middleware])
             app.add_routes([
                 web.get("/", self._serve_mini_app), 
                 web.get("/app", self._serve_mini_app), 
