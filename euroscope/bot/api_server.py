@@ -40,11 +40,12 @@ class APIServer:
         self._RESP_TTL = 60  # 60 seconds for most endpoints
         
         # Security & Limits
-        self.api_secret = getattr(self.config, "api_secret_key", None) or ""
-        if not self.api_secret:
+        if not getattr(self.config, "api_secret_key", None):
             import secrets
-            self.api_secret = secrets.token_hex(32)
-            logger.warning(f"API secret auto-generated. Add this to .env as EUROSCOPE_API_SECRET={self.api_secret}")
+            self.api_secret = secrets.token_hex(16)
+            logger.warning("API secret auto-generated. Set EUROSCOPE_API_SECRET in .env for persistence.")
+        else:
+            self.api_secret = self.config.api_secret_key
         self.rate_limits = {}  # Format: {"ip:endpoint": [timestamp1, timestamp2]}
         
         # Initialize WebhookDispatcher for outbound events
@@ -107,7 +108,7 @@ class APIServer:
         if match:
             response.headers["Access-Control-Allow-Origin"] = origin
         elif not origin:
-            response.headers["Access-Control-Allow-Origin"] = "*"
+            pass
         response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS, PUT, DELETE"
         response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-Requested-With, X-API-Key, Origin, Accept"
         response.headers["Access-Control-Max-Age"] = "86400"
@@ -830,7 +831,11 @@ class APIServer:
     async def _api_emergency(self, request):
         """API endpoint to trigger the Emergency Kill Switch. Requires admin-level auth."""
         admin_key = request.headers.get("X-Admin-Key", "")
-        expected_admin = os.getenv("EUROSCOPE_ADMIN_KEY", self.api_secret)
+        expected_admin = os.getenv("EUROSCOPE_ADMIN_KEY")
+        if not expected_admin:
+            logger.error("EUROSCOPE_ADMIN_KEY is not configured but emergency API was called.")
+            return web.json_response({"success": False, "error": "Admin authorization required"}, status=403)
+            
         if not admin_key or admin_key != expected_admin:
             logger.warning(f"Unauthorized EMERGENCY access attempt from {request.remote}")
             return web.json_response({"success": False, "error": "Admin authorization required"}, status=403)
@@ -1496,9 +1501,11 @@ class APIServer:
             port = int(os.getenv("PORT", 8080))
             runner = web.AppRunner(app)
             await runner.setup()
-            site = web.TCPSite(runner, "0.0.0.0", port)
-            logger.info(f"📡 Zenith API + Mini App at: http://0.0.0.0:{port}")
-            logger.info(f"📱 Mini App URL: http://0.0.0.0:{port}/app")
+            
+            host = os.getenv("EUROSCOPE_HOST", "127.0.0.1")
+            site = web.TCPSite(runner, host, port)
+            logger.info(f"📡 Zenith API + Mini App at: http://{host}:{port}")
+            logger.info(f"📱 Mini App URL: http://{host}:{port}/app")
             await site.start()
         except Exception as e:
             logger.error(f"❌ API Server CRASH: {e}")

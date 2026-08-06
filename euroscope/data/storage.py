@@ -402,11 +402,15 @@ class Storage:
             )
             await db.commit()
 
-    async def delete_alert(self, alert_id: int):
-        """Permanently delete an alert."""
+    async def delete_alert(self, alert_id: int, chat_id: int = None) -> int:
+        """Permanently delete an alert. Returns rows affected."""
         async with self._get_db() as db:
-            await db.execute("DELETE FROM alerts WHERE id=?", (alert_id,))
+            if chat_id is not None:
+                cursor = await db.execute("DELETE FROM alerts WHERE id=? AND chat_id=?", (alert_id, chat_id))
+            else:
+                cursor = await db.execute("DELETE FROM alerts WHERE id=?", (alert_id,))
             await db.commit()
+            return cursor.rowcount
 
     # --- Memory (key-value for learning) ---
 

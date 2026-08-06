@@ -76,6 +76,8 @@ class CommandHandlers:
 
     async def cmd_id(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /id command — show user's chat ID."""
+        if not await self.bot._check_auth(update):
+            return
         chat_id = update.effective_chat.id
         await update.message.reply_text(
             f"🆔 *Your Chat ID*: `{chat_id}`\n\nUse this ID in your `.env` file under `EUROSCOPE_PROACTIVE_CHAT_IDS` to receive proactive alerts.",
@@ -113,9 +115,13 @@ class CommandHandlers:
             return
             
         alert_id = int(context.args[0])
+        chat_id = update.effective_chat.id
         try:
-            await self.bot.container.storage.delete_alert(alert_id)
-            await self.bot._reply(update, f"🗑️ Alert `{alert_id}` has been deleted.", parse_mode="Markdown")
+            deleted_count = await self.bot.container.storage.delete_alert(alert_id, chat_id=chat_id)
+            if deleted_count > 0:
+                await self.bot._reply(update, f"🗑️ Alert `{alert_id}` has been deleted.", parse_mode="Markdown")
+            else:
+                await self.bot._reply(update, "⛔ Alert not found or you don't have permission to delete it.", parse_mode="Markdown")
         except Exception as e:
             logger.error(f"Error deleting alert: {e}")
             await self.bot._reply(update, "⚠️ Failed to delete alert. It may not exist.", parse_mode="Markdown")

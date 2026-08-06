@@ -33,7 +33,24 @@ class WebhookDispatcher:
         if not urls_str:
             return []
             
-        return [url.strip() for url in urls_str.split(",") if url.strip().startswith("http")]
+        def is_safe_url(url: str) -> bool:
+            if not url.startswith(("http://", "https://")): return False
+            try:
+                from urllib.parse import urlparse
+                import ipaddress
+                hostname = urlparse(url).hostname
+                if not hostname or hostname in ("localhost", "0.0.0.0"): return False
+                try:
+                    ip_obj = ipaddress.ip_address(hostname)
+                    if ip_obj.is_private or ip_obj.is_loopback or ip_obj.is_link_local:
+                        return False
+                except ValueError:
+                    pass
+                return True
+            except Exception:
+                return False
+            
+        return [url.strip() for url in urls_str.split(",") if is_safe_url(url.strip())]
 
     async def dispatch(self, event_type: str, payload: Dict[str, Any]):
         """
