@@ -20,6 +20,36 @@ from .webhooks import WebhookDispatcher
 logger = logging.getLogger("euroscope.api")
 
 
+import base64
+import hashlib
+from Crypto.Cipher import AES
+from Crypto.Util.Padding import pad, unpad
+
+class SettingsEncrypter:
+    def __init__(self, key: str):
+        self.key = hashlib.sha256(key.encode('utf-8')).digest()
+        
+    def encrypt(self, raw: str) -> bytes:
+        cipher = AES.new(self.key, AES.MODE_CBC)
+        ct_bytes = cipher.encrypt(pad(raw.encode('utf-8'), AES.block_size))
+        iv = base64.b64encode(cipher.iv).decode('utf-8')
+        ct = base64.b64encode(ct_bytes).decode('utf-8')
+        return json.dumps({'iv': iv, 'ciphertext': ct}).encode('utf-8')
+        
+    def decrypt(self, enc: bytes) -> str:
+        try:
+            b64 = json.loads(enc.decode('utf-8'))
+            if 'iv' in b64 and 'ciphertext' in b64:
+                iv = base64.b64decode(b64['iv'])
+                ct = base64.b64decode(b64['ciphertext'])
+                cipher = AES.new(self.key, AES.MODE_CBC, iv)
+                pt = unpad(cipher.decrypt(ct), AES.block_size)
+                return pt.decode('utf-8')
+        except Exception:
+            pass
+        return enc.decode('utf-8')
+
+
 class APIServer:
     """
     Handles all API endpoints and the local web server for the Mini App.
@@ -46,6 +76,7 @@ class APIServer:
             logger.warning("API secret auto-generated. Set EUROSCOPE_API_SECRET in .env for persistence.")
         else:
             self.api_secret = self.config.api_secret_key
+        self.encrypter = SettingsEncrypter(self.api_secret)
         self.rate_limits = {}  # Format: {"ip:endpoint": [timestamp1, timestamp2]}
         
         # Initialize WebhookDispatcher for outbound events
@@ -726,8 +757,10 @@ class APIServer:
                 "auto_trading_enabled": True
             }
             if os.path.exists(settings_path):
-                with open(settings_path, "r") as f:
-                    data.update(json.load(f))
+                with open(settings_path, "rb") as f:
+                    raw_data = f.read()
+                    decrypted = self.encrypter.decrypt(raw_data)
+                    data.update(json.loads(decrypted))
             return web.json_response({"success": True, "data": data})
         except Exception as e:
             return web.json_response({"success": False, "error": "Internal server error"})
@@ -773,15 +806,18 @@ class APIServer:
                 "auto_trading_enabled": True
             }
             if os.path.exists(settings_path):
-                with open(settings_path, "r") as f:
-                    data.update(json.load(f))
+                with open(settings_path, "rb") as f:
+                    raw_data = f.read()
+                    decrypted = self.encrypter.decrypt(raw_data)
+                    data.update(json.loads(decrypted))
                     
             data.update(validated)
             self.bot.bot_settings.update(data)
             
             os.makedirs(self.config.data_dir, exist_ok=True)
-            with open(settings_path, "w") as f:
-                json.dump(data, f)
+            with open(settings_path, "wb") as f:
+                enc_data = self.encrypter.encrypt(json.dumps(data))
+                f.write(enc_data)
                 
             try:
                 risk_skill = self.bot.orchestrator.registry.get("risk_management")
