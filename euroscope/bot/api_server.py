@@ -1420,8 +1420,34 @@ class APIServer:
             logger.error(f"Simulation trade error: {e}")
             return web.json_response({"success": False, "error": "Internal server error"})
 
+    async def _cleaner_task(self):
+        """Periodically clean memory caches to prevent leaks."""
+        while True:
+            await asyncio.sleep(300)  # run every 5 mins
+            now = time.monotonic()
+            
+            # Clean rate limits
+            expired_keys = []
+            for key, timestamps in self.rate_limits.items():
+                valid = [ts for ts in timestamps if now - ts < 60]
+                if not valid:
+                    expired_keys.append(key)
+                else:
+                    self.rate_limits[key] = valid
+            for key in expired_keys:
+                del self.rate_limits[key]
+                
+            # Clean response cache
+            expired_cache_keys = [
+                k for k, v in self._resp_cache.items()
+                if (now - v[0]) > self._RESP_TTL
+            ]
+            for k in expired_cache_keys:
+                del self._resp_cache[k]
+
     async def start(self):
         """Run the AIOHTTP server as a background task."""
+        asyncio.create_task(self._cleaner_task())
         try:
             app = web.Application(middlewares=[self._cors_middleware])
             app.add_routes([
