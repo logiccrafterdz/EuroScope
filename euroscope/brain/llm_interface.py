@@ -44,6 +44,21 @@ class LLMInterface:
         from .cost_tracker import CostTracker
         self.cost_tracker = cost_tracker or CostTracker()
 
+    def _sanitize_input(self, text: str) -> str:
+        """Sanitize user input to mitigate basic prompt injection."""
+        if not text:
+            return ""
+        patterns_to_block = [
+            r"(?i)ignore\s+all\s+previous\s+instructions",
+            r"(?i)system\s*prompt",
+            r"(?i)you\s+are\s+now",
+            r"(?i)new\s+rule[s]?:"
+        ]
+        sanitized = text
+        for pattern in patterns_to_block:
+            sanitized = re.sub(pattern, "[REDACTED]", sanitized)
+        return f"User Input: '''{sanitized}'''"
+
     def _get_history(self, chat_id: int) -> list[dict]:
         """Get or create per-user conversation history with TTL cleanup."""
         now = time.time()
@@ -84,7 +99,7 @@ class LLMInterface:
         # Add recent conversation history for this user
         user_history = self._get_history(chat_id)
         messages.extend(user_history[-self.max_history:])
-        messages.append({"role": "user", "content": user_message})
+        messages.append({"role": "user", "content": self._sanitize_input(user_message)})
 
         # Use router if available
         if self.router:
@@ -148,7 +163,7 @@ class LLMInterface:
 
         messages = [
             {"role": "system", "content": system},
-            {"role": "user", "content": user_message}
+            {"role": "user", "content": self._sanitize_input(user_message)}
         ]
 
         if self.router:
@@ -191,7 +206,7 @@ class LLMInterface:
 
         messages = [{"role": "system", "content": system}]
         messages.extend(self._get_history(chat_id)[-self.max_history:])
-        messages.append({"role": "user", "content": user_message})
+        messages.append({"role": "user", "content": self._sanitize_input(user_message)})
 
         for _ in range(max_iterations):
             response = await self.router.chat_with_functions(messages=messages)
