@@ -526,7 +526,7 @@ class APIServer:
             from ..analytics.backtest_engine import BacktestEngine
             engine = BacktestEngine()
 
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             bt_result = await asyncio.wait_for(
                 loop.run_in_executor(None, lambda: engine.run_fast(candles, strategy_filter=strategy)),
                 timeout=45.0
